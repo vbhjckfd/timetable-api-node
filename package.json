@@ -1,0 +1,24 @@
+{
+  "name": "timetable-api-cloud-func",
+  "version": "1.0.0",
+  "description": "API for lad.lviv.ua service",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^1.5.1",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "gtfs": "^1.9.4",
+    "lodash": "^4.17.15",
+    "mongoose": "^5.9.6",
+    "node-fetch": "^2.6.0",
+    "npm-config": "^0.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "functions-framework --target=timetable",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "vbhjckfd@gmail.com",
+  "license": "ISC"
+}
