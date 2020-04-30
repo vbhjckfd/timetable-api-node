@@ -22,8 +22,7 @@ module.exports = async (req, res, next) => {
       "agencies": [
         {
           "agency_key": "Microgiz",
-          //"url": "http://track.ua-gis.com/gtfs/lviv/static.zip",
-          "url": "https://drive.google.com/uc?id=1Wc12CLvZt7rvEBCDBn3PyD7PBK4lYVj4&export=download",
+          "url": "http://track.ua-gis.com/gtfs/lviv/static.zip",
           "exclude": [
             "stop_times"
           ]

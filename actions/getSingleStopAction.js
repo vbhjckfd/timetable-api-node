@@ -12,5 +12,11 @@ module.exports = async (req, res, next) => {
 
     let timetableData = await timetableService.getTimetableForStop(stop);
 
-    res.json(timetableData); 
+    res.json({
+        name: stop.name,
+        longitude: stop.location.coordinates[0],
+        latitude: stop.location.coordinates[1],
+        code: stop.code,
+        timetable: timetableData
+    });
 }
