@@ -12,11 +12,14 @@ module.exports = async (req, res, next) => {
 
     let timetableData = await timetableService.getTimetableForStop(stop);
 
-    res.json({
-        name: stop.name,
-        longitude: stop.location.coordinates[0],
-        latitude: stop.location.coordinates[1],
-        code: stop.code,
-        timetable: timetableData
-    });
+    res
+        .set('Cache-Control', `public, s-maxage=60`)
+        .json({
+            name: stop.name,
+            longitude: stop.location.coordinates[0],
+            latitude: stop.location.coordinates[1],
+            code: stop.code,
+            timetable: timetableData
+        })
+    ;
 }

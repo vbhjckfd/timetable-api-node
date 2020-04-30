@@ -18,14 +18,17 @@ module.exports = async (req, res, next) => {
     }).find((error, results) => {
         if (error) throw error;
 
-        res.json(results.map(s => {
-            return {
-                code: s.code,
-                name: s.name,
-                longitude: s.location.coordinates[0],
-                latitude: s.location.coordinates[1]
-            };
-        })); 
+        res
+            .set('Cache-Control', `public, s-maxage=${60 * 60 * 24}`)
+            .json(results.map(s => {
+                return {
+                    code: s.code,
+                    name: s.name,
+                    longitude: s.location.coordinates[0],
+                    latitude: s.location.coordinates[1]
+                };
+            }))
+        ;
     });
 
 }
