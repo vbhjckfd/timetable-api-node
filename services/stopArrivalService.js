@@ -27,7 +27,7 @@ const stopArrivalService = {
                     if (_(['trol', 'tram']).indexOf(type) > -1) {
                         prefix = 'T';
                     }
-                    let title = prefix + item.title.replace('A', '');
+                    let title = prefix + item.title.replace('А', '');
 
                     if (!directions.hasOwnProperty(item.id)) {
                         directions[item.id] = item.directionTitle
