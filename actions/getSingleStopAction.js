@@ -4,9 +4,15 @@ const timetableDb = require('../connections/timetableDb');
 const StopModel = timetableDb.model('Stop');
 
 module.exports = async (req, res, next) => {
-    let stop = await StopModel.findOne({code: req.params.code});
+    let code = Number(req.params.code);
+    if (!code)  {
+        res.status(400).send(`Bad argument, ${req.params.code} is not a number`);
+        return;
+    }
+
+    let stop = await StopModel.findOne({code: code});
     if (!stop) {
-        res.sendStatus(404);
+        res.status(404).send(`Bad argument, stop with code ${code} not found`);
         return;
     }
 
