@@ -13,7 +13,7 @@ const stopArrivalService = {
             return _
                 .chain(data.routes)
                 .filter(item => item.timeSource === 'gps' || item.transportName === 'Нічний маршрут')
-                .sortBy(i => {return i.timeLeft})
+                .sortBy(i => {return parseInt(i.timeLeft)})
                 .slice(0, 10)
                 .map(item => {
                     let type = 'bus';
