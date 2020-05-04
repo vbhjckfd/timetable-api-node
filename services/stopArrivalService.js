@@ -12,7 +12,7 @@ const stopArrivalService = {
 
             return _
                 .chain(data.routes)
-                .filter(item => item.timeSource === 'gps')
+                .filter(item => item.timeSource === 'gps' || item.transportName === 'Нічний маршрут')
                 .sortBy(i => {return i.timeLeft})
                 .slice(0, 10)
                 .map(item => {
@@ -23,11 +23,13 @@ const stopArrivalService = {
                         type = 'tram';
                     }
 
-                    let prefix = 'A';
+                    let prefix = 'А';
                     if (_(['trol', 'tram']).indexOf(type) > -1) {
-                        prefix = 'T';
+                        prefix = 'Т';
                     }
-                    let title = prefix + item.title.replace('А', '');
+                    if (item.transportName === 'Нічний маршрут') prefix = 'Н';
+
+                    let title = prefix + item.title.replace('А', '').replace('Н', '');
 
                     if (!directions.hasOwnProperty(item.id)) {
                         directions[item.id] = item.directionTitle
