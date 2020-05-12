@@ -9,6 +9,7 @@
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "gtfs": "^1.9.4",
+    "gtfs-realtime-bindings": "0.0.5",
     "lodash": "^4.17.15",
     "mongoose": "^5.9.6",
     "node-fetch": "^2.6.0",
