@@ -64,6 +64,7 @@ module.exports = async (req, res, next) => {
             {
                 code: code,
                 name: stop_name,
+                microgiz_id: stopRow.stop_id,
                 location: {
                     type: "Point",
                     coordinates: stopRow.loc

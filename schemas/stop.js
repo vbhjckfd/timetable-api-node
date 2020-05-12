@@ -17,6 +17,10 @@ const StopSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    microgiz_id: {
+      type: Number,
+      required: false
+    },
     easyway_id: {
         type: Number,
         required: false
