@@ -90,6 +90,8 @@ module.exports = async (req, res, next) => {
     res.send({
         'color': '#' + route.route_color,
         'text_color': '#' + route.route_text_color,
+        'route_short_name': route.route_short_name,
+        'route_long_name': route.route_long_name,
         'vehicles': vehicles,
         'shapes': _(shapes).map((s) => { return s.map((point) => {
             return [point.shape_pt_lat, point.shape_pt_lon]
