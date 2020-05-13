@@ -1,6 +1,9 @@
 const gtfs = require('gtfs');
 const mongoose = require('mongoose');
 const _ = require('lodash');
+const timetableDb = require('../connections/timetableDb');
+
+const StopModel = timetableDb.model('Stop');
 
 const dbConfig = {
     user: process.env.MONGO_IMPORT_USER,
@@ -41,9 +44,13 @@ module.exports = async (req, res, next) => {
         'route_id': route.route_id
     });
     
+    let tripShapeMap = {};
     trips.forEach((t) => {
+        tripShapeMap[t.shape_id] = t.trip_id;
         shapeIdsStat.push(t.shape_id);
     });
+
+    const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
 
     let mostPopularShapes = _(shapeIdsStat)
         .countBy()
@@ -59,8 +66,27 @@ module.exports = async (req, res, next) => {
         }
     });
 
+    const stopTimes = await gtfs.getStoptimes({
+        agency_key: 'Microgiz',
+        trip_id: {
+            $in: _(tripShapeMap).values().value()
+        }
+    });
+
+    let stopsByShape = [];
+
     for (key in mostPopularShapes) {
         shapes[key] = _(shapes[key]).filter((data) => data.shape_id == mostPopularShapes[key]).value();
+        stopsByShape[key] = _(stopTimes)
+            .filter((data) => data.trip_id == tripShapeMap[mostPopularShapes[key]])
+            .map((st) => {return allStops[st.stop_id]})
+            .map((s) => {
+                return {
+                    code: s.code,
+                    loc: [s.location.coordinates[1], s.location.coordinates[0]]
+                }
+            })
+            .value();
     }
 
     mongoose.connection.close();
@@ -72,6 +98,7 @@ module.exports = async (req, res, next) => {
             'text_color': '#' + route.route_text_color,
             'route_short_name': route.route_short_name,
             'route_long_name': route.route_long_name,
+            'stops': stopsByShape,
             'shapes': _(shapes).map((s) => { return s.map((point) => {
                 return [point.shape_pt_lat, point.shape_pt_lon]
             }) }).value()
