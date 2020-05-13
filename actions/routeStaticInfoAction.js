@@ -72,10 +72,9 @@ module.exports = async (req, res, next) => {
             'text_color': '#' + route.route_text_color,
             'route_short_name': route.route_short_name,
             'route_long_name': route.route_long_name,
-            'shapes': shapes,
-            // 'shapes': _(shapes).map((s) => { return s.map((point) => {
-            //     return [point.shape_pt_lat, point.shape_pt_lon]
-            // }) }).value()
+            'shapes': _(shapes).map((s) => { return s.map((point) => {
+                return [point.shape_pt_lat, point.shape_pt_lon]
+            }) }).value()
         })
     ;
 }
