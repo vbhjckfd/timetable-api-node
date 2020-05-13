@@ -8,6 +8,7 @@ const notFoundAction = require('./actions/notFoundAction');
 const getClosestStopsAction = require('./actions/getClosestStopsAction');
 const getSingleStopAction = require('./actions/getSingleStopAction');
 const importGtfsStaticAction = require('./actions/importGtfsStaticAction');
+const routeInfoAction = require('./actions/routeInfoAction');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use(function (err, req, res, next) {
 app.get('/stops/:code', getSingleStopAction);
 app.get('/closest', getClosestStopsAction);
 app.get('/import/gtfs_static', importGtfsStaticAction);
+app.get('/routes/:name', routeInfoAction);
 app.use(notFoundAction);
 
 exports.timetable = app;
