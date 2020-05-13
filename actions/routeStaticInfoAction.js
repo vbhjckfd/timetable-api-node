@@ -1,8 +1,6 @@
 const gtfs = require('gtfs');
 const mongoose = require('mongoose');
 const _ = require('lodash');
-const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
-const fetch = require("node-fetch");
 
 const dbConfig = {
     user: process.env.MONGO_IMPORT_USER,
@@ -37,34 +35,10 @@ module.exports = async (req, res, next) => {
         return i.route_short_name === normalizeRouteName(req.params.name);
     });
 
-    const response = await fetch('http://track.ua-gis.com/gtfs/lviv/vehicle_position');
-    const body = await response.buffer();
-
-    let tripIds = [];
-    let vehicles = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(body).entity
-    .filter((entity) => {
-        return entity.vehicle.trip.routeId == route.route_id && !!entity.vehicle.trip.tripId
-    })
-    .map((i) => {
-        let position = i.vehicle.position;
-        tripIds.push(i.vehicle.trip.tripId);
-
-        return {
-            'location': [
-                position.latitude,
-                position.longitude
-            ],
-            'bearing': position.bearing
-        };
-    });
-    tripIds = [...new Set(tripIds)];
-
     let shapeIdsStat = [];
 
     const trips = await gtfs.getTrips({
-        'trip_id': {
-            '$in': tripIds
-        }
+        'route_id': route.route_id
     });
     
     trips.forEach((t) => {
@@ -77,7 +51,7 @@ module.exports = async (req, res, next) => {
         .orderBy(_.last)
         .takeRight(2)
         .map(_.head)
-        .value();    
+        .value();
 
     const shapes = await gtfs.getShapes({
         'shape_id': {
@@ -85,16 +59,23 @@ module.exports = async (req, res, next) => {
         }
     });
 
+    for (key in mostPopularShapes) {
+        shapes[key] = _(shapes[key]).filter((data) => data.shape_id == mostPopularShapes[key]).value();
+    }
+
     mongoose.connection.close();
 
-    res.send({
-        'color': '#' + route.route_color,
-        'text_color': '#' + route.route_text_color,
-        'route_short_name': route.route_short_name,
-        'route_long_name': route.route_long_name,
-        'vehicles': vehicles,
-        'shapes': _(shapes).map((s) => { return s.map((point) => {
-            return [point.shape_pt_lat, point.shape_pt_lon]
-        }) }).value()
-    });
+    res
+        .set('Cache-Control', `public, s-maxage=${60 * 60 * 24}`)
+        .send({
+            'color': '#' + route.route_color,
+            'text_color': '#' + route.route_text_color,
+            'route_short_name': route.route_short_name,
+            'route_long_name': route.route_long_name,
+            'shapes': shapes,
+            // 'shapes': _(shapes).map((s) => { return s.map((point) => {
+            //     return [point.shape_pt_lat, point.shape_pt_lon]
+            // }) }).value()
+        })
+    ;
 }
