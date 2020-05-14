@@ -83,6 +83,7 @@ module.exports = async (req, res, next) => {
             .map((s) => {
                 return {
                     code: s.code,
+                    name: stop.name,
                     loc: [s.location.coordinates[1], s.location.coordinates[0]]
                 }
             })
