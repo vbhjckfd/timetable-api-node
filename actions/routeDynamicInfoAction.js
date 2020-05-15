@@ -59,6 +59,6 @@ module.exports = async (req, res, next) => {
     mongoose.connection.close();
 
     res
-        .set('Cache-Control', `private, max-age=0, no-cache`)
+        .set('Cache-Control', `public, s-maxage=15`)
         .send(vehicles);
 }
