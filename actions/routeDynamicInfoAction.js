@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const _ = require('lodash');
 const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 const fetch = require("node-fetch");
+const normalizeRouteName = require("../utils/routeNameNormalizer");
 
 const dbConfig = {
     user: process.env.MONGO_IMPORT_USER,
@@ -10,22 +11,6 @@ const dbConfig = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useFindAndModify: false
-}
-
-const normalizeRouteName = (routeName) => {
-    let rawNumber = parseInt(routeName.replace(/\D/g,''));
-    let prefix = 'А';
-
-    if (routeName.startsWith('Т')) {
-        // tram or trol
-        prefix = (rawNumber >= 30) ? 'Тр' : 'Т';
-        
-    } else if (routeName.startsWith('Н')) {
-        // night bus
-        prefix = 'Н-А'
-    }
-
-    return prefix + ((rawNumber > 10) ? rawNumber : ('0' + rawNumber));
 }
 
 module.exports = async (req, res, next) => {
