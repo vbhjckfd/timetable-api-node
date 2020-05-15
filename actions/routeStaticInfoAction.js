@@ -2,6 +2,7 @@ const gtfs = require('gtfs');
 const mongoose = require('mongoose');
 const _ = require('lodash');
 const timetableDb = require('../connections/timetableDb');
+const normalizeRouteName = require("../utils/routeNameNormalizer");
 
 const StopModel = timetableDb.model('Stop');
 
@@ -11,22 +12,6 @@ const dbConfig = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useFindAndModify: false
-}
-
-const normalizeRouteName = (routeName) => {
-    let rawNumber = parseInt(routeName.replace(/\D/g,''));
-    let prefix = 'А';
-
-    if (routeName.startsWith('Т')) {
-        // tram or trol
-        prefix = (rawNumber >= 30) ? 'Тр' : 'Т';
-        
-    } else if (routeName.startsWith('Н')) {
-        // night bus
-        prefix = 'Н-А'
-    }
-
-    return prefix + ((rawNumber > 10) ? rawNumber : ('0' + rawNumber));
 }
 
 module.exports = async (req, res, next) => {
