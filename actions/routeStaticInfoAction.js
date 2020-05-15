@@ -60,7 +60,7 @@ module.exports = async (req, res, next) => {
         .map(_.head)
         .value();
 
-    const shapes = await gtfs.getShapes({
+    let shapes = await gtfs.getShapes({
         'shape_id': {
             '$in': mostPopularShapes
         }
@@ -72,13 +72,13 @@ module.exports = async (req, res, next) => {
             $in: _(tripShapeMap).values().value()
         }
     });
-
     let stopsByShape = [];
 
     for (key in mostPopularShapes) {
         shapes[key] = _(shapes[key]).filter((data) => data.shape_id == mostPopularShapes[key]).value();
         stopsByShape[key] = _(stopTimes)
             .filter((data) => data.trip_id == tripShapeMap[mostPopularShapes[key]])
+            .filter((st) => !!allStops[st.stop_id])
             .map((st) => {return allStops[st.stop_id]})
             .map((s) => {
                 return {
