@@ -2,15 +2,14 @@ module.exports = (routeName) => {
     let rawNumber = parseInt(routeName.replace(/\D/g,''));
     let prefix = 'А';
 
-    if (routeName.startsWith('Т')) {
+    if (routeName.startsWith('Т') || routeName.startsWith('T')) {
         // tram or trol
         prefix = (rawNumber >= 20) ? 'Тр' : 'Т';
         
-    } else if (routeName.startsWith('Н')) {
+    } else if (routeName.startsWith('Н') || routeName.startsWith('H')) {
         // night bus
         prefix = 'Н-А'
     }
 
     return prefix + ((rawNumber > 10) ? rawNumber : ('0' + rawNumber));
 }
-
