@@ -23,6 +23,8 @@ module.exports = async (req, res, next) => {
         return i.route_short_name === normalizeRouteName(req.params.name);
     });
 
+    if (!route) return res.sendStatus(404);
+
     let shapeIdsStat = [];
 
     const trips = await gtfs.getTrips({
@@ -50,6 +52,8 @@ module.exports = async (req, res, next) => {
             '$in': mostPopularShapes
         }
     });
+
+    if (!shapes.length) return res.sendStatus(500);
 
     const stopTimes = await gtfs.getStoptimes({
         agency_key: 'Microgiz',
