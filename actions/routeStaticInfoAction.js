@@ -53,7 +53,7 @@ module.exports = async (req, res, next) => {
         }
     });
 
-    if (!shapes.length) return res.sendStatus(500);
+    if (shapes.length < 2) return res.sendStatus(500);
 
     const stopTimes = await gtfs.getStoptimes({
         agency_key: 'Microgiz',
@@ -61,6 +61,9 @@ module.exports = async (req, res, next) => {
             $in: _(tripShapeMap).values().value()
         }
     });
+
+    mongoose.connection.close();
+
     let stopsByShape = [];
 
     for (key in mostPopularShapes) {
@@ -79,7 +82,7 @@ module.exports = async (req, res, next) => {
             .value();
     }
 
-    mongoose.connection.close();
+    if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
     res
         .set('Cache-Control', `public, s-maxage=${60 * 60 * 24}`)
