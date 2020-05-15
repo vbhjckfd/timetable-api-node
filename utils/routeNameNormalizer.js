@@ -4,7 +4,7 @@ module.exports = (routeName) => {
 
     if (routeName.startsWith('Т')) {
         // tram or trol
-        prefix = (rawNumber >= 30) ? 'Тр' : 'Т';
+        prefix = (rawNumber >= 20) ? 'Тр' : 'Т';
         
     } else if (routeName.startsWith('Н')) {
         // night bus
