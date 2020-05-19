@@ -33,6 +33,7 @@ module.exports = async (req, res, next) => {
         let position = i.vehicle.position;
 
         return {
+            'id': i.vehicle.vehicle.id,
             'location': [
                 position.latitude,
                 position.longitude
