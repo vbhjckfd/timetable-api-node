@@ -17,11 +17,9 @@ const dbConfig = {
 module.exports = async (req, res, next) => {
     mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
 
-    const routes = await gtfs.getRoutes();
-
-    let route = _(routes).find((i) => {
-        return i.route_short_name === normalizeRouteName(req.params.name);
-    });
+    const route = (await gtfs.getRoutes({
+        route_short_name: normalizeRouteName(req.params.name)
+    })).shift();
 
     if (!route) return res.sendStatus(404);
 
