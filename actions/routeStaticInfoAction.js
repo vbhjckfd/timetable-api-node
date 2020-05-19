@@ -84,8 +84,19 @@ module.exports = async (req, res, next) => {
 
     if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
+    const now = new Date();
+    const utc = new Date(Date.UTC(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        1,
+        10,
+        0
+    ));
+
     res
-        .set('Cache-Control', `public, s-maxage=${60 * 60 * 24}`)
+        .set('Cache-Control', `public`)
+        .set('Expires', `${utc.toGMTString()}`) // Expire cache after night import is done
         .send({
             'color': '#' + route.route_color,
             'text_color': '#' + route.route_text_color,
