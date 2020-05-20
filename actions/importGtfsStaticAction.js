@@ -52,6 +52,11 @@ module.exports = async (req, res, next) => {
             continue;
         }
 
+        if ([83].includes(code)) {
+            console.warn(`Manually skipped stop ${code}`);
+            continue;
+        }
+
         let stop_name = stopRow.stop_name;
 
         for (cleaner of [`00${code}`, `0${code}`, code, '()', '" "', '(Т6)', '(0)', 'уточнити' , /^"{1}/ , /\s+$/, "\\"]) {
