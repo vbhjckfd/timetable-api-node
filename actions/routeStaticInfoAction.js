@@ -23,8 +23,6 @@ module.exports = async (req, res, next) => {
 
     if (!route) return res.sendStatus(404);
 
-    if (!route) return res.sendStatus(404);
-
     let shapeIdsStat = [];
 
     const trips = await gtfs.getTrips({
@@ -83,8 +81,8 @@ module.exports = async (req, res, next) => {
     if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
     res
-        .set('Cache-Control', `public`)
-        .set('Expires', `${appHelpers.nextImportDate().toGMTString()}`) // Expire cache after night import is done
+        .set('Cache-Control', 'public')
+        .set('Expires', appHelpers.nextImportDate().toGMTString()) // Expire cache after night import is done
         .send({
             'color': '#' + route.route_color,
             'text_color': '#' + route.route_text_color,

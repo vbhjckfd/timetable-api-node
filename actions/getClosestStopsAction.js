@@ -20,8 +20,8 @@ module.exports = async (req, res, next) => {
         if (error) throw error;
 
         res
-            .set('Cache-Control', `public`)
-            .set('Expires', `${appHelpers.nextImportDate().toGMTString()}`) // Expire cache after night import is done
+            .set('Cache-Control', 'public')
+            .set('Expires', appHelpers.nextImportDate().toGMTString()) // Expire cache after night import is done
             .json(results.map(s => {
                 return {
                     code: s.code,
