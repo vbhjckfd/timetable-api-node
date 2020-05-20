@@ -2,7 +2,7 @@ const gtfs = require('gtfs');
 const mongoose = require('mongoose');
 const _ = require('lodash');
 const timetableDb = require('../connections/timetableDb');
-const normalizeRouteName = require("../utils/routeNameNormalizer");
+const appHelpers = require("../utils/appHelpers");
 
 const StopModel = timetableDb.model('Stop');
 
@@ -18,7 +18,7 @@ module.exports = async (req, res, next) => {
     mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
 
     const route = (await gtfs.getRoutes({
-        route_short_name: normalizeRouteName(req.params.name)
+        route_short_name: appHelpers.normalizeRouteName(req.params.name)
     })).shift();
 
     if (!route) return res.sendStatus(404);
@@ -82,19 +82,9 @@ module.exports = async (req, res, next) => {
 
     if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
-    const now = new Date();
-    const utc = new Date(Date.UTC(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-        1,
-        10,
-        0
-    ));
-
     res
         .set('Cache-Control', `public`)
-        .set('Expires', `${utc.toGMTString()}`) // Expire cache after night import is done
+        .set('Expires', `${appHelpers.nextImportDate().toGMTString()}`) // Expire cache after night import is done
         .send({
             'color': '#' + route.route_color,
             'text_color': '#' + route.route_text_color,

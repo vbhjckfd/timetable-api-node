@@ -1,5 +1,6 @@
 const timetableDb = require('../connections/timetableDb');
 const StopModel = timetableDb.model('Stop');
+const appHelpers = require("../utils/appHelpers");
 
 module.exports = async (req, res, next) => {
     let latitude = parseFloat(req.query.latitude).toFixed(3);
@@ -19,7 +20,8 @@ module.exports = async (req, res, next) => {
         if (error) throw error;
 
         res
-            .set('Cache-Control', `public, s-maxage=${60 * 60 * 24}`)
+            .set('Cache-Control', `public`)
+            .set('Expires', `${appHelpers.nextImportDate().toGMTString()}`) // Expire cache after night import is done
             .json(results.map(s => {
                 return {
                     code: s.code,

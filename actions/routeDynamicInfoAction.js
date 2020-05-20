@@ -2,11 +2,11 @@ const gtfs = require('gtfs');
 const _ = require('lodash');
 const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 const fetch = require("node-fetch");
-const normalizeRouteName = require("../utils/routeNameNormalizer");
+const appHelpers = require("../utils/appHelpers");
 
 module.exports = async (req, res, next) => {
     const route = (await gtfs.getRoutes({
-        route_short_name: normalizeRouteName(req.params.name)
+        route_short_name: appHelpers.normalizeRouteName(req.params.name)
     })).shift();
 
     const response = await fetch('http://track.ua-gis.com/gtfs/lviv/vehicle_position');
