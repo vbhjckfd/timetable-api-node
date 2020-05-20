@@ -62,8 +62,6 @@ module.exports = async (req, res, next) => {
         }
     });
 
-    mongoose.connection.close();
-
     let stopsByShape = [];
 
     for (key in mostPopularShapes) {

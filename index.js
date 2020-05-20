@@ -1,8 +1,19 @@
+const mongoose = require('mongoose');
+
 const dotenv = require('dotenv');
 dotenv.config();
 
 const cors = require('cors')
 const express = require('express');
+
+const dbConfig = {
+  user: process.env.MONGO_IMPORT_USER,
+  pass: process.env.MONGO_IMPORT_PASSWORD,
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useFindAndModify: false
+}
+mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
 
 const notFoundAction = require('./actions/notFoundAction');
 const getClosestStopsAction = require('./actions/getClosestStopsAction');
@@ -26,5 +37,7 @@ app.get('/import/gtfs_static', importGtfsStaticAction);
 app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
 app.use(notFoundAction);
+
+process.on('exit', mongoose.disconnect);
 
 exports.timetable = app;

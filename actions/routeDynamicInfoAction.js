@@ -1,21 +1,10 @@
 const gtfs = require('gtfs');
-const mongoose = require('mongoose');
 const _ = require('lodash');
 const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 const fetch = require("node-fetch");
 const normalizeRouteName = require("../utils/routeNameNormalizer");
 
-const dbConfig = {
-    user: process.env.MONGO_IMPORT_USER,
-    pass: process.env.MONGO_IMPORT_PASSWORD,
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    useFindAndModify: false
-}
-
 module.exports = async (req, res, next) => {
-    mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
-
     const route = (await gtfs.getRoutes({
         route_short_name: normalizeRouteName(req.params.name)
     })).shift();
@@ -65,9 +54,7 @@ module.exports = async (req, res, next) => {
             ],
             'bearing': position.bearing
         };
-    });    
-
-    mongoose.connection.close();
+    });
 
     res
         .set('Cache-Control', `public, s-maxage=15`)
