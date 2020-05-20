@@ -64,24 +64,26 @@ module.exports = async (req, res, next) => {
         }
         stop_name = stop_name.replace('""', '"')
 
-        let stopModel = await StopModel.findOneAndUpdate(
-            {code: code}, 
-            {
-                code: code,
-                name: stop_name,
-                microgiz_id: stopRow.stop_id,
-                location: {
-                    type: "Point",
-                    coordinates: stopRow.loc
-                }
-            },
-            {upsert: true, new: true}
-        );
+        let stopModel = await StopModel.findOne({code: code});
+        if (!stopModel) {
+            stopModel = await StopModel.create({
+                code: code
+            });
+        }
+
+        stopModel.name = stop_name;
+        stopModel.microgiz_id = stopRow.stop_id;
+        stopModel.location = {
+            type: "Point",
+            coordinates: stopRow.loc
+        };
 
         // Because we could change that manually in database
         if (!stopModel.easyway_id) {
-            stopModel.easyway_id = easyway_map[code.toString()] || false;
+            stopModel.easyway_id = easyway_map[code.toString()] || 0;
         }
+
+        stopModel.save();
 
         console.log(`Saved stop ${stopModel.code} - ${stopModel.name}`);
         stopIds.push(stopModel.id);
