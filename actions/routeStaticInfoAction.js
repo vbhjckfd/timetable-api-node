@@ -23,6 +23,8 @@ module.exports = async (req, res, next) => {
 
     if (!route) return res.sendStatus(404);
 
+    if (!route) return res.sendStatus(404);
+
     let shapeIdsStat = [];
 
     const trips = await gtfs.getTrips({
