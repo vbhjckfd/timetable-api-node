@@ -46,6 +46,7 @@ const stopArrivalService = {
                         number: 0
                     }
                 })
+                .value()
             ;
         });
     }
