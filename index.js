@@ -21,6 +21,7 @@ const getSingleStopAction = require('./actions/getSingleStopAction');
 const importGtfsStaticAction = require('./actions/importGtfsStaticAction');
 const routeInfoDynamicAction = require('./actions/routeDynamicInfoAction');
 const routeInfoStaticAction = require('./actions/routeStaticInfoAction');
+const vehicleInfoAction = require('./actions/vehicleInfoAction');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.get('/closest', getClosestStopsAction);
 app.get('/import/gtfs_static', importGtfsStaticAction);
 app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
+app.get('/vehicle/:vehicleId', vehicleInfoAction);
 app.use(notFoundAction);
 
 process.on('exit', mongoose.disconnect);
