@@ -1,53 +1,67 @@
-let _ = require('lodash');
-const fetch = require('node-fetch');
+const gtfs = require('gtfs');
+const _ = require('lodash');
+const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
+const fetch = require("node-fetch");
+const appHelpers = require("../utils/appHelpers");
 
 const stopArrivalService = {
     
-    getTimetableForStop: function(stop) {
-        return fetch(`https://api.eway.in.ua/?login=${process.env.EASYWAY_API_USER}&password=${process.env.EASYWAY_API_PASS}&function=stops.GetStopInfo&city=lviv&id=${stop.easyway_id}&v=1.2`)
-        .then(async (response) => {
-            let data = await response.json();
+    getTimetableForStop: async function(stop) {
+        const response = await fetch('http://track.ua-gis.com/gtfs/lviv/trip_updates');
+        const body = await response.buffer();
 
-            let directions = {};
+        const closestVehicles = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(body).entity
+        .filter((entity) => {
+            return entity.tripUpdate.stopTimeUpdate.map((stu) => {return parseInt(stu.stopId)}).includes(stop.microgiz_id);
+        })
+        .map((i) => {return i.tripUpdate})
+        .map((i) => {
+            i.stopTimeUpdate = i.stopTimeUpdate.filter((st) => {return st.stopId == stop.microgiz_id}).shift();
+            return i;
+        })
+        .map((i) => {
+            let arrivalTime = null;
+            if (i.stopTimeUpdate.arrival) {
+                arrivalTime = parseInt(`${i.stopTimeUpdate.arrival.time.low}000`);
+            }
 
-            return _
-                .chain(data.routes)
-                .filter(item => item.timeSource === 'gps' || item.transportName === 'Нічний маршрут')
-                .sortBy(i => {return parseInt(i.timeLeft)})
-                .slice(0, 10)
-                .map(item => {
-                    let type = 'bus';
-                    if (item.transportKey == 'trol') {
-                        type = 'trol';
-                    } else if (item.transportKey == 'tram') {
-                        type = 'tram';
-                    }
+            return {
+                time: arrivalTime,
+                route_id: i.trip.routeId,
+                trip_id: i.trip.tripId,
+                vehicle: i.vehicle.id
+            }
+        })
+        .sort((a, b) => {
+            return a.time - b.time;
+        });
 
-                    let prefix = 'А';
-                    if (_(['trol', 'tram']).indexOf(type) > -1) {
-                        prefix = 'Т';
-                    }
-                    if (item.transportName === 'Нічний маршрут') prefix = 'Н';
+        const trips = _(await gtfs.getTrips({
+            trip_id: {
+                $in: closestVehicles.map((v) => {return v.trip_id})
+            }
+        }))
+        .keyBy('trip_id')
+        .value();
 
-                    let title = prefix + item.title.replace('А', '').replace('Н', '');
+        const routes = _(await gtfs.getRoutes({
+            route_id: {
+                $in: closestVehicles.map((v) => {return v.route_id})
+            }
+        }))
+        .keyBy('route_id')
+        .value();
 
-                    if (!directions.hasOwnProperty(item.id)) {
-                        directions[item.id] = item.directionTitle
-                    }
-
-                    return {
-                        route: title,
-                        vehicle_type: type,
-                        lowfloor: item.handicapped,
-                        end_stop: directions[item.id],
-                        time_left: item.timeLeftFormatted,
-                        longitude: 0,
-                        latitude: 0,
-                        number: 0
-                    }
-                })
-                .value()
-            ;
+        return closestVehicles.map((vh) => {
+            return {
+                route: appHelpers.formatRouteName(routes[vh.route_id]),
+                vehicle_type: appHelpers.getRouteType(routes[vh.route_id]),
+                lowfloor: !!trips[vh.trip_id].wheelchair_accessible,
+                end_stop: appHelpers.cleanUpStopName(trips[vh.trip_id].trip_headsign),
+                arrival_time: (new Date(vh.time)).toUTCString(),
+                time_left: appHelpers.getTextWaitTime(vh.time),
+                vehicle_id: vh.vehicle
+            };
         });
     }
 
