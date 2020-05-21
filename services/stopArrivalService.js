@@ -54,7 +54,7 @@ const stopArrivalService = {
 
         return closestVehicles.map((vh) => {
             return {
-                route: routes[vh.route_id].route_short_name,
+                route: appHelpers.formatRouteName(routes[vh.route_id]),
                 vehicle_type: appHelpers.getRouteType(routes[vh.route_id]),
                 lowfloor: !!trips[vh.trip_id].wheelchair_accessible,
                 end_stop: appHelpers.cleanUpStopName(trips[vh.trip_id].trip_headsign),

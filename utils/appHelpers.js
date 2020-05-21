@@ -45,5 +45,17 @@ module.exports = {
     getTextWaitTime: (busArrivalTime) => {
         let minutesLeft = Math.round((busArrivalTime - new Date()) / 1000 / 60);
         return ((minutesLeft > 0) ? minutesLeft : '< 1') + 'хв';
+    },
+
+    formatRouteName: (route) => {
+        let name = route.route_short_name;
+
+        if (name.startsWith('Тр')) {
+            name = name.replace('Тр', 'Т');
+        } else if (name.startsWith('Н-А')) {
+            name = name.replace('Н-А', 'Н');
+        }
+
+        return name;
     }
 }
