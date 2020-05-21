@@ -72,7 +72,8 @@ module.exports = async (req, res, next) => {
             arrivals: arrivalTimes.map((item) => {
                 return {
                     code: stopIdsMap[item.stopId].code,
-                    arrival: item.departure ? 0 : (new Date(parseInt(`${item.arrival.time.low}000`))).toUTCString()
+                    arrival: item.arrival ? (new Date(parseInt(`${item.arrival.time.low}000`))).toUTCString() : null,
+                    departure: item.departure ? (new Date(parseInt(`${item.departure.time.low}000`))).toUTCString() : null
                 };
             })
         });
