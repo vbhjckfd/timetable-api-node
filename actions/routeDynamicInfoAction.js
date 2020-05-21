@@ -9,6 +9,8 @@ module.exports = async (req, res, next) => {
         route_short_name: appHelpers.normalizeRouteName(req.params.name)
     })).shift();
 
+    if (!route) return res.sendStatus(404);
+
     const response = await fetch('http://track.ua-gis.com/gtfs/lviv/vehicle_position');
     const body = await response.buffer();
 
