@@ -7,7 +7,7 @@ const appHelpers = require("../utils/appHelpers");
 const stopArrivalService = {
     
     getTimetableForStop: async function(stop) {
-        const response = await fetch('http://track.ua-gis.com/gtfs/lviv/trip_updates');
+        const response = await fetch(process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates');
         const body = await response.buffer();
 
         const closestVehicles = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(body).entity

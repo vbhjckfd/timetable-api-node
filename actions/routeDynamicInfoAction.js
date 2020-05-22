@@ -11,7 +11,7 @@ module.exports = async (req, res, next) => {
 
     if (!route) return res.sendStatus(404);
 
-    const response = await fetch('http://track.ua-gis.com/gtfs/lviv/vehicle_position');
+    const response = await fetch(process.env.VEHICLES_POSITION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position');
     const body = await response.buffer();
 
     let trips = await gtfs.getTrips({
