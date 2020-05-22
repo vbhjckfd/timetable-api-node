@@ -16,7 +16,12 @@ module.exports = async (req, res, next) => {
         return;
     }
 
-    const timetableData = await timetableService.getTimetableForStop(stop);
+    let timetableData = [];
+    try {
+        timetableData = await timetableService.getTimetableForStop(stop);
+    } catch (e) {
+        console.error(e);
+    }
     const cacheAge = timetableData.length > 0 ? 30 : 10;
 
     res
