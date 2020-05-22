@@ -5,9 +5,9 @@ const fetch = require("node-fetch");
 const appHelpers = require("../utils/appHelpers");
 
 module.exports = async (req, res, next) => {
-    const route = (await gtfs.getRoutes({
-        route_short_name: appHelpers.normalizeRouteName(req.params.name)
-    })).shift();
+    const query = Number(req.params.name) ? {route_id: parseInt(req.params.name).toString() } : {route_short_name: appHelpers.normalizeRouteName(req.params.name)}
+
+    const route = (await gtfs.getRoutes(query)).shift();
 
     if (!route) return res.sendStatus(404);
 

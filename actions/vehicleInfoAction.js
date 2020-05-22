@@ -60,12 +60,13 @@ module.exports = async (req, res, next) => {
     arrivalTimes = arrivalTimes.filter((item) => {return !!stopIdsMap[item.stopId]})
 
     res
-        .set('Cache-Control', `public, s-maxage=15`)
+        .set('Cache-Control', `public, s-maxage=5`)
         .send({
             location: [
                 vehiclePosition.position.latitude,
                 vehiclePosition.position.longitude
             ],
+            routeId: vehiclePosition.trip.routeId,
             bearing: vehiclePosition.position.bearing,
             direction: mostPopularShapes.indexOf(tripShapeMap[vehiclePosition.trip.tripId]),
             licensePlate: vehiclePosition.vehicle.licensePlate,
