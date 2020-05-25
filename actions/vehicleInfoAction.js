@@ -2,15 +2,12 @@ const gtfs = require('gtfs');
 const _ = require('lodash');
 const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 const fetch = require("node-fetch");
-const appHelpers = require("../utils/appHelpers");
 const timetableDb = require('../connections/timetableDb');
 const StopModel = timetableDb.model('Stop');
+const microgizService = require('../services/microgizService');
 
 module.exports = async (req, res, next) => {
-    const response = await fetch('http://track.ua-gis.com/gtfs/lviv/vehicle_position');
-    const body = await response.buffer();
-
-    let vehiclePosition = _(GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(body).entity)
+    let vehiclePosition = _(await microgizService.getVehiclesLocations())
     .find((entity) => {
         return entity.vehicle.vehicle.id == req.params.vehicleId;
     });
@@ -37,10 +34,7 @@ module.exports = async (req, res, next) => {
         .map(_.head)
         .value();
 
-    const tripUpdatesResponse = await fetch('http://track.ua-gis.com/gtfs/lviv/trip_updates');
-    const tripUpdatesBody = await tripUpdatesResponse.buffer();
-
-    const arrivalTimeItems = _(GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(tripUpdatesBody).entity)
+    const arrivalTimeItems = _(await microgizService.getArrivalTimes())
     .find((entity) => {
         return entity.tripUpdate.vehicle.id == req.params.vehicleId;
     }) || null;
@@ -73,8 +67,8 @@ module.exports = async (req, res, next) => {
             arrivals: arrivalTimes.map((item) => {
                 return {
                     code: stopIdsMap[item.stopId].code,
-                    arrival: item.arrival ? (new Date(parseInt(`${item.arrival.time.low}000`))).toUTCString() : null,
-                    departure: item.departure ? (new Date(parseInt(`${item.departure.time.low}000`))).toUTCString() : null
+                    arrival: item.arrival ? (new Date(parseInt(`${item.arrival.time}000`))).toUTCString() : null,
+                    departure: item.departure ? (new Date(parseInt(`${item.departure.time}000`))).toUTCString() : null
                 };
             })
         });

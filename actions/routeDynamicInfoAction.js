@@ -1,6 +1,6 @@
 const gtfs = require('gtfs');
 const _ = require('lodash');
-const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
+const microgizService = require('../services/microgizService');
 const fetch = require("node-fetch");
 const appHelpers = require("../utils/appHelpers");
 
@@ -10,9 +10,6 @@ module.exports = async (req, res, next) => {
     const route = (await gtfs.getRoutes(query)).shift();
 
     if (!route) return res.sendStatus(404);
-
-    const response = await fetch(process.env.VEHICLES_POSITION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position');
-    const body = await response.buffer();
 
     let trips = await gtfs.getTrips({
         'route_id': route.route_id
@@ -40,7 +37,7 @@ module.exports = async (req, res, next) => {
         .value()
     ;
 
-    let vehicles = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(body).entity
+    let vehicles = _(await microgizService.getVehiclesLocations())
     .filter((entity) => {
         return entity.vehicle.trip.routeId == route.route_id && !!entity.vehicle.trip.tripId && goodTripIds.includes(entity.vehicle.trip.tripId)
     })
@@ -59,6 +56,6 @@ module.exports = async (req, res, next) => {
     });
 
     res
-        .set('Cache-Control', `public, s-maxage=15`)
+        .set('Cache-Control', `public, s-maxage=10`)
         .send(vehicles);
 }
