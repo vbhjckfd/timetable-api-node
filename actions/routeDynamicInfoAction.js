@@ -1,7 +1,6 @@
 const gtfs = require('gtfs');
 const _ = require('lodash');
 const microgizService = require('../services/microgizService');
-const fetch = require("node-fetch");
 const appHelpers = require("../utils/appHelpers");
 
 module.exports = async (req, res, next) => {
@@ -11,31 +10,8 @@ module.exports = async (req, res, next) => {
 
     if (!route) return res.sendStatus(404);
 
-    let trips = await gtfs.getTrips({
-        'route_id': route.route_id
-    });
-
-    let tripShapeMap = {};
-    let shapeIdsStat = [];
-    trips.forEach((t) => {
-        tripShapeMap[t.trip_id] = t.shape_id;
-        shapeIdsStat.push(t.shape_id);
-    });
-
-    let mostPopularShapes = _(shapeIdsStat)
-        .countBy()
-        .entries()
-        .orderBy(_.last)
-        .takeRight(2)
-        .map(_.head)
-        .value();
-
-    let goodTripIds = _(trips)
-        .filter((t) => {return mostPopularShapes.includes(t.shape_id)})
-        .map((t) => {return t.trip_id})
-        .uniq()
-        .value()
-    ;
+    const tripDirectionMap = await appHelpers.getTripDirectionMap(route.route_id);
+    const goodTripIds = Object.keys(tripDirectionMap);
 
     let vehicles = _(await microgizService.getVehiclesLocations())
     .filter((entity) => {
@@ -46,7 +22,7 @@ module.exports = async (req, res, next) => {
 
         return {
             'id': i.vehicle.vehicle.id,
-            'direction': mostPopularShapes.indexOf(tripShapeMap[i.vehicle.trip.tripId]),
+            'direction': tripDirectionMap[i.vehicle.trip.tripId],
             'location': [
                 position.latitude,
                 position.longitude

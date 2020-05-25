@@ -1,3 +1,6 @@
+const gtfs = require('gtfs');
+const _ = require('lodash');
+
 module.exports = {
     
     nextImportDate: () => {
@@ -57,5 +60,35 @@ module.exports = {
         }
 
         return name;
+    },
+
+    getTripDirectionMap: async (routeId) => {
+        const trips = await gtfs.getTrips({
+            'route_id': routeId
+        });
+
+        let tripShapeMap = {};
+        let shapeIdsStat = [];
+        trips.forEach((t) => {
+            tripShapeMap[t.trip_id] = t.shape_id;
+            shapeIdsStat.push(t.shape_id);
+        });
+
+        let mostPopularShapes = _(shapeIdsStat)
+            .countBy()
+            .entries()
+            .orderBy(_.last)
+            .takeRight(2)
+            .map(_.head)
+            .value();
+
+        let res = {};
+        for (tripId in tripShapeMap) {
+            if (mostPopularShapes.includes(tripShapeMap[tripId])) {
+                res[tripId] = mostPopularShapes.indexOf(tripShapeMap[tripId]);
+            }
+        }
+
+        return res;
     }
 }
