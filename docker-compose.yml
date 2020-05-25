@@ -17,7 +17,7 @@ services:
         ports:
             - "27019:27017"
     redis:
-        image: redis:5-alpine
+        image: marketplace.gcr.io/google/redis5
         ports:
             - "6479:6379"
 
