@@ -16,11 +16,6 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_IMPORT_PASSWORD}
         ports:
             - "27019:27017"
-    redis:
-        image: marketplace.gcr.io/google/redis5
-        ports:
-            - "6479:6379"
-
 
 
 

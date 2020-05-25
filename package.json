@@ -13,8 +13,7 @@
     "lodash": "^4.17.15",
     "mongoose": "^5.9.6",
     "node-fetch": "^2.6.0",
-    "npm-config": "^0.2.0",
-    "redis": "^3.0.2"
+    "npm-config": "^0.2.0"
   },
   "devDependencies": {},
   "scripts": {
