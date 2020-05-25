@@ -16,6 +16,10 @@ services:
             MONGO_INITDB_ROOT_PASSWORD: ${MONGO_IMPORT_PASSWORD}
         ports:
             - "27019:27017"
+    redis:
+        image: redis:5-alpine
+        ports:
+            - "6479:6379"
 
 
 

@@ -1,16 +1,12 @@
 const gtfs = require('gtfs');
 const _ = require('lodash');
-const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
-const fetch = require("node-fetch");
 const appHelpers = require("../utils/appHelpers");
+const microgizService = require("./microgizService");
 
 const stopArrivalService = {
     
     getTimetableForStop: async function(stop) {
-        const response = await fetch(process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates');
-        const body = await response.buffer();
-
-        const closestVehicles = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(body).entity
+        const closestVehicles = (await microgizService.getArrivalTimes())
         .filter((entity) => {
             return entity.tripUpdate.stopTimeUpdate.map((stu) => {return parseInt(stu.stopId)}).includes(stop.microgiz_id);
         })
@@ -19,14 +15,10 @@ const stopArrivalService = {
             i.stopTimeUpdate = i.stopTimeUpdate.filter((st) => {return st.stopId == stop.microgiz_id}).shift();
             return i;
         })
+        .filter(i => {return !!i.stopTimeUpdate.arrival})
         .map((i) => {
-            let arrivalTime = null;
-            if (i.stopTimeUpdate.arrival) {
-                arrivalTime = parseInt(`${i.stopTimeUpdate.arrival.time.low}000`);
-            }
-
             return {
-                time: arrivalTime,
+                time: parseInt(`${i.stopTimeUpdate.arrival.time}000`),
                 route_id: i.trip.routeId,
                 trip_id: i.trip.tripId,
                 vehicle: i.vehicle.id
