@@ -48,6 +48,27 @@ const stopArrivalService = {
         .keyBy('route_id')
         .value();
 
+        const vehiclesIds = closestVehicles.map((v) => {return v.vehicle})
+        const vehiclesLocations = _(await microgizService.getVehiclesLocations())
+            .filter((entity) => {
+                return vehiclesIds.includes(entity.vehicle.vehicle.id)
+            })
+            .map((i) => {
+                const position = i.vehicle.position;
+
+                return {
+                    vehicle_id: i.vehicle.vehicle.id,
+                    location: [
+                        position.latitude.toFixed(5),
+                        position.longitude.toFixed(5)
+                    ],
+                    bearing: position.bearing
+                };
+            })
+            .keyBy('vehicle_id')
+            .value()
+        ;
+
         return closestVehicles.map((vh) => {
             return {
                 route: appHelpers.formatRouteName(routes[vh.route_id]),
@@ -56,7 +77,7 @@ const stopArrivalService = {
                 end_stop: appHelpers.cleanUpStopName(trips[vh.trip_id].trip_headsign),
                 arrival_time: (new Date(vh.time)).toUTCString(),
                 time_left: appHelpers.getTextWaitTime(vh.time),
-                vehicle_id: vh.vehicle
+                ...vehiclesLocations[vh.vehicle]
             };
         });
     }
