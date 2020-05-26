@@ -15,10 +15,10 @@ const stopArrivalService = {
             i.stopTimeUpdate = i.stopTimeUpdate.filter((st) => {return st.stopId == stop.microgiz_id}).shift();
             return i;
         })
-        .filter(i => {return !!i.stopTimeUpdate.arrival})
         .map((i) => {
+            const time = i.stopTimeUpdate.arrival || i.stopTimeUpdate.departure;
             return {
-                time: parseInt(`${i.stopTimeUpdate.arrival.time}000`),
+                time: parseInt(`${time.time}000`),
                 route_id: i.trip.routeId,
                 trip_id: i.trip.tripId,
                 vehicle: i.vehicle.id
