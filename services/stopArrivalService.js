@@ -6,6 +6,9 @@ const microgizService = require("./microgizService");
 const stopArrivalService = {
     
     getTimetableForStop: async function(stop) {
+        const now = new Date();
+        now.setMilliseconds(0);
+
         const closestVehicles = (await microgizService.getArrivalTimes())
         .filter((entity) => {
             return entity.tripUpdate.stopTimeUpdate.map((stu) => {return parseInt(stu.stopId)}).includes(stop.microgiz_id);
@@ -24,6 +27,7 @@ const stopArrivalService = {
                 vehicle: i.vehicle.id
             }
         })
+        .filter(i => {return new Date(i.time) >= now;})
         .sort((a, b) => {
             return a.time - b.time;
         });
