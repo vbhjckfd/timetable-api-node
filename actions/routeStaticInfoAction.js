@@ -84,6 +84,7 @@ module.exports = async (req, res, next) => {
         .set('Cache-Control', 'public')
         .set('Expires', appHelpers.nextImportDate().toGMTString()) // Expire cache after night import is done
         .send({
+            id: route.route_id,
             route_short_name: route.route_short_name,
             route_long_name: route.route_long_name,
             stops: stopsByShape,
