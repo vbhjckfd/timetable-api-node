@@ -13,21 +13,21 @@ module.exports = async (req, res, next) => {
     const tripDirectionMap = await appHelpers.getTripDirectionMap(route.route_id);
     const goodTripIds = Object.keys(tripDirectionMap);
 
-    let vehicles = _(await microgizService.getVehiclesLocations())
+    const vehicles = _(await microgizService.getVehiclesLocations())
     .filter((entity) => {
         return entity.vehicle.trip.routeId == route.route_id && !!entity.vehicle.trip.tripId && goodTripIds.includes(entity.vehicle.trip.tripId)
     })
     .map((i) => {
-        let position = i.vehicle.position;
+        const position = i.vehicle.position;
 
         return {
-            'id': i.vehicle.vehicle.id,
-            'direction': tripDirectionMap[i.vehicle.trip.tripId],
-            'location': [
+            id: i.vehicle.vehicle.id,
+            direction: tripDirectionMap[i.vehicle.trip.tripId],
+            location: [
                 position.latitude,
                 position.longitude
             ],
-            'bearing': position.bearing
+            bearing: position.bearing
         };
     });
 

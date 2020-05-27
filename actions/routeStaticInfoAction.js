@@ -78,18 +78,16 @@ module.exports = async (req, res, next) => {
             .value();
     }
 
-    //if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
+    if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
     res
         .set('Cache-Control', 'public')
         .set('Expires', appHelpers.nextImportDate().toGMTString()) // Expire cache after night import is done
         .send({
-            'color': '#' + route.route_color,
-            'text_color': '#' + route.route_text_color,
-            'route_short_name': route.route_short_name,
-            'route_long_name': route.route_long_name,
-            'stops': stopsByShape,
-            'shapes': _(shapes).map((s) => { return s.map((point) => {
+            route_short_name: route.route_short_name,
+            route_long_name: route.route_long_name,
+            stops: stopsByShape,
+            shapes: _(shapes).map((s) => { return s.map((point) => {
                 return [point.shape_pt_lat, point.shape_pt_lon]
             }) }).value()
         })
