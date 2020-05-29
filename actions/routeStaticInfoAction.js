@@ -43,6 +43,7 @@ module.exports = async (req, res, next) => {
         .orderBy(_.last)
         .takeRight(2)
         .map(_.head)
+        .sort()
         .value();
 
     let shapes = await gtfs.getShapes({

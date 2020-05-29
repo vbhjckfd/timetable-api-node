@@ -62,6 +62,28 @@ module.exports = {
         return name;
     },
 
+    getMostPopularShapes: async (routeId) => {
+        const trips = await gtfs.getTrips({
+            'route_id': routeId
+        });
+
+        let tripShapeMap = {};
+        let shapeIdsStat = [];
+        trips.forEach((t) => {
+            tripShapeMap[t.trip_id] = t.shape_id;
+            shapeIdsStat.push(t.shape_id);
+        });
+
+        return _(shapeIdsStat)
+            .countBy()
+            .entries()
+            .orderBy(_.last)
+            .takeRight(2)
+            .map(_.head)
+            .sort()
+            .value();
+    },
+
     getTripDirectionMap: async (routeId) => {
         const trips = await gtfs.getTrips({
             'route_id': routeId
@@ -80,6 +102,7 @@ module.exports = {
             .orderBy(_.last)
             .takeRight(2)
             .map(_.head)
+            .sort()
             .value();
 
         let res = {};
