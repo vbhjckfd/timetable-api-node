@@ -84,6 +84,42 @@ module.exports = {
             .value();
     },
 
+    getRouteColor: (route) => {
+        switch (route.route_short_name.charAt(0)) {
+            case 'Т':
+                const colorMap = {
+                    '33': '6F7C32',
+                    '32': 'E51467',
+                    '31': '229038',
+                    '30': 'EF88AA',
+                    '29': '323C8D',
+                    '27': 'B0CB1F',
+                    '25': 'E85222',
+                    '24': 'E5E248',
+                    '23': 'BD8260',
+                    '22': '3E9B7D',
+                    '09': '26602C',
+                    '08': '9E9E9E',
+                    '07': '0971B7',
+                    '06': '954592',
+                    '05': 'FECD27',
+                    '04': '1CBBEE',
+                    '03': '50B056',
+                    '02': '93573D',
+                    '01': 'E42D24',
+                };
+
+                const rawNumber = route.route_short_name.match(/\d+/g).join('')
+                return colorMap[rawNumber.toString()];
+            break;
+            case 'Н':
+                return '000000';
+            break;
+        }
+
+        return '0E4F95'
+    },
+
     getTripDirectionMap: async (routeId) => {
         const trips = await gtfs.getTrips({
             'route_id': routeId
