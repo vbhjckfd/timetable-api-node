@@ -71,6 +71,7 @@ const stopArrivalService = {
 
         return closestVehicles.map((vh) => {
             return {
+                color: '#' + appHelpers.getRouteColor(routes[vh.route_id]),
                 route: appHelpers.formatRouteName(routes[vh.route_id]),
                 vehicle_type: appHelpers.getRouteType(routes[vh.route_id]),
                 lowfloor: !!trips[vh.trip_id].wheelchair_accessible,
