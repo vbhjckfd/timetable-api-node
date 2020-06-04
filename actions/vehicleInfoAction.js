@@ -35,6 +35,8 @@ module.exports = async (req, res, next) => {
 
     const tripDirectionMap = await appHelpers.getTripDirectionMap(vehiclePosition.trip.routeId);
 
+    const stopRoutesMap = await microgizService.routesThroughStop();
+
     res
         .set('Cache-Control', `public, s-maxage=5`)
         .send({
@@ -50,7 +52,8 @@ module.exports = async (req, res, next) => {
                 return {
                     code: stopIdsMap[item.stopId].code,
                     arrival: item.arrival ? (new Date(parseInt(`${item.arrival.time}000`))).toUTCString() : null,
-                    departure: item.departure ? (new Date(parseInt(`${item.departure.time}000`))).toUTCString() : null
+                    departure: item.departure ? (new Date(parseInt(`${item.departure.time}000`))).toUTCString() : null,
+                    transfers: stopRoutesMap[stopIdsMap[item.stopId].code]
                 };
             })
         });

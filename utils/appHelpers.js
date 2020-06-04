@@ -59,6 +59,8 @@ module.exports = {
             name = name.replace('Н-А', 'Н');
         }
 
+        name = name.replace('-А', '');
+
         return name;
     },
 
