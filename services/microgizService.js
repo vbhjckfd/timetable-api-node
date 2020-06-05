@@ -17,11 +17,11 @@ const STOP_ROUTE_MAP_KEY = 'stop-route-map-hash';
 module.exports = {
 
     getVehiclesLocations: () => {
-        return redisClient.getAsync(LOCATION_CACHE_KEY)
-            .then((data) => {
-                if (data) {
-                    return JSON.parse(data);
-                }
+        // return redisClient.getAsync(LOCATION_CACHE_KEY)
+        //     .then((data) => {
+        //         if (data) {
+        //             return JSON.parse(data);
+        //         }
 
                 return fetch(process.env.VEHICLES_LOCATION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position')
                     .then(response => response.buffer())
@@ -31,15 +31,15 @@ module.exports = {
 
                         return parsedData;
                     });
-        });
+        // });
     },
 
     getArrivalTimes: () => {
-        return redisClient.getAsync(ARRIVALS_CACHE_KEY)
-            .then((data) => {
-                if (data) {
-                    return JSON.parse(data);
-                }
+        // return redisClient.getAsync(ARRIVALS_CACHE_KEY)
+        //     .then((data) => {
+        //         if (data) {
+        //             return JSON.parse(data);
+        //         }
 
                 return fetch(process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates')
                     .then(response => response.buffer())
@@ -49,7 +49,7 @@ module.exports = {
 
                         return parsedData;
                     });
-        });
+        // });
     },
 
     routesThroughStop: async (stopIds) => {
