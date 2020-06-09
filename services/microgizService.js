@@ -53,12 +53,12 @@ module.exports = {
     },
 
     routesThroughStop: async (stopIds) => {
-        return redisClient.getAsync(STOP_ROUTE_MAP_KEY)
-            .then(async (data) => {
-                if (data) {
-                    console.log('HIT!');
-                    return JSON.parse(data);
-                }
+        // return redisClient.getAsync(STOP_ROUTE_MAP_KEY)
+        //     .then(async (data) => {
+        //         if (data) {
+        //             console.log('HIT!');
+        //             return JSON.parse(data);
+        //         }
 
                 const trips = await gtfs.getTrips();
                 const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
@@ -117,9 +117,9 @@ module.exports = {
                     });
                 }
 
-                redisClient.setex(ARRIVALS_CACHE_KEY, 3600, JSON.stringify(stopRoutesMap));
+                // redisClient.setex(ARRIVALS_CACHE_KEY, 3600, JSON.stringify(stopRoutesMap));
                 return stopRoutesMap;
-        });
+        // });
 
 
 
