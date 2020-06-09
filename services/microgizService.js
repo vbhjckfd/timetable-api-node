@@ -8,7 +8,7 @@ const timetableDb = require('../connections/timetableDb');
 const StopModel = timetableDb.model('Stop');
 
 let Promise = require('bluebird');
-const redisClient = Promise.promisifyAll(require("./redisClient"));
+//const redisClient = Promise.promisifyAll(require("./redisClient"));
 
 const ARRIVALS_CACHE_KEY = 'arrival-times';
 const LOCATION_CACHE_KEY = 'vehicles-locations';
@@ -27,7 +27,7 @@ module.exports = {
                     .then(response => response.buffer())
                     .then(data => {
                         const parsedData = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity;
-                        redisClient.setex(LOCATION_CACHE_KEY, 10, JSON.stringify(parsedData));
+                        //redisClient.setex(LOCATION_CACHE_KEY, 10, JSON.stringify(parsedData));
 
                         return parsedData;
                     });
@@ -45,7 +45,7 @@ module.exports = {
                     .then(response => response.buffer())
                     .then(data => {
                         const parsedData = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity;
-                        redisClient.setex(ARRIVALS_CACHE_KEY, 10, JSON.stringify(parsedData));
+                        //redisClient.setex(ARRIVALS_CACHE_KEY, 10, JSON.stringify(parsedData));
 
                         return parsedData;
                     });
