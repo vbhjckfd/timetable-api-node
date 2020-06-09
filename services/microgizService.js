@@ -60,7 +60,18 @@ module.exports = {
         //             return JSON.parse(data);
         //         }
 
-                const trips = await gtfs.getTrips();
+                const stopTimes = await gtfs.getStoptimes({
+                    agency_key: 'Microgiz',
+                    stop_id: {
+                        $in: stopIds
+                    }
+                });
+
+                const trips = await gtfs.getTrips({
+                    trip_id: {
+                        $in: stopTimes.map(st => {return st.trip_id})
+                    }
+                });
                 const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
                 const allRoutes = _(await gtfs.getRoutes({})).keyBy('route_id').value();
 
@@ -72,9 +83,9 @@ module.exports = {
                 });
 
                 let stopRoutesMap = {};
-                Object.keys(allStops).forEach(key => {
-                    stopRoutesMap[allStops[key].code] = [];
-                })
+                for (let stopId of stopIds) {
+                    stopRoutesMap[stopId] = [];
+                }
 
                 for (let routeId in tripsPerRoute) {
                     let tripShapeMap = {};
@@ -88,28 +99,22 @@ module.exports = {
                         .countBy()
                         .entries()
                         .orderBy(_.last)
-                        .takeRight(2)
+                        .takeRight(1)
                         .map(_.head)
                         .sort()
                         .value()
                     ;
 
-                    if (!(mostPopularShapes[0] && mostPopularShapes[1])) {
+                    if (!mostPopularShapes[0]) {
                         continue;
                     }
 
-                    const stopTimes = await gtfs.getStoptimes({
-                        agency_key: 'Microgiz',
-                        trip_id: {
-                            $in: [
-                                tripShapeMap[mostPopularShapes[0]],
-                                tripShapeMap[mostPopularShapes[1]]
-                            ]
-                        }
-                    });
-
-                    stopTimes.forEach(st => {
-                        allStops[st.stop_id] && stopRoutesMap[allStops[st.stop_id].code].push({
+                    stopTimes
+                    .filter(st => {
+                        return tripShapeMap[mostPopularShapes[0]] == st.trip_id;
+                    })
+                    .forEach(st => {
+                        allStops[st.stop_id] && stopRoutesMap[st.stop_id].push({
                             color: '#' + appHelpers.getRouteColor(allRoutes[routeId]),
                             route: appHelpers.formatRouteName(allRoutes[routeId]),
                             vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),

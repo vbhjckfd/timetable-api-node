@@ -23,7 +23,7 @@ module.exports = async (req, res, next) => {
         console.error(e);
     }
     const cacheAge = timetableData.length > 0 ? 30 : 10;
-    const stopRoutesMap = await microgizService.routesThroughStop();
+    const stopRoutesMap = await microgizService.routesThroughStop([stop.microgiz_id]);
 
     res
         .set('Cache-Control', `public, s-maxage=${cacheAge}`)
@@ -31,7 +31,7 @@ module.exports = async (req, res, next) => {
             name: stop.name,
             longitude: stop.location.coordinates[0],
             latitude: stop.location.coordinates[1],
-            transfers: stopRoutesMap[stop.code],
+            transfers: stopRoutesMap[stop.microgiz_id],
             code: stop.code,
             timetable: timetableData
         })
