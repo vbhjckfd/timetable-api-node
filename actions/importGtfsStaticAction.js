@@ -4,7 +4,7 @@ const timetableDb = require('../connections/timetableDb');
 module.exports = async (req, res, next) => {
 
     const StopModel = timetableDb.model('Stop');
-    
+
     await gtfs.import({
       "agencies": [
         {
@@ -16,9 +16,13 @@ module.exports = async (req, res, next) => {
         }
       ]
     });
-    
+
     let importedStops = await gtfs.getStops();
     let stopIds = [];
+
+    if (!importedStops.length) {
+        return res.sendStatus(500);
+    }
 
     for (stopRow of importedStops) {
         let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
