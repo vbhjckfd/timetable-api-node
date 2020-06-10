@@ -79,7 +79,7 @@ module.exports = async (req, res, next) => {
             .value();
     }
 
-    if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
+    //if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
     res
         .set('Cache-Control', `public, max-age=0, s-maxage=${appHelpers.secondsUntilImportDone()}, stale-while-revalidate=15`)
