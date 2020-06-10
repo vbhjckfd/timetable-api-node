@@ -60,6 +60,12 @@ module.exports = {
         //             return JSON.parse(data);
         //         }
 
+                let stopRoutesMap = {};
+                for (let stopId of stopIds) {
+                    stopRoutesMap[stopId] = [];
+                }
+                return stopRoutesMap;
+
                 const stopTimes = await gtfs.getStoptimes({
                     agency_key: 'Microgiz',
                     stop_id: {
@@ -82,10 +88,7 @@ module.exports = {
                     tripsPerRoute[t.route_id].push(t);
                 });
 
-                let stopRoutesMap = {};
-                for (let stopId of stopIds) {
-                    stopRoutesMap[stopId] = [];
-                }
+
 
                 for (let routeId in tripsPerRoute) {
                     let tripShapeMap = {};
