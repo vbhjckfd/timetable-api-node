@@ -82,8 +82,7 @@ module.exports = async (req, res, next) => {
     if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
 
     res
-        .set('Cache-Control', 'public')
-        .set('Expires', appHelpers.nextImportDate().toGMTString()) // Expire cache after night import is done
+        .set('Cache-Control', `public, max-age=0, s-maxage=${appHelpers.secondsUntilImportDone()}, stale-while-revalidate=15`)
         .send({
             id: route.route_id,
             color: '#' + appHelpers.getRouteColor(route),

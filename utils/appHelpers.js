@@ -2,7 +2,7 @@ const gtfs = require('gtfs');
 const _ = require('lodash');
 
 module.exports = {
-    
+
     nextImportDate: () => {
         const now = new Date();
         return new Date(Date.UTC(
@@ -10,9 +10,13 @@ module.exports = {
             now.getMonth(),
             now.getDate() + 1,
             1,
-            10,
+            15,
             0
         ));
+    },
+
+    secondsUntilImportDone: () => {
+        return Math.round((module.exports.nextImportDate() - new Date()) / 1000);
     },
 
     normalizeRouteName: (routeName) => {
@@ -22,7 +26,7 @@ module.exports = {
         if (routeName.startsWith('Т') || routeName.startsWith('T')) {
             // tram or trol
             prefix = (rawNumber >= 20) ? 'Тр' : 'Т';
-            
+
         } else if (routeName.startsWith('Н') || routeName.startsWith('H')) {
             // night bus
             prefix = 'Н-А'

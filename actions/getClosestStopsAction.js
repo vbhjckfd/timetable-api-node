@@ -19,9 +19,13 @@ module.exports = async (req, res, next) => {
     }).find((error, results) => {
         if (error) throw error;
 
+        let cacheLine = `public, max-age=0, s-maxage=${appHelpers.secondsUntilImportDone()}, stale-while-revalidate=15`;
+        if (!results.length) {
+            cacheLine = 'no-cache'; // Do not cache if no stops around point
+        }
+
         res
-            .set('Cache-Control', 'public')
-            .set('Expires', appHelpers.nextImportDate().toGMTString()) // Expire cache after night import is done
+            .set('Cache-Control', cacheLine)
             .json(results.map(s => {
                 return {
                     code: s.code,
