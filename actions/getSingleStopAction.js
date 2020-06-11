@@ -16,22 +16,26 @@ module.exports = async (req, res, next) => {
         return;
     }
 
-    let timetableData = [];
+    let timetableData, transfers = [];
     try {
-        timetableData = await timetableService.getTimetableForStop(stop);
+        [timetableData, stopRoutesMap] = await Promise.all([
+            timetableService.getTimetableForStop(stop),
+            microgizService.routesThroughStop([stop.microgiz_id])
+        ]);
+
+        transfers = stopRoutesMap[stop.microgiz_id];
     } catch (e) {
         console.error(e);
     }
-    const cacheAge = timetableData.length > 0 ? 30 : 10;
-    const stopRoutesMap = await microgizService.routesThroughStop([stop.microgiz_id]);
+    const cacheAge = timetableData.length > 0 ? 10 : 5;
 
     res
-        .set('Cache-Control', `public, s-maxage=${cacheAge}`)
+        .set('Cache-Control', `public, max-age=0, s-maxage=${cacheAge}`)
         .json({
             name: stop.name,
             longitude: stop.location.coordinates[0],
             latitude: stop.location.coordinates[1],
-            transfers: stopRoutesMap[stop.microgiz_id],
+            transfers: transfers,
             code: stop.code,
             timetable: timetableData
         })

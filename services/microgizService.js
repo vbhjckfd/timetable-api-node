@@ -64,22 +64,26 @@ module.exports = {
                 for (let stopId of stopIds) {
                     stopRoutesMap[stopId] = [];
                 }
-                return stopRoutesMap;
 
                 const stopTimes = await gtfs.getStoptimes({
                     agency_key: 'Microgiz',
                     stop_id: {
                         $in: stopIds
                     }
-                });
+                }, {trip_id: 1, stop_id: 1, _id: 0});
 
-                const trips = await gtfs.getTrips({
-                    trip_id: {
-                        $in: stopTimes.map(st => {return st.trip_id})
-                    }
-                });
-                const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
-                const allRoutes = _(await gtfs.getRoutes({})).keyBy('route_id').value();
+                const [trips, allStopsRaw, allRoutesRaw] = await Promise.all([
+                    gtfs.getTrips({
+                        trip_id: {
+                            $in: stopTimes.map(st => {return st.trip_id})
+                        }
+                    }, {route_id: 1, shape_id: 1, trip_id: 1, _id: 0}),
+                    StopModel.find({}),
+                    gtfs.getRoutes({})
+                ])
+
+                const allStops = _(allStopsRaw).keyBy('microgiz_id').value();
+                const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
 
                 let tripsPerRoute = {};
                 trips.forEach(t => {
@@ -87,8 +91,6 @@ module.exports = {
 
                     tripsPerRoute[t.route_id].push(t);
                 });
-
-
 
                 for (let routeId in tripsPerRoute) {
                     let tripShapeMap = {};
@@ -98,23 +100,21 @@ module.exports = {
                         shapeIdsStat.push(t.shape_id);
                     });
 
-                    const mostPopularShapes = _(shapeIdsStat)
+                    const mostPopularShape = _(shapeIdsStat)
                         .countBy()
                         .entries()
                         .orderBy(_.last)
                         .takeRight(1)
                         .map(_.head)
-                        .sort()
                         .value()
+                        .pop()
                     ;
 
-                    if (!mostPopularShapes[0]) {
-                        continue;
-                    }
+                    if (!mostPopularShape) continue;
 
                     stopTimes
                     .filter(st => {
-                        return tripShapeMap[mostPopularShapes[0]] == st.trip_id;
+                        return tripShapeMap[mostPopularShape] == st.trip_id;
                     })
                     .forEach(st => {
                         allStops[st.stop_id] && stopRoutesMap[st.stop_id].push({
