@@ -85,7 +85,7 @@ module.exports = async (req, res, next) => {
         .set('Cache-Control', `public, max-age=0, s-maxage=${appHelpers.secondsUntilImportDone()}, stale-while-revalidate=15`)
         .send({
             id: route.route_id,
-            color: '#' + appHelpers.getRouteColor(route),
+            color: appHelpers.getRouteColor(route),
             route_short_name: route.route_short_name,
             route_long_name: route.route_long_name,
             stops: stopsByShape,

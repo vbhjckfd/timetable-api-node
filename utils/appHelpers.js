@@ -116,14 +116,14 @@ module.exports = {
                 };
 
                 const rawNumber = route.route_short_name.match(/\d+/g).join('')
-                return colorMap[rawNumber.toString()];
+                return '#' + colorMap[rawNumber.toString()];
             break;
             case 'Н':
-                return '000000';
+                return '#000000';
             break;
         }
 
-        return '0E4F95'
+        return '#0E4F95'
     },
 
     getTripDirectionMap: async (routeId) => {

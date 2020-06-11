@@ -18,7 +18,7 @@ module.exports = async (req, res, next) => {
         const position = i.vehicle.position;
 
         const dist = geodist(
-            {lat: position.latitude, lon: position.longitude}, 
+            {lat: position.latitude, lon: position.longitude},
             {lat: latitude, lon: longitude},
             {unit: 'meters'}
         );
@@ -31,7 +31,7 @@ module.exports = async (req, res, next) => {
 
         return {
             id: i.vehicle.vehicle.id,
-            color: '#' + appHelpers.getRouteColor(route),
+            color: appHelpers.getRouteColor(route),
             route: appHelpers.formatRouteName(route),
             vehicle_type: appHelpers.getRouteType(route),
             location: [

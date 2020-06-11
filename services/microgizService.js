@@ -118,7 +118,7 @@ module.exports = {
                     })
                     .forEach(st => {
                         allStops[st.stop_id] && stopRoutesMap[st.stop_id].push({
-                            color: '#' + appHelpers.getRouteColor(allRoutes[routeId]),
+                            color: appHelpers.getRouteColor(allRoutes[routeId]),
                             route: appHelpers.formatRouteName(allRoutes[routeId]),
                             vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
                         });
