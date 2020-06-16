@@ -86,6 +86,7 @@ module.exports = async (req, res, next) => {
         .send({
             id: route.route_id,
             color: appHelpers.getRouteColor(route),
+            type: appHelpers.getRouteType(route),
             route_short_name: route.route_short_name,
             route_long_name: route.route_long_name,
             stops: stopsByShape,
