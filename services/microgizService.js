@@ -65,6 +65,8 @@ module.exports = {
                     stopRoutesMap[stopId] = [];
                 }
 
+                return stopRoutesMap;
+
                 const stopTimes = await gtfs.getStoptimes({
                     agency_key: 'Microgiz',
                     stop_id: {
