@@ -22,6 +22,7 @@ const routeInfoDynamicAction = require('./actions/routeDynamicInfoAction');
 const routeInfoStaticAction = require('./actions/routeStaticInfoAction');
 const vehicleInfoAction = require('./actions/vehicleInfoAction');
 const closestTransportAction = require('./actions/closestTransportAction');
+const feedbackAction = require('./actions/feedbackAction');
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
 app.get('/vehicle/:vehicleId', vehicleInfoAction);
 app.get('/transport', closestTransportAction);
+app.post('/feedback', feedbackAction);
 app.use(notFoundAction);
 
 process.on('exit', mongoose.disconnect);
