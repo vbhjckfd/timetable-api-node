@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const stopSchema = require('./../schemas/stop');
+const feedbackSchema = require('./../schemas/feedback');
 
 const dbConfig = {
     user: process.env.MONGO_IMPORT_USER,
@@ -11,5 +12,6 @@ const dbConfig = {
 
 const timetableDb = mongoose.createConnection(process.env.MONGO_URL, dbConfig)
 timetableDb.model('Stop', stopSchema);
+timetableDb.model('Feedback', feedbackSchema);
 
 module.exports = timetableDb;

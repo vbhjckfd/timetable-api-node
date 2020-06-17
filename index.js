@@ -40,7 +40,10 @@ app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
 app.get('/vehicle/:vehicleId', vehicleInfoAction);
 app.get('/transport', closestTransportAction);
+
+app.options('/feedback', cors());
 app.post('/feedback', feedbackAction);
+
 app.use(notFoundAction);
 
 process.on('exit', mongoose.disconnect);
