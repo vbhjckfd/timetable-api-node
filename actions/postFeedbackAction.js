@@ -1,13 +1,18 @@
 const timetableDb = require('../connections/timetableDb');
 const FeedbackModel = timetableDb.model('Feedback');
+const { v4: uuidv4 } = require('uuid');
 
 module.exports = async (req, res, next) => {
     const feedbackData = {
         message: req.body.message,
+        uuid: uuidv4(),
+        response: null,
     };
 
     const feedback = await FeedbackModel.create(feedbackData);
 
     res
-        .send({message: `Ваше звернення зареєстровано під номером ${feedback._id}`});
+        .set('Location', `/feedback/${feedback.uuid}`)
+        .status(201)
+        .send();
 }

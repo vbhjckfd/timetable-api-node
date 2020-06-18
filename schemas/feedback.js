@@ -5,6 +5,14 @@ const FeedbackSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    uuid: {
+      type: String,
+      required: true
+    },
+    response: {
+      type: String,
+      required: false
+    }
 });
 
 module.exports = FeedbackSchema
