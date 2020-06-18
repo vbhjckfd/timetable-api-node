@@ -15,7 +15,8 @@
     "mongoose": "^5.9.19",
     "node-fetch": "^2.6.0",
     "npm-config": "^0.2.0",
-    "redis": "^3.0.2"
+    "redis": "^3.0.2",
+    "uuid": "^8.1.0"
   },
   "devDependencies": {},
   "scripts": {

@@ -22,7 +22,8 @@ const routeInfoDynamicAction = require('./actions/routeDynamicInfoAction');
 const routeInfoStaticAction = require('./actions/routeStaticInfoAction');
 const vehicleInfoAction = require('./actions/vehicleInfoAction');
 const closestTransportAction = require('./actions/closestTransportAction');
-const feedbackAction = require('./actions/feedbackAction');
+const postFeedbackAction = require('./actions/postFeedbackAction');
+const getFeedbackAction = require('./actions/getFeedbackAction');
 
 const app = express();
 
@@ -42,7 +43,8 @@ app.get('/vehicle/:vehicleId', vehicleInfoAction);
 app.get('/transport', closestTransportAction);
 
 app.options('/feedback', cors());
-app.post('/feedback', feedbackAction);
+app.post('/feedback', postFeedbackAction);
+app.get('/feedback/:id', getFeedbackAction);
 
 app.use(notFoundAction);
 
