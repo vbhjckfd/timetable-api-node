@@ -14,5 +14,7 @@ module.exports = async (req, res, next) => {
     res
         .set('Location', `/feedback/${feedback.uuid}`)
         .status(201)
-        .send();
+        .send({
+            id: feedback.uuid
+        });
 }
