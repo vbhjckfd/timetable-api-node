@@ -12,6 +12,21 @@ const PointSchema = new mongoose.Schema({
   }
 });
 
+const TransferSchema = new mongoose.Schema({
+  color: {
+    type: String,
+    required: true
+  },
+  route: {
+    type: String,
+    required: true
+  },
+  vehicle_type: {
+    type: String,
+    required: true
+  },
+});
+
 const StopSchema = new mongoose.Schema({
     code: {
         type: Number,
@@ -31,7 +46,8 @@ const StopSchema = new mongoose.Schema({
     },
     location: {
         type: PointSchema
-    }
+    },
+    transfers: [TransferSchema]
 });
 
 StopSchema.index({ "location": "2dsphere" });

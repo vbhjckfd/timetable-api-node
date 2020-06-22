@@ -64,6 +64,7 @@ module.exports = {
         }
 
         name = name.replace('-А', '');
+        name = name.replace('а', '');
 
         return name;
     },

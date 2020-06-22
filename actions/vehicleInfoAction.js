@@ -21,7 +21,7 @@ module.exports = async (req, res, next) => {
 
     let arrivalTimes = arrivalTimeItems ? arrivalTimeItems.tripUpdate.stopTimeUpdate : []
 
-    const stopIds = arrivalTimes.map((i) => {return i.stopId});
+    const stopIds = arrivalTimes.map(i => i.stopId);
 
     const stopIdsMap = _(await StopModel.find({
         microgiz_id: {
@@ -31,11 +31,9 @@ module.exports = async (req, res, next) => {
     .keyBy('microgiz_id')
     .value();
 
-    arrivalTimes = arrivalTimes.filter((item) => {return !!stopIdsMap[item.stopId]})
+    arrivalTimes = arrivalTimes.filter(item => !!stopIdsMap[item.stopId])
 
     const tripDirectionMap = await appHelpers.getTripDirectionMap(vehiclePosition.trip.routeId);
-
-    const stopRoutesMap = await microgizService.routesThroughStop(stopIds);
 
     res
         .set('Cache-Control', `public, s-maxage=5`)
@@ -53,7 +51,7 @@ module.exports = async (req, res, next) => {
                     code: stopIdsMap[item.stopId].code,
                     arrival: item.arrival ? (new Date(parseInt(`${item.arrival.time}000`))).toUTCString() : null,
                     departure: item.departure ? (new Date(parseInt(`${item.departure.time}000`))).toUTCString() : null,
-                    transfers: stopRoutesMap[item.stopId]
+                    transfers: stopIdsMap[item.stopId].transfers.map(i => _(i).pick('route', 'color', 'vehicle_type')) || []
                 };
             })
         });
