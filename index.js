@@ -15,9 +15,12 @@ const dbConfig = {
 mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
 
 const notFoundAction = require('./actions/notFoundAction');
+
+const remapStopsInfoAction = require('./actions/remapStopsInfoAction');
+const importGtfsStaticAction = require('./actions/importGtfsStaticAction');
+
 const getClosestStopsAction = require('./actions/getClosestStopsAction');
 const getSingleStopAction = require('./actions/getSingleStopAction');
-const importGtfsStaticAction = require('./actions/importGtfsStaticAction');
 const routeInfoDynamicAction = require('./actions/routeDynamicInfoAction');
 const routeInfoStaticAction = require('./actions/routeStaticInfoAction');
 const vehicleInfoAction = require('./actions/vehicleInfoAction');
@@ -36,7 +39,10 @@ app.use(function (err, req, res, next) {
 
 app.get('/stops/:code', getSingleStopAction);
 app.get('/closest', getClosestStopsAction);
+
 app.get('/import/gtfs_static', importGtfsStaticAction);
+app.get('/import/remap_stops_info', remapStopsInfoAction);
+
 app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
 app.get('/vehicle/:vehicleId', vehicleInfoAction);

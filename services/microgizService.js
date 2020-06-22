@@ -52,87 +52,79 @@ module.exports = {
         // });
     },
 
-    routesThroughStop: async (stopIds) => {
-        // return redisClient.getAsync(STOP_ROUTE_MAP_KEY)
-        //     .then(async (data) => {
-        //         if (data) {
-        //             console.log('HIT!');
-        //             return JSON.parse(data);
-        //         }
+routesThroughStop: async (stop) => {
+        let routes = new Map();
 
-                let stopRoutesMap = {};
-                for (let stopId of stopIds) {
-                    stopRoutesMap[stopId] = [];
-                }
+        const stopTimes = await gtfs.getStoptimes({
+            agency_key: 'Microgiz',
+            stop_id: stop.microgiz_id,
+            trip_id: {
+                $gt: 0
+            }
+        }, {trip_id: 1, _id: 0});
 
-                return stopRoutesMap;
+        const [trips, allRoutesRaw] = await Promise.all([
+            gtfs.getTrips({
+                trip_id: {$in: stopTimes.map(i => i.trip_id)},
+            }, {route_id: 1, shape_id: 1, trip_id: 1, _id: 0}),
+            gtfs.getRoutes({})
+        ])
 
-                const stopTimes = await gtfs.getStoptimes({
-                    agency_key: 'Microgiz',
-                    stop_id: {
-                        $in: stopIds
-                    }
-                }, {trip_id: 1, stop_id: 1, _id: 0});
+        const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
 
-                const [trips, allStopsRaw, allRoutesRaw] = await Promise.all([
-                    gtfs.getTrips({
-                        trip_id: {
-                            $in: stopTimes.map(st => {return st.trip_id})
-                        }
-                    }, {route_id: 1, shape_id: 1, trip_id: 1, _id: 0}),
-                    StopModel.find({}),
-                    gtfs.getRoutes({})
-                ])
+        let tripsPerRoute = {};
+        trips.forEach(t => {
+            tripsPerRoute[t.route_id] = tripsPerRoute[t.route_id] || [];
 
-                const allStops = _(allStopsRaw).keyBy('microgiz_id').value();
-                const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
+            tripsPerRoute[t.route_id].push(t);
+        });
 
-                let tripsPerRoute = {};
-                trips.forEach(t => {
-                    tripsPerRoute[t.route_id] = tripsPerRoute[t.route_id] || [];
+        for (let routeId in tripsPerRoute) {
+            let tripShapeMap = {};
+            let shapeIdsStat = [];
+            tripsPerRoute[routeId].forEach((t) => {
+                tripShapeMap[t.shape_id] = t.trip_id;
+                shapeIdsStat.push(t.shape_id);
+            });
 
-                    tripsPerRoute[t.route_id].push(t);
+            const mostPopularShape = _(shapeIdsStat)
+                .countBy()
+                .entries()
+                .orderBy(_.last)
+                .takeRight(1)
+                .map(_.head)
+                .value()
+                .pop()
+            ;
+
+            if (!mostPopularShape) continue;
+
+            stopTimes
+            .filter(st => {
+                return tripShapeMap[mostPopularShape] == st.trip_id;
+            })
+            .forEach(st => {
+                const routeName = appHelpers.formatRouteName(allRoutes[routeId]);
+                routes.set(routeName, {
+                    color: appHelpers.getRouteColor(allRoutes[routeId]),
+                    route: routeName,
+                    vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
                 });
+            });
+        }
 
-                for (let routeId in tripsPerRoute) {
-                    let tripShapeMap = {};
-                    let shapeIdsStat = [];
-                    tripsPerRoute[routeId].forEach((t) => {
-                        tripShapeMap[t.shape_id] = t.trip_id;
-                        shapeIdsStat.push(t.shape_id);
-                    });
+        routes = Array.from(routes.values()).sort((a, b) => {
+            if (a.route < b.route) {
+                return -1;
+            }
+            if (a.route > b.route) {
+                return 1;
+            }
 
-                    const mostPopularShape = _(shapeIdsStat)
-                        .countBy()
-                        .entries()
-                        .orderBy(_.last)
-                        .takeRight(1)
-                        .map(_.head)
-                        .value()
-                        .pop()
-                    ;
+            return 0;
+        });
 
-                    if (!mostPopularShape) continue;
-
-                    stopTimes
-                    .filter(st => {
-                        return tripShapeMap[mostPopularShape] == st.trip_id;
-                    })
-                    .forEach(st => {
-                        allStops[st.stop_id] && stopRoutesMap[st.stop_id].push({
-                            color: appHelpers.getRouteColor(allRoutes[routeId]),
-                            route: appHelpers.formatRouteName(allRoutes[routeId]),
-                            vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
-                        });
-                    });
-                }
-
-                // redisClient.setex(ARRIVALS_CACHE_KEY, 3600, JSON.stringify(stopRoutesMap));
-                return stopRoutesMap;
-        // });
-
-
-
+        return routes;
     }
 
 };

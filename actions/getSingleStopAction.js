@@ -1,6 +1,6 @@
 const timetableService = require('../services/stopArrivalService');
 const timetableDb = require('../connections/timetableDb');
-const microgizService = require('../services/microgizService');
+const _ = require('lodash');
 const StopModel = timetableDb.model('Stop');
 
 module.exports = async (req, res, next) => {
@@ -16,14 +16,9 @@ module.exports = async (req, res, next) => {
         return;
     }
 
-    let timetableData, transfers = [];
+    let timetableData = [];
     try {
-        [timetableData, stopRoutesMap] = await Promise.all([
-            timetableService.getTimetableForStop(stop),
-            microgizService.routesThroughStop([stop.microgiz_id])
-        ]);
-
-        transfers = stopRoutesMap[stop.microgiz_id];
+        timetableData = await timetableService.getTimetableForStop(stop);
     } catch (e) {
         console.error(e);
     }
@@ -35,7 +30,7 @@ module.exports = async (req, res, next) => {
             name: stop.name,
             longitude: stop.location.coordinates[0],
             latitude: stop.location.coordinates[1],
-            transfers: transfers,
+            transfers: stop.transfers.map(i => _(i).pick('route', 'color', 'vehicle_type')) || [],
             code: stop.code,
             timetable: timetableData
         })
