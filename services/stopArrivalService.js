@@ -8,7 +8,12 @@ const stopArrivalService = {
     getTimetableForStop: async function(stop) {
         const now = (new Date()).setMilliseconds(0);
 
-        const closestVehicles = (await microgizService.getArrivalTimes())
+        const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
+            microgizService.getArrivalTimes(),
+            microgizService.getVehiclesLocations()
+        ]);
+
+        const closestVehicles = closestVehiclesRaw
         .filter(entity => {
             return entity.tripUpdate.stopTimeUpdate.map(stu => parseInt(stu.stopId)).includes(stop.microgiz_id);
         })
@@ -29,24 +34,16 @@ const stopArrivalService = {
         .filter(i => new Date(i.time) >= now)
         .sort((a, b) => a.time - b.time);
 
-        const [tripsRaw, routesRaw] = await Promise.all([
-            gtfs.getTrips({
-                trip_id: {
-                    $in: closestVehicles.map(v => v.trip_id)
-                }
-            }),
-            gtfs.getRoutes({
-                route_id: {
-                    $in: closestVehicles.map(v => v.route_id)
-                }
-            })
-        ]);
+        const tripsRaw = await gtfs.getTrips({
+            trip_id: {
+                $in: closestVehicles.map(v => v.trip_id)
+            }
+        });
 
         const trips = _(tripsRaw).keyBy('trip_id').value();
-        const routes = _(routesRaw).keyBy('route_id').value();
 
         const vehiclesIds = closestVehicles.map(v => v.vehicle)
-        const vehiclesLocations = _(await microgizService.getVehiclesLocations())
+        const vehiclesLocations = _(vehiclesLocationsRaw)
             .filter(entity => vehiclesIds.includes(entity.vehicle.vehicle.id))
             .map(i => {
                 const position = i.vehicle.position;
@@ -64,16 +61,18 @@ const stopArrivalService = {
             .value()
         ;
 
-        return closestVehicles.map(vh => ({
-                color: appHelpers.getRouteColor(routes[vh.route_id]),
-                route: appHelpers.formatRouteName(routes[vh.route_id]),
-                vehicle_type: appHelpers.getRouteType(routes[vh.route_id]),
+        return closestVehicles.map(vh => {
+            const routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id).toObject();
+            const {_id, id, ...routeInfo} = routeInfoRaw;
+
+            return {
                 lowfloor: trips[vh.trip_id] ? !!trips[vh.trip_id].wheelchair_accessible : false,
                 end_stop: trips[vh.trip_id] ? appHelpers.cleanUpStopName(trips[vh.trip_id].trip_headsign) : '',
                 arrival_time: (new Date(vh.time)).toUTCString(),
                 time_left: appHelpers.getTextWaitTime(vh.time),
-                ...vehiclesLocations[vh.vehicle]
-            })
+                ...vehiclesLocations[vh.vehicle],
+                ...routeInfo,
+            }}
         );
     }
 

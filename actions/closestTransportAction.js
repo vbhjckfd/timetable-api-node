@@ -9,11 +9,16 @@ module.exports = async (req, res, next) => {
           longitude = parseFloat(req.query.longitude).toFixed(3)
     ;
 
-    const routes = _(await gtfs.getRoutes())
+    const [routesRaw, vehiclesRaw] = await Promise.all([
+        gtfs.getRoutes(),
+        microgizService.getVehiclesLocations()
+    ]);
+
+    const routes = _(routesRaw)
     .keyBy('route_id')
     .value();
 
-    const vehicles = _(await microgizService.getVehiclesLocations())
+    const vehicles = _(vehiclesRaw)
     .filter(i => {
         const position = i.vehicle.position;
 
@@ -23,7 +28,7 @@ module.exports = async (req, res, next) => {
             {unit: 'meters'}
         );
 
-        return dist < 600;
+        return dist < 1000;
     })
     .map(i => {
         const position = i.vehicle.position;

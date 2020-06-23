@@ -1,6 +1,5 @@
 const timetableService = require('../services/stopArrivalService');
 const timetableDb = require('../connections/timetableDb');
-const _ = require('lodash');
 const StopModel = timetableDb.model('Stop');
 
 module.exports = async (req, res, next) => {
@@ -24,13 +23,18 @@ module.exports = async (req, res, next) => {
     }
     const cacheAge = timetableData.length > 0 ? 10 : 5;
 
+    const transfers = stop.transfers.map(i => {
+        const { _id, ...omitted } = i.toObject();
+        return omitted;
+    });
+
     res
         .set('Cache-Control', `public, max-age=0, s-maxage=${cacheAge}`)
         .json({
             name: stop.name,
             longitude: stop.location.coordinates[0],
             latitude: stop.location.coordinates[1],
-            transfers: stop.transfers.map(i => _(i).pick('route', 'color', 'vehicle_type')) || [],
+            transfers: transfers,
             code: stop.code,
             timetable: timetableData
         })

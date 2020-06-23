@@ -7,17 +7,15 @@ const appHelpers = require('../utils/appHelpers');
 
 module.exports = async (req, res, next) => {
     let vehiclePosition = _(await microgizService.getVehiclesLocations())
-    .find((entity) => {
-        return entity.vehicle.vehicle.id == req.params.vehicleId;
-    });
+        .find(entity => entity.vehicle.vehicle.id == req.params.vehicleId)
+    ;
 
     if (!vehiclePosition) return res.sendStatus(404);
     vehiclePosition = vehiclePosition.vehicle;
 
     const arrivalTimeItems = _(await microgizService.getArrivalTimes())
-    .find((entity) => {
-        return entity.tripUpdate.vehicle.id == req.params.vehicleId;
-    }) || null;
+        .find(entity => entity.tripUpdate.vehicle.id == req.params.vehicleId) || null
+    ;
 
     let arrivalTimes = arrivalTimeItems ? arrivalTimeItems.tripUpdate.stopTimeUpdate : []
 
@@ -47,11 +45,16 @@ module.exports = async (req, res, next) => {
             direction: tripDirectionMap[vehiclePosition.trip.tripId],
             licensePlate: vehiclePosition.vehicle.licensePlate,
             arrivals: arrivalTimes.map((item) => {
+                const transfers = stopIdsMap[item.stopId].transfers.map(i => {
+                    const { _id, ...omitted } = i.toObject();
+                    return omitted;
+                });
+
                 return {
                     code: stopIdsMap[item.stopId].code,
                     arrival: item.arrival ? (new Date(parseInt(`${item.arrival.time}000`))).toUTCString() : null,
                     departure: item.departure ? (new Date(parseInt(`${item.departure.time}000`))).toUTCString() : null,
-                    transfers: stopIdsMap[item.stopId].transfers.map(i => _(i).pick('route', 'color', 'vehicle_type')) || []
+                    transfers: transfers
                 };
             })
         });

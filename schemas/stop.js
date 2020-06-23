@@ -13,6 +13,10 @@ const PointSchema = new mongoose.Schema({
 });
 
 const TransferSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    required: false
+  },
   color: {
     type: String,
     required: true

@@ -21,6 +21,7 @@
   "devDependencies": {},
   "scripts": {
     "start": "functions-framework --target=timetable",
+    "profileapp": "node --prof node_modules/@google-cloud/functions-framework --target=timetable",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "vbhjckfd@gmail.com",
