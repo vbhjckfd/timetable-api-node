@@ -13,6 +13,8 @@ module.exports = async (req, res, next) => {
         return res.sendStatus(500);
     }
 
+    let saveCallbacks = [];
+
     for (stopRow of importedStops) {
         let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 
@@ -70,17 +72,10 @@ module.exports = async (req, res, next) => {
         stopModel.microgiz_id = stopData.microgiz_id;
         stopModel.location = stopData.location;
 
-        stopModel.save(async (err, stopObj) => {
-            if (err) {
-                console.log(err);
-                return;
-            }
-
+        saveCallbacks.push(stopModel.save().then(async (stopObj) => {
             stopObj.transfers = await microgizService.routesThroughStop(stopObj);
-            stopObj.save((err) => {
-                if (err) console.log(err);
-            });
-        });
+            await stopObj.save();
+        }));
 
         stopIds.push(stopModel.id);
     }
@@ -90,6 +85,8 @@ module.exports = async (req, res, next) => {
         await StopModel.deleteMany({"_id" : { $nin : stopIds}})
     }
 
+    await Promise.all(saveCallbacks);
+    console.log(`${saveCallbacks.length} callbacks completed`);
 
     res.send('Ok');
 }
