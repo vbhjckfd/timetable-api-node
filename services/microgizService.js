@@ -106,6 +106,7 @@ routesThroughStop: async (stop) => {
             .forEach(st => {
                 const routeName = appHelpers.formatRouteName(allRoutes[routeId]);
                 routes.set(routeName, {
+                    id: routeId,
                     color: appHelpers.getRouteColor(allRoutes[routeId]),
                     route: routeName,
                     vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
