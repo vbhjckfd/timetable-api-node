@@ -72,10 +72,13 @@ module.exports = async (req, res, next) => {
         stopModel.microgiz_id = stopData.microgiz_id;
         stopModel.location = stopData.location;
 
-        saveCallbacks.push(stopModel.save().then(async (stopObj) => {
-            stopObj.transfers = await microgizService.routesThroughStop(stopObj);
-            await stopObj.save();
-        }));
+        saveCallbacks.push(stopModel.save()
+            .then(async (stopObj) => {
+                stopObj.transfers = await microgizService.routesThroughStop(stopObj);
+                await stopObj.save();
+            }).catch(error => {
+                console.error(error, code);
+            }));
 
         stopIds.push(stopModel.id);
     }

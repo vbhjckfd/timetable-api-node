@@ -52,6 +52,8 @@ const StopSchema = new mongoose.Schema({
         type: PointSchema
     },
     transfers: [TransferSchema]
+}, {
+  skipVersioning: { transfers: true }
 });
 
 StopSchema.index({ "location": "2dsphere" });

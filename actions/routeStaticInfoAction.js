@@ -1,22 +1,11 @@
 const gtfs = require('gtfs');
-const mongoose = require('mongoose');
 const _ = require('lodash');
 const timetableDb = require('../connections/timetableDb');
 const appHelpers = require("../utils/appHelpers");
 
 const StopModel = timetableDb.model('Stop');
 
-const dbConfig = {
-    user: process.env.MONGO_IMPORT_USER,
-    pass: process.env.MONGO_IMPORT_PASSWORD,
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    useFindAndModify: false
-}
-
 module.exports = async (req, res, next) => {
-    mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
-
     const query = Number(req.params.name) ? {route_id: parseInt(req.params.name).toString() } : {route_short_name: appHelpers.normalizeRouteName(req.params.name)}
 
     const route = (await gtfs.getRoutes(query)).shift();
