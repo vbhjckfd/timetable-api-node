@@ -8,10 +8,13 @@ const stopArrivalService = {
     getTimetableForStop: async function(stop) {
         const now = (new Date()).setMilliseconds(0);
 
-        const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
+        const [closestVehiclesRaw, vehiclesLocationsRaw, allRoutesRaw] = await Promise.all([
             microgizService.getArrivalTimes(),
-            microgizService.getVehiclesLocations()
+            microgizService.getVehiclesLocations(),
+            gtfs.getRoutes()
         ]);
+
+        const routesByRouteId = _(allRoutesRaw).keyBy('route_id').value();
 
         const closestVehicles = closestVehiclesRaw
         .filter(entity => {
@@ -62,8 +65,19 @@ const stopArrivalService = {
         ;
 
         return closestVehicles.map(vh => {
-            const routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id).toObject();
-            const {_id, id, ...routeInfo} = routeInfoRaw;
+            let routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id);
+            let routeInfo = {}
+            if (routeInfoRaw) {
+                routeInfo = _.omit(routeInfoRaw.toObject(), ['_id', 'id'])
+            } else {
+                const routeObj = routesByRouteId[vh.route_id];
+                console.error(`No binding for route ${appHelpers.formatRouteName(routeObj)} to stop ${stop.name} (${stop.code})`);
+                routeInfo = {
+                    color: appHelpers.getRouteColor(routeObj),
+                    route: appHelpers.formatRouteName(routeObj),
+                    vehicle_type: appHelpers.getRouteType(routeObj),
+                }
+            }
 
             return {
                 lowfloor: trips[vh.trip_id] ? !!trips[vh.trip_id].wheelchair_accessible : false,
