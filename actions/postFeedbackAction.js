@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 module.exports = async (req, res, next) => {
     const feedbackData = {
         message: req.body.message,
+        user_uuid: req.body.uuid,
         uuid: uuidv4(),
         response: null,
     };

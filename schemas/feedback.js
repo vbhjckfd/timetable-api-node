@@ -9,6 +9,10 @@ const FeedbackSchema = new mongoose.Schema({
       type: String,
       required: true
     },
+    user_uuid: {
+      type: String,
+      required: false
+    },
     response: {
       type: String,
       required: false
