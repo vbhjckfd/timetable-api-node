@@ -15,9 +15,12 @@ module.exports = async (req, res, next) => {
         return;
     }
 
+    const skipTimetableData = req.query.skipTimetableData || false;
     let timetableData = [];
     try {
-        timetableData = await timetableService.getTimetableForStop(stop);
+        if (!skipTimetableData) {
+            timetableData = await timetableService.getTimetableForStop(stop);
+        }
     } catch (e) {
         console.error(e);
     }
@@ -29,7 +32,7 @@ module.exports = async (req, res, next) => {
     });
 
     res
-        .set('Cache-Control', `public, max-age=0, s-maxage=${cacheAge}`)
+        .set('Cache-Control', `public, max-age=0, s-maxage=${skipTimetableData ? 3600 : cacheAge}`)
         .json({
             name: stop.name,
             longitude: stop.location.coordinates[0],
