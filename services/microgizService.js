@@ -16,6 +16,14 @@ const STOP_ROUTE_MAP_KEY = 'stop-route-map-hash';
 
 module.exports = {
 
+    getTimeOfLastStaticUpdate: () => {
+        return fetch('http://track.ua-gis.com/gtfs/lviv/static.zip', {
+            method: 'HEAD'
+        }).then(response => {
+            return new Date(response.headers.get('last-modified'));
+        })
+    },
+
     getVehiclesLocations: () => {
         // return redisClient.getAsync(LOCATION_CACHE_KEY)
         //     .then((data) => {
