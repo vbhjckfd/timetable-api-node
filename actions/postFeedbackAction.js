@@ -1,21 +1,24 @@
 const timetableDb = require('../connections/timetableDb');
 const FeedbackModel = timetableDb.model('Feedback');
-const { v4: uuidv4 } = require('uuid');
 
 module.exports = async (req, res, next) => {
-    const feedbackData = {
+    let dataToSave = {
         message: req.body.message,
         user_uuid: req.body.uuid,
-        uuid: uuidv4(),
-        response: null,
-    };
+        is_response: false,
+        user_agent: req.get('User-Agent') || null
+    }
 
-    const feedback = await FeedbackModel.create(feedbackData);
+    if (Array.isArray(req.body.location) && req.body.location.length == 2) {
+        dataToSave.location = {
+            type: "Point",
+            coordinates: req.body.location || [],
+        }
+    }
+
+    await FeedbackModel.create(dataToSave);
 
     res
-        .set('Location', `/feedback/${feedback.uuid}`)
         .status(201)
-        .send({
-            id: feedback.uuid
-        });
+        .send();
 }
