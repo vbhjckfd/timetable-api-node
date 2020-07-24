@@ -27,6 +27,7 @@ const vehicleInfoAction = require('./actions/vehicleInfoAction');
 const closestTransportAction = require('./actions/closestTransportAction');
 const postFeedbackAction = require('./actions/postFeedbackAction');
 const getFeedbackAction = require('./actions/getFeedbackAction');
+const getGlobalMessagesAction = require('./actions/getGlobalMessagesAction');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.get('/transport', closestTransportAction);
 app.options('/feedback', cors());
 app.post('/feedback', postFeedbackAction);
 app.get('/feedback/:id', getFeedbackAction);
+app.get('/messages', getGlobalMessagesAction);
 
 app.use(notFoundAction);
 
