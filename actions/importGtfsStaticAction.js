@@ -21,7 +21,7 @@ module.exports = async (req, res, next) => {
       getLastUpdateLocalDate()
     ]);
 
-    if (lastUpdateLocal.getTime() == lastUpdateRemote.getTime()) {
+    if ((lastUpdateLocal || new Date()).getTime() == lastUpdateRemote.getTime()) {
       return res.send('Still fresh!');
     }
 
@@ -37,7 +37,7 @@ module.exports = async (req, res, next) => {
       ]
     });
 
-    await redisClient.set(STATIC_REFRESH_DATE_KEY, JSON.stringify(lastUpdateRemote));
+    redisClient.set(STATIC_REFRESH_DATE_KEY, JSON.stringify(lastUpdateRemote));
 
     res.send('Refreshed');
 }
