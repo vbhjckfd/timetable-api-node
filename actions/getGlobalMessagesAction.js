@@ -2,7 +2,16 @@ const timetableDb = require('../connections/timetableDb');
 const MessageModel = timetableDb.model('Message');
 
 module.exports = async (req, res, next) => {
-    const dateSince = req.query.since ? new Date(req.query.since) : new Date(1970, 0);
+    let dateSince = new Date(1970, 0);
+    if (req.query.since) {
+        dateSince = new Date(req.query.since.replace(/"/g, ''));
+
+        if (dateSince instanceof Date && isNaN(dateSince.getTime())) {
+            console.error(`Bad input argument ${req.query.since}`);
+            dateSince = new Date(1970, 0);
+        }
+    }
+
     const messagesRaw = await MessageModel.find({createdAt: {$gt: dateSince}}).sort('createdAt');
 
     res
