@@ -29,6 +29,10 @@ const TransferSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  shape_id: {
+    type: String,
+    required: false
+  },
 });
 
 const StopSchema = new mongoose.Schema({

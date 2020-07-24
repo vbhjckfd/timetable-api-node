@@ -94,6 +94,7 @@ module.exports = {
                     color: appHelpers.getRouteColor(allRoutes[routeId]),
                     route: routeName,
                     vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
+                    shape_id: mostPopularShape
                 });
             });
         }
