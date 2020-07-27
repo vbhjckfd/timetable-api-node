@@ -7,6 +7,10 @@ const redisClient = Promise.promisifyAll(require("../services/redisClient"));
 const STATIC_REFRESH_DATE_KEY = 'static-data-refreshed';
 
 module.exports = async (req, res, next) => {
+    if (req.query.drop_last_update) {
+      redisClient.del(STATIC_REFRESH_DATE_KEY);
+      return res.send('Key dropped');
+    }
 
     const getLastUpdateLocalDate = () => {
       return redisClient
