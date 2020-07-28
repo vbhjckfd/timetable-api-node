@@ -1,20 +1,49 @@
 const gtfs = require('gtfs');
 const timetableDb = require('../connections/timetableDb');
 const microgizService = require("../services/microgizService");
+const appHelpers = require("../utils/appHelpers");
 
 module.exports = async (req, res, next) => {
 
     const StopModel = timetableDb.model('Stop');
+    const RouteModel = timetableDb.model('Route');
 
-    let importedStops = await gtfs.getStops();
+    const importedStops = await gtfs.getStops();
+    const importedRoutes = await gtfs.getRoutes();
     let stopIds = [];
 
     if (!importedStops.length) {
         return res.sendStatus(500);
     }
 
-    let saveCallbacks = [];
+    let tripDirectionPromises = [];
+    for (route of importedRoutes) {
+        let routeModel = await RouteModel.findOne({external_id: route.route_id});
 
+        let routeData = {
+            external_id: route.route_id,
+            trip_shape_map: {}
+        };
+
+        if (!routeModel) {
+            routeModel = await RouteModel.create(routeData);
+        }
+
+        tripDirectionPromises.push(
+            appHelpers.getTripDirectionMap(route.route_id)
+                .then(data => {
+                    routeModel.trip_shape_map = data;
+                    routeModel.save();
+                })
+                .catch(error => {
+                    console.error(error, code);
+                })
+        );
+    }
+    await Promise.all(tripDirectionPromises);
+    console.log(`${tripDirectionPromises.length} routes processed`);
+
+    let saveCallbacks = [];
     for (stopRow of importedStops) {
         let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 

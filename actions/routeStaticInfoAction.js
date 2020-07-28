@@ -4,6 +4,7 @@ const timetableDb = require('../connections/timetableDb');
 const appHelpers = require("../utils/appHelpers");
 
 const StopModel = timetableDb.model('Stop');
+const RouteModel = timetableDb.model('Route');
 
 module.exports = async (req, res, next) => {
     const query = Number(req.params.name) ? {route_id: parseInt(req.params.name).toString() } : {route_short_name: appHelpers.normalizeRouteName(req.params.name)}
@@ -12,28 +13,22 @@ module.exports = async (req, res, next) => {
 
     if (!route) return res.sendStatus(404);
 
-    let shapeIdsStat = [];
+    const routeLocal = await RouteModel.findOne({external_id: route.route_id})
+    let mostPopularShapes = new Set();
 
     const trips = await gtfs.getTrips({
-        'route_id': route.route_id
+        'trip_id': {$in : Array.from(routeLocal.trip_shape_map.keys())}
     });
 
     let tripShapeMap = {};
     trips.forEach((t) => {
         tripShapeMap[t.shape_id] = t.trip_id;
-        shapeIdsStat.push(t.shape_id);
+        mostPopularShapes.add(t.shape_id);
     });
 
     const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
 
-    let mostPopularShapes = _(shapeIdsStat)
-        .countBy()
-        .entries()
-        .orderBy(_.last)
-        .takeRight(2)
-        .map(_.head)
-        .sort()
-        .value();
+    mostPopularShapes = Array.from(mostPopularShapes);
 
     let shapes = await gtfs.getShapes({
         'shape_id': {
@@ -55,10 +50,10 @@ module.exports = async (req, res, next) => {
     for (key in mostPopularShapes) {
         shapes[key] = _(shapes[key]).filter((data) => data.shape_id == mostPopularShapes[key]).value();
         stopsByShape[key] = _(stopTimes)
-            .filter((data) => data.trip_id == tripShapeMap[mostPopularShapes[key]])
-            .filter((st) => !!allStops[st.stop_id])
-            .map((st) => {return allStops[st.stop_id]})
-            .map((s) => {
+            .filter(data => data.trip_id == tripShapeMap[mostPopularShapes[key]])
+            .filter(st => !!allStops[st.stop_id])
+            .map(st => allStops[st.stop_id])
+            .map(s => {
                 return {
                     code: s.code,
                     name: s.name,
