@@ -1,19 +1,23 @@
-const gtfs = require('gtfs');
 const _ = require('lodash');
 const timetableDb = require('../connections/timetableDb');
 const StopModel = timetableDb.model('Stop');
+const RouteModel = timetableDb.model('Route');
 const microgizService = require('../services/microgizService');
-const appHelpers = require('../utils/appHelpers');
 
 module.exports = async (req, res, next) => {
-    let vehiclePosition = _(await microgizService.getVehiclesLocations())
+    const [vehiclePositionRaw, arrivalTimeItemsRaw] = await Promise.all([
+        microgizService.getVehiclesLocations(),
+        microgizService.getArrivalTimes()
+    ]);
+
+    let vehiclePosition = _(vehiclePositionRaw)
         .find(entity => entity.vehicle.vehicle.id == req.params.vehicleId)
     ;
 
     if (!vehiclePosition) return res.sendStatus(404);
     vehiclePosition = vehiclePosition.vehicle;
 
-    const arrivalTimeItems = _(await microgizService.getArrivalTimes())
+    const arrivalTimeItems = _(arrivalTimeItemsRaw)
         .find(entity => entity.tripUpdate.vehicle.id == req.params.vehicleId) || null
     ;
 
@@ -31,7 +35,7 @@ module.exports = async (req, res, next) => {
 
     arrivalTimes = arrivalTimes.filter(item => !!stopIdsMap[item.stopId])
 
-    const tripDirectionMap = await appHelpers.getTripDirectionMap(vehiclePosition.trip.routeId);
+    const routeLocal = await RouteModel.findOne({external_id: vehiclePosition.trip.routeId});
 
     res
         .set('Cache-Control', `public, s-maxage=5`)
@@ -42,7 +46,7 @@ module.exports = async (req, res, next) => {
             ],
             routeId: vehiclePosition.trip.routeId,
             bearing: vehiclePosition.position.bearing,
-            direction: tripDirectionMap[vehiclePosition.trip.tripId],
+            direction: routeLocal.trip_shape_map.get(vehiclePosition.trip.tripId.toString()),
             licensePlate: vehiclePosition.vehicle.licensePlate,
             arrivals: arrivalTimes.map((item) => {
                 const transfers = stopIdsMap[item.stopId].transfers.map(i => {
