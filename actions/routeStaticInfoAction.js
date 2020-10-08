@@ -54,10 +54,16 @@ module.exports = async (req, res, next) => {
             .filter(st => !!allStops[st.stop_id])
             .map(st => allStops[st.stop_id])
             .map(s => {
+                const transfers = s.transfers.map(i => {
+                    const { _id, shape_id, ...omitted } = i.toObject();
+                    return omitted;
+                });
+
                 return {
                     code: s.code,
                     name: s.name,
-                    loc: [s.location.coordinates[1], s.location.coordinates[0]]
+                    loc: [s.location.coordinates[1], s.location.coordinates[0]],
+                    transfers: transfers,
                 }
             })
             .value();
