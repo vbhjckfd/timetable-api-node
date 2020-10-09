@@ -54,10 +54,20 @@ module.exports = async (req, res, next) => {
             .filter(st => !!allStops[st.stop_id])
             .map(st => allStops[st.stop_id])
             .map(s => {
-                const transfers = s.transfers.map(i => {
+                const transfers = s.transfers
+                .map(i => {
                     const { _id, shape_id, ...omitted } = i.toObject();
                     return omitted;
-                });
+                })
+                .filter(i => route.route_id != i.id)
+                .sort((a, b) => {
+                    if (a['vehicle_type'] == b['vehicle_type']) {
+                        return 0;
+                    }
+
+                    return a['vehicle_type'] == 'bus' ? 1 : -1;
+                })
+                ;
 
                 return {
                     code: s.code,
