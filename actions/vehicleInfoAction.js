@@ -49,10 +49,20 @@ module.exports = async (req, res, next) => {
             direction: routeLocal.trip_shape_map.get(vehiclePosition.trip.tripId.toString()),
             licensePlate: vehiclePosition.vehicle.licensePlate,
             arrivals: arrivalTimes.map((item) => {
-                const transfers = stopIdsMap[item.stopId].transfers.map(i => {
+                const transfers = stopIdsMap[item.stopId].transfers
+                .map(i => {
                     const { _id, ...omitted } = i.toObject();
                     return omitted;
-                });
+                })
+                .filter(i => vehiclePosition.trip.routeId != i.id)
+                .sort((a, b) => {
+                    if (a['vehicle_type'] == b['vehicle_type']) {
+                        return 0;
+                    }
+
+                    return a['vehicle_type'] == 'bus' ? 1 : -1;
+                })
+                ;
 
                 return {
                     code: stopIdsMap[item.stopId].code,
