@@ -18,14 +18,9 @@ module.exports = async (req, res, next) => {
     vehiclePosition = vehiclePosition.vehicle;
 
     const arrivalTimeItems = _(arrivalTimeItemsRaw)
-        .filter(entity => entity.tripUpdate.vehicle.id == req.params.vehicleId)
-        .value()
-    ;
+        .find(e => e.tripUpdate.trip.tripId == vehiclePosition.trip.tripId) || null;
 
-    let arrivalTimes = [];
-    if (arrivalTimeItems) {
-        arrivalTimeItems.forEach(i => {arrivalTimes = arrivalTimes.concat(i.tripUpdate.stopTimeUpdate)});
-    }
+    let arrivalTimes = arrivalTimeItems ? arrivalTimeItems.tripUpdate.stopTimeUpdate : [];
 
     const stopIds = arrivalTimes.map(i => i.stopId);
 
