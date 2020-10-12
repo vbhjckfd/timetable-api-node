@@ -18,10 +18,14 @@ module.exports = async (req, res, next) => {
     vehiclePosition = vehiclePosition.vehicle;
 
     const arrivalTimeItems = _(arrivalTimeItemsRaw)
-        .find(entity => entity.tripUpdate.vehicle.id == req.params.vehicleId) || null
+        .filter(entity => entity.tripUpdate.vehicle.id == req.params.vehicleId)
+        .value()
     ;
 
-    let arrivalTimes = arrivalTimeItems ? arrivalTimeItems.tripUpdate.stopTimeUpdate : []
+    let arrivalTimes = [];
+    if (arrivalTimeItems) {
+        arrivalTimeItems.forEach(i => {arrivalTimes = arrivalTimes.concat(i.tripUpdate.stopTimeUpdate)});
+    }
 
     const stopIds = arrivalTimes.map(i => i.stopId);
 
