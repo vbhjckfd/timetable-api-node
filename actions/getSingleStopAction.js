@@ -32,7 +32,7 @@ module.exports = async (req, res, next) => {
     });
 
     res
-        .set('Cache-Control', `public, max-age=0, s-maxage=${skipTimetableData ? 3600 : cacheAge}`)
+        .set('Cache-Control', `public, max-age=0, s-maxage=${skipTimetableData ? 10 * 24 * 3600 : cacheAge}`)
         .json({
             name: stop.name,
             longitude: stop.location.coordinates[0],

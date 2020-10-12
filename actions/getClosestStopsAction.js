@@ -23,7 +23,7 @@ module.exports = async (req, res, next) => {
             return res.status(500).send(`Bad argument: ${JSON.stringify([latitude, longitude])}`);
         }
 
-        let cacheLine = `public, max-age=0, s-maxage=${appHelpers.secondsUntilImportDone()}, stale-while-revalidate=15`;
+        let cacheLine = `public, max-age=0, s-maxage=${10 * 24 * 3600}, stale-while-revalidate=15`;
         if (!results.length) {
             cacheLine = 'no-cache'; // Do not cache if no stops around point
         }
