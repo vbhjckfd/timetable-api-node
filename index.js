@@ -21,6 +21,8 @@ const importGtfsStaticAction = require('./actions/importGtfsStaticAction');
 
 const getClosestStopsAction = require('./actions/getClosestStopsAction');
 const getSingleStopAction = require('./actions/getSingleStopAction');
+const getStopTimetableAction = require('./actions/getStopTimetableAction');
+const getStopStaticDataAction = require('./actions/getStopStaticDataAction');
 const getAllStopsAction = require('./actions/getAllStopsAction');
 const routeInfoDynamicAction = require('./actions/routeDynamicInfoAction');
 const routeInfoStaticAction = require('./actions/routeStaticInfoAction');
@@ -39,6 +41,8 @@ app.use(function (err, req, res, next) {
   res.status(500).send('Something broke!');
 });
 
+app.get('/stops/:code/timetable', getStopTimetableAction);
+app.get('/stops/:code/static', getStopStaticDataAction);
 app.get('/stops/:code', getSingleStopAction);
 app.get('/stops', getAllStopsAction);
 app.get('/closest', getClosestStopsAction);
