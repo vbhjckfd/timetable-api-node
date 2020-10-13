@@ -17,10 +17,12 @@ module.exports = async (req, res, next) => {
     if (!vehiclePosition) return res.sendStatus(404);
     vehiclePosition = vehiclePosition.vehicle;
 
-    const arrivalTimeItems = _(arrivalTimeItemsRaw)
-        .find(e => e.tripUpdate.trip.tripId == vehiclePosition.trip.tripId) || null;
-
-    let arrivalTimes = arrivalTimeItems ? arrivalTimeItems.tripUpdate.stopTimeUpdate : [];
+    let arrivalTimes = _(arrivalTimeItemsRaw)
+        .filter(e => e.tripUpdate.vehicle.id == req.params.vehicleId)
+        .map(e => e.tripUpdate.stopTimeUpdate)
+        .flatten()
+        .sortBy(i => i.stopSequence)
+        .value()
 
     const stopIds = arrivalTimes.map(i => i.stopId);
 
