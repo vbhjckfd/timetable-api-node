@@ -136,12 +136,14 @@ module.exports = {
             .map(i => i.shape_id)
         );
 
+        const existingShapeRaw = await gtfs.getShapes({
+            shape_id: {
+                '$in': Array.from(tripsShapes)
+            }
+        }, {shape_id: 1, _id: 0});
+
         const existingShapeIds = new Set(
-            (await gtfs.getShapes({
-                shape_id: {
-                    '$in': Array.from(tripsShapes)
-                }
-            }, {shape_id: 1, _id: 0}))
+            Array.from(existingShapeRaw)
             .flat()
             .map(i => i.shape_id)
         );
