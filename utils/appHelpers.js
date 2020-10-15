@@ -32,7 +32,7 @@ module.exports = {
             prefix = 'Н-А'
         }
 
-        return prefix + ((rawNumber > 10) ? rawNumber : ('0' + rawNumber));
+        return prefix + ((rawNumber >= 10) ? rawNumber : ('0' + rawNumber));
     },
 
     getRouteType: (route) => {
