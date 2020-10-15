@@ -18,25 +18,30 @@ module.exports = async (req, res, next) => {
 
     let tripDirectionPromises = [];
     for (route of importedRoutes) {
-        let routeModel = await RouteModel.findOne({external_id: route.route_id});
-
-        let routeData = {
-            external_id: route.route_id,
-            trip_shape_map: {}
-        };
-
-        if (!routeModel) {
-            routeModel = await RouteModel.create(routeData);
-        }
-
         tripDirectionPromises.push(
             appHelpers.getTripDirectionMap(route.route_id)
-                .then(data => {
+                .then(async data => {
+                    const any_trip_id = data.keys().next().value;
+                    const trip = (await gtfs.getTrips({
+                        'trip_id': any_trip_id
+                    })).shift();
+
+                    let routeModel = await RouteModel.findOne({external_id: trip.route_id});
+
+                    if (!routeModel) {
+                        routeModel = await RouteModel.create({
+                            external_id: route.route_id,
+                            trip_shape_map: new Map()
+                        });
+                    }
+
                     routeModel.trip_shape_map = data;
-                    routeModel.save();
+                    routeModel.markModified('trip_shape_map');
+
+                    await routeModel.save();
                 })
                 .catch(error => {
-                    console.error(error, code);
+                    console.error(error);
                 })
         );
     }
@@ -104,6 +109,7 @@ module.exports = async (req, res, next) => {
         saveCallbacks.push(stopModel.save()
             .then(async (stopObj) => {
                 stopObj.transfers = await microgizService.routesThroughStop(stopObj);
+                stopObj.markModified('transfers');
                 await stopObj.save();
             }).catch(error => {
                 console.error(error, code);

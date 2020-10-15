@@ -18,7 +18,7 @@ module.exports = async (req, res, next) => {
 
     const trips = await gtfs.getTrips({
         'trip_id': {$in : Array.from(routeLocal.trip_shape_map.keys())}
-    });
+    }, { shape_id: 1, trip_id: 1, _id: 0 });
 
     let tripShapeMap = {};
     trips.forEach((t) => {
