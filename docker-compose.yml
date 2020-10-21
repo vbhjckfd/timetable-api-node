@@ -12,8 +12,8 @@ services:
         image: mongo
         restart: always
         environment:
-            MONGO_INITDB_ROOT_USERNAME: ${MONGO_IMPORT_USER}
-            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_IMPORT_PASSWORD}
+            MONGO_INITDB_ROOT_USERNAME: ${MONGO_LOCAL_USER}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_LOCAL_PASSWORD}
         ports:
             - "27019:27017"
     redis:

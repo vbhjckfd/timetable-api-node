@@ -5,8 +5,8 @@ const messageSchema = require('./../schemas/message');
 const routeSchema = require('./../schemas/route');
 
 const dbConfig = {
-    user: process.env.MONGO_IMPORT_USER,
-    pass: process.env.MONGO_IMPORT_PASSWORD,
+    user: process.env.MONGO_LOCAL_USER,
+    pass: process.env.MONGO_LOCAL_PASSWORD,
     useNewUrlParser: true,
     useUnifiedTopology: true,
     useFindAndModify: false
