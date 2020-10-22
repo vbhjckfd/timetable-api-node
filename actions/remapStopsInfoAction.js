@@ -30,7 +30,7 @@ module.exports = async (req, res, next) => {
 
                     if (!routeModel) {
                         routeModel = await RouteModel.create({
-                            external_id: route.route_id,
+                            external_id: trip.route_id,
                             trip_shape_map: new Map()
                         });
                     }
