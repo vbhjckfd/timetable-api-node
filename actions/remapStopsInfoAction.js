@@ -16,40 +16,33 @@ module.exports = async (req, res, next) => {
         return res.sendStatus(500);
     }
 
-    let tripDirectionPromises = [];
-    for (route of importedRoutes) {
-        tripDirectionPromises.push(
-            appHelpers.getTripDirectionMap(route.route_id)
-                .then(async data => {
-                    const any_trip_id = data.keys().next().value;
-                    const trip = (await gtfs.getTrips({
-                        'trip_id': any_trip_id
-                    })).shift();
+    const routeRelatedPromises = importedRoutes.map(async r => {
+        let routeModel = await RouteModel.findOne({external_id: r.route_id});
 
-                    let routeModel = await RouteModel.findOne({external_id: trip.route_id});
+        if (!routeModel) {
+            routeModel = await RouteModel.create({
+                external_id: r.route_id,
+                trip_shape_map: new Map(),
+                most_popular_shapes: []
+            });
+        }
 
-                    if (!routeModel) {
-                        routeModel = await RouteModel.create({
-                            external_id: trip.route_id,
-                            trip_shape_map: new Map()
-                        });
-                    }
+        [routeModel.most_popular_shapes, routeModel.trip_shape_map] = await Promise.all([
+            appHelpers.getMostPopularShapes(r.route_id),
+            appHelpers.getTripDirectionMap(r.route_id)
+        ])
 
-                    routeModel.trip_shape_map = data;
-                    routeModel.markModified('trip_shape_map');
+        routeModel.markModified('most_popular_shapes');
+        routeModel.markModified('trip_shape_map');
 
-                    await routeModel.save();
-                })
-                .catch(error => {
-                    console.error(error);
-                })
-        );
-    }
-    await Promise.all(tripDirectionPromises);
-    console.log(`${tripDirectionPromises.length} routes processed`);
+        return routeModel.save();
+    });
 
-    let saveCallbacks = [];
-    for (stopRow of importedStops) {
+    await Promise.all(routeRelatedPromises);
+
+    console.log(`${routeRelatedPromises.length} routes processed`);
+
+    const stopPromises = importedStops.map(async stopRow => {
         let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 
         if (null === code) {
@@ -65,17 +58,17 @@ module.exports = async (req, res, next) => {
 
         if (!code) {
             console.warn(`Skipped stop with microgiz id ${stopRow.stop_id}, bad code in ${stopRow.stop_name}`);
-            continue;
+            return;
         }
 
         if ([83].includes(code)) {
             console.warn(`Manually skipped stop with code ${code}`);
-            continue;
+            return;
         }
 
         if (["45002"].includes(stopRow.stop_id)) {
             console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id}`);
-            continue;
+            return;
         }
 
         let stop_name = stopRow.stop_name;
@@ -106,25 +99,27 @@ module.exports = async (req, res, next) => {
         stopModel.microgiz_id = stopData.microgiz_id;
         stopModel.location = stopData.location;
 
-        saveCallbacks.push(stopModel.save()
+        stopIds.push(stopModel.id);
+
+        return stopModel.save()
             .then(async (stopObj) => {
                 stopObj.transfers = await microgizService.routesThroughStop(stopObj);
                 stopObj.markModified('transfers');
                 await stopObj.save();
             }).catch(error => {
                 console.error(error, code);
-            }));
+            });
+    });
 
-        stopIds.push(stopModel.id);
-    }
+    console.log('Firing async process of stops processing');
+
+    await Promise.all(stopPromises);
 
     if (stopIds.length > 0) {
-        console.log(`${stopIds.length} stops processed, waiting for transfers callbacks`);
         await StopModel.deleteMany({"_id" : { $nin : stopIds}})
     }
 
-    await Promise.all(saveCallbacks);
-    console.log(`${saveCallbacks.length} callbacks completed`);
+    console.log(`${stopPromises.length} stops processed`);
 
     res.send('Ok');
 }
