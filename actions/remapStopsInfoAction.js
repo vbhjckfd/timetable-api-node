@@ -93,6 +93,7 @@ module.exports = async (req, res, next) => {
 
         if (!stopModel) {
             stopModel = await StopModel.create(stopData);
+            await stopModel.save();
         }
 
         stopModel.name = stopData.name;
@@ -101,14 +102,9 @@ module.exports = async (req, res, next) => {
 
         stopIds.push(stopModel.id);
 
-        return stopModel.save()
-            .then(async (stopObj) => {
-                stopObj.transfers = await microgizService.routesThroughStop(stopObj);
-                stopObj.markModified('transfers');
-                await stopObj.save();
-            }).catch(error => {
-                console.error(error, code);
-            });
+        stopModel.transfers = await microgizService.routesThroughStop(stopModel);
+        stopModel.markModified('transfers');
+        return stopModel.save();
     });
 
     console.log('Firing async process of stops processing');
