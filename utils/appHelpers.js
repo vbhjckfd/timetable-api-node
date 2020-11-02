@@ -93,7 +93,7 @@ module.exports = {
         const trips = await gtfs.getTrips({
             route_id: routeId,
             shape_id: {'$in': Array.from(existingShapeIds)}
-        }, {shape_id: 1, trip_id: 1, _id: 0});
+        }, {shape_id: 1, _id: 0});
 
         const shapeIdsStat = trips.map(t => t.shape_id);
 
@@ -143,48 +143,19 @@ module.exports = {
         return '#0E4F95'
     },
 
-    getTripDirectionMap: async (routeId) => {
-        const tripsShapes = new Set(
-            (await gtfs.getTrips({
-                route_id: routeId
-            },
-            {shape_id: 1, _id: 0}))
-            .map(i => i.shape_id)
-        );
-
-        const existingShapeRaw = await gtfs.getShapes({
-            shape_id: {
-                '$in': Array.from(tripsShapes)
-            }
-        }, {shape_id: 1, _id: 0});
-
-        const existingShapeIds = new Set(
-            Array.from(existingShapeRaw)
-            .flat()
-            .map(i => i.shape_id)
-        );
+    getTripDirectionMap: async (routeId, data = null) => {
+        const mostPopularShapes = data || await module.getMostPopularShapes(routeId);
 
         let tripShapeMap = {};
-        let shapeIdsStat = [];
 
         const trips = await gtfs.getTrips({
             route_id: routeId,
-            shape_id: {'$in': Array.from(existingShapeIds)}
+            shape_id: {'$in': Array.from(mostPopularShapes)}
         }, {shape_id: 1, trip_id: 1, _id: 0});
 
-        trips.forEach((t) => {
+        trips.forEach(t => {
             tripShapeMap[t.trip_id] = t.shape_id;
-            shapeIdsStat.push(t.shape_id);
         });
-
-        let mostPopularShapes = _(shapeIdsStat)
-            .countBy()
-            .entries()
-            .orderBy(_.last)
-            .takeRight(2)
-            .map(_.head)
-            .sort()
-            .value();
 
         let res = new Map();
         for (tripId in tripShapeMap) {

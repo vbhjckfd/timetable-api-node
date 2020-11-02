@@ -14,7 +14,6 @@ module.exports = async (req, res, next) => {
     if (!route) return res.sendStatus(404);
 
     const routeLocal = await RouteModel.findOne({external_id: route.route_id})
-    let mostPopularShapes = new Set();
 
     const trips = await gtfs.getTrips({
         'trip_id': {$in : Array.from(routeLocal.trip_shape_map.keys())}
@@ -23,12 +22,11 @@ module.exports = async (req, res, next) => {
     let tripShapeMap = {};
     trips.forEach((t) => {
         tripShapeMap[t.shape_id] = t.trip_id;
-        mostPopularShapes.add(t.shape_id);
     });
 
     const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
 
-    mostPopularShapes = Array.from(mostPopularShapes);
+    mostPopularShapes = routeLocal.most_popular_shapes;
 
     let shapes = await gtfs.getShapes({
         'shape_id': {

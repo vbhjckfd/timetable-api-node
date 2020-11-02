@@ -27,10 +27,8 @@ module.exports = async (req, res, next) => {
             });
         }
 
-        [routeModel.most_popular_shapes, routeModel.trip_shape_map] = await Promise.all([
-            appHelpers.getMostPopularShapes(r.route_id),
-            appHelpers.getTripDirectionMap(r.route_id)
-        ])
+        routeModel.most_popular_shapes = await appHelpers.getMostPopularShapes(r.route_id);
+        routeModel.trip_shape_map = await appHelpers.getTripDirectionMap(r.route_id, routeModel.most_popular_shapes);
 
         routeModel.markModified('most_popular_shapes');
         routeModel.markModified('trip_shape_map');
