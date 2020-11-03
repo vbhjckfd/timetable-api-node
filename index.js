@@ -10,7 +10,8 @@ const dbConfig = {
   pass: process.env.MONGO_IMPORT_PASSWORD,
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  useFindAndModify: false
+  useFindAndModify: false,
+  poolSize: 20
 }
 mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
 
