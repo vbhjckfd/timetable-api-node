@@ -11,7 +11,8 @@ const dbConfig = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   useFindAndModify: false,
-  poolSize: 20
+  poolSize: 20,
+  socketTimeoutMS: 30000 * 5
 }
 mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
 
