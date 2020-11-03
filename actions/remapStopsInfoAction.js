@@ -27,10 +27,27 @@ module.exports = async (req, res, next) => {
             });
         }
 
-        routeModel.most_popular_shapes = await appHelpers.getMostPopularShapes(r.route_id);
-        routeModel.trip_shape_map = await appHelpers.getTripDirectionMap(r.route_id, routeModel.most_popular_shapes);
-
+        const mostPopularShapes = await appHelpers.getMostPopularShapes(r.route_id);
+        routeModel.most_popular_shapes = mostPopularShapes;
         routeModel.markModified('most_popular_shapes');
+
+        let tripDirectionMap = {};
+
+        const trips = await gtfs.getTrips({
+            route_id: r.route_id,
+            shape_id: {'$in': Array.from(mostPopularShapes)}
+        }, {trip_id: 1, direction_id: 1, _id: 0});
+
+        trips.forEach(t => {
+            tripDirectionMap[t.trip_id] = t.direction_id;
+        });
+
+        let routeTripShapeMap = new Map();
+        for (tripId in tripDirectionMap) {
+            routeTripShapeMap.set(tripId, tripDirectionMap[tripId]);
+        }
+
+        routeModel.trip_shape_map = routeTripShapeMap;
         routeModel.markModified('trip_shape_map');
 
         return routeModel.save();

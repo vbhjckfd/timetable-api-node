@@ -141,29 +141,6 @@ module.exports = {
         }
 
         return '#0E4F95'
-    },
-
-    getTripDirectionMap: async (routeId, data = null) => {
-        const mostPopularShapes = data || await module.getMostPopularShapes(routeId);
-
-        let tripShapeMap = {};
-
-        const trips = await gtfs.getTrips({
-            route_id: routeId,
-            shape_id: {'$in': Array.from(mostPopularShapes)}
-        }, {shape_id: 1, trip_id: 1, _id: 0});
-
-        trips.forEach(t => {
-            tripShapeMap[t.trip_id] = t.shape_id;
-        });
-
-        let res = new Map();
-        for (tripId in tripShapeMap) {
-            if (mostPopularShapes.includes(tripShapeMap[tripId])) {
-                res.set(tripId, mostPopularShapes.indexOf(tripShapeMap[tripId]));
-            }
-        }
-
-        return res;
     }
+
 }

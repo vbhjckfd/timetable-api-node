@@ -3,8 +3,11 @@ const fetch = require("node-fetch");
 const gtfs = require('gtfs');
 const _ = require('lodash');
 const appHelpers = require("../utils/appHelpers");
+const timetableDb = require('../connections/timetableDb');
 
 let Promise = require('bluebird');
+
+const RouteModel = timetableDb.model('Route');
 
 module.exports = {
 
@@ -50,36 +53,28 @@ module.exports = {
         const [trips, allRoutesRaw] = await Promise.all([
             gtfs.getTrips({
                 trip_id: {$in: stopTimes.map(i => i.trip_id)},
-            }, {route_id: 1, shape_id: 1, trip_id: 1, _id: 0}),
+            }, {route_id: 1, shape_id: 1, trip_id: 1, direction_id: 1, _id: 0}),
             gtfs.getRoutes({})
         ])
 
         const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
 
-        let tripsPerRoute = {};
-        trips.forEach(t => {
-            tripsPerRoute[t.route_id] = tripsPerRoute[t.route_id] || [];
+        const localRoutesRaw = await RouteModel.find();
+        const locaRoutesByExternalId = _(localRoutesRaw).keyBy('external_id').value();
 
-            tripsPerRoute[t.route_id].push(t);
+        let routeShapeMap = {};
+        trips.forEach(t => {
+            if (routeShapeMap[t.route_id]) {
+                return;
+            }
+
+            if (locaRoutesByExternalId[t.route_id].trip_shape_map.has(t.trip_id)) {
+                routeShapeMap[t.route_id] = t;
+            }
         });
 
-        for (let routeId in tripsPerRoute) {
-            let tripShapeMap = {};
-            let shapeIdsStat = [];
-            tripsPerRoute[routeId].forEach((t) => {
-                tripShapeMap[t.shape_id] = t.trip_id;
-                shapeIdsStat.push(t.shape_id);
-            });
-
-            const mostPopularShape = _(shapeIdsStat)
-                .countBy()
-                .entries()
-                .orderBy(_.last)
-                .takeRight(1)
-                .map(_.head)
-                .value()
-                .pop()
-            ;
+        for (let routeId in routeShapeMap) {
+            const mostPopularShape = routeShapeMap[routeId].shape_id
 
             if (!mostPopularShape) continue;
 
@@ -89,7 +84,8 @@ module.exports = {
                 color: appHelpers.getRouteColor(allRoutes[routeId]),
                 route: routeName,
                 vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
-                shape_id: mostPopularShape
+                shape_id: mostPopularShape,
+                direction_id: routeShapeMap[routeId].direction_id
             });
         }
 

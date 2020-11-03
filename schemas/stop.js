@@ -33,6 +33,10 @@ const TransferSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  direction_id: {
+    type: String,
+    required: false
+  },
 });
 
 const StopSchema = new mongoose.Schema({
