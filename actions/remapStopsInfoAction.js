@@ -57,7 +57,8 @@ module.exports = async (req, res, next) => {
 
     console.log(`${routeRelatedPromises.length} routes processed`);
 
-    const stopPromises = importedStops.map(async stopRow => {
+    let stopPromises = [];
+    for (stopRow of importedStops) {
         let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 
         if (null === code) {
@@ -73,17 +74,17 @@ module.exports = async (req, res, next) => {
 
         if (!code) {
             console.warn(`Skipped stop with microgiz id ${stopRow.stop_id}, bad code in ${stopRow.stop_name}`);
-            return;
+            continue;
         }
 
         if ([83].includes(code)) {
             console.warn(`Manually skipped stop with code ${code}`);
-            return;
+            continue;
         }
 
         if (["45002"].includes(stopRow.stop_id)) {
             console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id}`);
-            return;
+            continue;
         }
 
         let stop_name = stopRow.stop_name;
@@ -119,8 +120,9 @@ module.exports = async (req, res, next) => {
 
         stopModel.transfers = await microgizService.routesThroughStop(stopModel);
         stopModel.markModified('transfers');
-        return stopModel.save();
-    });
+
+        stopPromises.push(stopModel.save());
+    }
 
     console.log('Firing async process of stops processing');
 
