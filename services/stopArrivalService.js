@@ -80,6 +80,7 @@ const stopArrivalService = {
             }
 
             return {
+                route_id: vh.route_id,
                 direction: trips[vh.trip_id] ? trips[vh.trip_id].direction_id : null,
                 lowfloor: trips[vh.trip_id] ? !!trips[vh.trip_id].wheelchair_accessible : false,
                 end_stop: trips[vh.trip_id] ? appHelpers.cleanUpStopName(trips[vh.trip_id].trip_headsign) : '',
