@@ -26,7 +26,7 @@ module.exports = async (req, res, next) => {
 
     const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
 
-    mostPopularShapes = routeLocal.most_popular_shapes;
+    const mostPopularShapes = routeLocal.most_popular_shapes;
 
     let shapes = await gtfs.getShapes({
         'shape_id': {
