@@ -88,9 +88,9 @@ module.exports = async (req, res, next) => {
             route_short_name: route.route_short_name,
             route_long_name: route.route_long_name,
             stops: stopsByShape,
-            shapes: _(shapes).map((s) => { return s.map((point) => {
-                return [point.shape_pt_lat, point.shape_pt_lon]
-            }) }).value()
+            shapes: _(shapes)
+                .map(s => s.map(p => [p.shape_pt_lat, p.shape_pt_lon]))
+                .value()
         })
     ;
 }

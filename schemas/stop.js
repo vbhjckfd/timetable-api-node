@@ -30,11 +30,11 @@ const TransferSchema = new mongoose.Schema({
     required: true
   },
   shape_id: {
-    type: String,
+    type: Number,
     required: false
   },
   direction_id: {
-    type: String,
+    type: Number,
     required: false
   },
 });
