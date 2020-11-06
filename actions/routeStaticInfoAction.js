@@ -16,11 +16,11 @@ module.exports = async (req, res, next) => {
     const routeLocal = await RouteModel.findOne({external_id: route.route_id})
 
     const trips = await gtfs.getTrips({
-        'trip_id': {$in : Array.from(routeLocal.trip_shape_map.keys())}
+        trip_id: {$in : Array.from(routeLocal.trip_shape_map.keys())}
     }, { shape_id: 1, trip_id: 1, _id: 0 });
 
     let tripShapeMap = {};
-    trips.forEach((t) => {
+    trips.forEach(t => {
         tripShapeMap[t.shape_id] = t.trip_id;
     });
 
@@ -28,27 +28,30 @@ module.exports = async (req, res, next) => {
 
     const mostPopularShapes = routeLocal.most_popular_shapes;
 
-    let shapes = await gtfs.getShapes({
-        'shape_id': {
-            '$in': mostPopularShapes
+    const shapesRaw = await gtfs.getShapes({
+        shape_id: {
+            $in: mostPopularShapes
         }
-    });
+    }, {shape_id: 1, shape_pt_lat: 1, shape_pt_lon: 1, _id: 0});
 
-    if (shapes.length < 2) return res.sendStatus(500);
+    if (shapesRaw.length < 2) return res.sendStatus(500);
+
+    // Basically shapesRaw[0] is same as shapesRaw[1], mixed but identical. Stupid google adapter
+    const shapeRawFixed = shapesRaw[0];
 
     const stopTimes = await gtfs.getStoptimes({
         agency_key: 'Microgiz',
         trip_id: {
             $in: _(tripShapeMap).values().value()
         }
-    });
+    }, {trip_id: 1, stop_id: 1, _id: 0});
 
     let stopsByShape = [];
+    let shapes = [];
 
-    for (key in mostPopularShapes) {
-        shapes[key] = _(shapes[key]).filter((data) => data.shape_id == mostPopularShapes[key]).value();
+    for (key of [0, 1]) {
         stopsByShape[key] = _(stopTimes)
-            .filter(data => data.trip_id == tripShapeMap[mostPopularShapes[key]])
+            .filter(data => routeLocal.trip_shape_map.get(data.trip_id) == key)
             .filter(st => !!allStops[st.stop_id])
             .map(st => allStops[st.stop_id])
             .map(s => {
@@ -75,6 +78,8 @@ module.exports = async (req, res, next) => {
                 }
             })
             .value();
+
+        shapes[key] = shapeRawFixed.filter(shapeItem => routeLocal.trip_shape_map.get(tripShapeMap[shapeItem.shape_id]) == key);
     }
 
     //if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);
@@ -88,9 +93,7 @@ module.exports = async (req, res, next) => {
             route_short_name: route.route_short_name,
             route_long_name: route.route_long_name,
             stops: stopsByShape,
-            shapes: _(shapes)
-                .map(s => s.map(p => [p.shape_pt_lat, p.shape_pt_lon]))
-                .value()
+            shapes: shapes.map(s => s.map(p => [p.shape_pt_lat, p.shape_pt_lon]))
         })
     ;
 }
