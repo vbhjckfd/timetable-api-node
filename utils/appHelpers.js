@@ -35,11 +35,11 @@ module.exports = {
         return prefix + ((rawNumber >= 10) ? rawNumber : ('0' + rawNumber));
     },
 
-    getRouteType: (route) => {
+    getRouteType: (routeName) => {
         let type = 'bus';
-        if (route.route_short_name.startsWith('Тр')) {
+        if (routeName.startsWith('Тр')) {
             type = 'trol';
-        } else if (route.route_short_name.startsWith('Т')) {
+        } else if (routeName.startsWith('Т')) {
             type = 'tram';
         }
         return type;
@@ -54,9 +54,7 @@ module.exports = {
         return ((minutesLeft > 0) ? minutesLeft : '< 1') + 'хв';
     },
 
-    formatRouteName: (route) => {
-        let name = route.route_short_name;
-
+    formatRouteName: (name) => {
         if (name.startsWith('Тр')) {
             name = name.replace('Тр', 'Т');
         } else if (name.startsWith('Н-А')) {
@@ -107,8 +105,8 @@ module.exports = {
             .value();
     },
 
-    getRouteColor: (route) => {
-        switch (route.route_short_name.charAt(0)) {
+    getRouteColor: (routeName) => {
+        switch (routeName.charAt(0)) {
             case 'Т':
                 const colorMap = {
                     '33': '6F7C32',
@@ -132,7 +130,7 @@ module.exports = {
                     '01': 'E42D24',
                 };
 
-                const rawNumber = route.route_short_name.match(/\d+/g).join('')
+                const rawNumber = routeName.match(/\d+/g).join('')
                 return '#' + colorMap[rawNumber.toString()];
             break;
             case 'Н':

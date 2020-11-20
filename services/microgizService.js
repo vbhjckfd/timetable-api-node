@@ -63,12 +63,14 @@ module.exports = {
         const locaRoutesByExternalId = _(localRoutesRaw).keyBy('external_id').value();
 
         let routeShapeMap = {};
-        trips.forEach(t => {
+        trips
+        .filter(t => !!t.shape_id)
+        .forEach(t => {
             if (routeShapeMap[t.route_id]) {
                 return;
             }
 
-            if (locaRoutesByExternalId[t.route_id].trip_shape_map.has(t.trip_id)) {
+            if (locaRoutesByExternalId[t.route_id].trip_direction_map.has(t.trip_id)) {
                 routeShapeMap[t.route_id] = t;
             }
         });
@@ -78,12 +80,12 @@ module.exports = {
 
             if (!mostPopularShape) continue;
 
-            const routeName = appHelpers.formatRouteName(allRoutes[routeId]);
+            const routeName = appHelpers.formatRouteName(allRoutes[routeId].route_short_name);
             routes.set(routeName, {
                 id: routeId,
-                color: appHelpers.getRouteColor(allRoutes[routeId]),
+                color: appHelpers.getRouteColor(allRoutes[routeId].route_short_name),
                 route: routeName,
-                vehicle_type: appHelpers.getRouteType(allRoutes[routeId]),
+                vehicle_type: appHelpers.getRouteType(allRoutes[routeId].route_short_name),
                 shape_id: mostPopularShape,
                 direction_id: routeShapeMap[routeId].direction_id
             });

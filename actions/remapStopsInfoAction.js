@@ -2,6 +2,7 @@ const gtfs = require('gtfs');
 const timetableDb = require('../connections/timetableDb');
 const microgizService = require("../services/microgizService");
 const appHelpers = require("../utils/appHelpers");
+const _ = require('lodash');
 
 module.exports = async (req, res, next) => {
 
@@ -16,6 +17,7 @@ module.exports = async (req, res, next) => {
         return res.sendStatus(500);
     }
 
+    let importedRoutesIds = [];
     const routeRelatedPromises = importedRoutes.map(async r => {
         let routeModel = await RouteModel.findOne({external_id: r.route_id});
 
@@ -23,37 +25,76 @@ module.exports = async (req, res, next) => {
             routeModel = await RouteModel.create({
                 external_id: r.route_id,
                 trip_shape_map: new Map(),
-                most_popular_shapes: []
+                trip_direction_map: new Map(),
+                stops_by_shape: new Map(),
+                shapes: new Map(),
+                short_name: '',
+                long_name: '',
             });
         }
 
         const mostPopularShapes = await appHelpers.getMostPopularShapes(r.route_id);
-        routeModel.most_popular_shapes = mostPopularShapes;
-        routeModel.markModified('most_popular_shapes');
 
-        let tripDirectionMap = {};
+        if (!mostPopularShapes.length) {
+            console.error(`Route ${r.route_id} - ${r.route_short_name} has no shapes`);
+            return;
+        }
+
+        routeModel.short_name = appHelpers.normalizeRouteName(r.route_short_name);
+        routeModel.long_name = r.route_long_name;
+
+        const shapesRaw = await gtfs.getShapes({
+            shape_id: {
+                $in: mostPopularShapes
+            }
+        }, {shape_id: 1, shape_pt_lat: 1, shape_pt_lon: 1, _id: 0});
+
+        let shapesToSave = new Map();
+        shapesRaw[0].forEach(i => {
+            if (!shapesToSave.has(i.shape_id)) {
+                shapesToSave.set(i.shape_id, []);
+            }
+
+            shapesToSave.get(i.shape_id).push([i.shape_pt_lat, i.shape_pt_lon])
+        })
+
+        routeModel.shapes = shapesToSave;
+        routeModel.markModified('shapes');
+
+        let tripDirectionMap = new Map();
+        let tripShapeMap = new Map();
+        let shapeDirectionMap = new Map();
 
         const trips = await gtfs.getTrips({
             route_id: r.route_id,
             shape_id: {'$in': Array.from(mostPopularShapes)}
-        }, {trip_id: 1, direction_id: 1, _id: 0});
+        }, {trip_id: 1, direction_id: 1, shape_id: 1, _id: 0});
 
         trips.forEach(t => {
-            tripDirectionMap[t.trip_id] = t.direction_id;
+            tripDirectionMap.set(t.trip_id, t.direction_id);
+            tripShapeMap.set(t.trip_id, t.shape_id);
+            shapeDirectionMap.set(t.shape_id, t.direction_id);
         });
 
-        let routeTripShapeMap = new Map();
-        for (tripId in tripDirectionMap) {
-            routeTripShapeMap.set(tripId, tripDirectionMap[tripId]);
-        }
+        routeModel.trip_direction_map = tripDirectionMap;
+        routeModel.markModified('trip_direction_map');
 
-        routeModel.trip_shape_map = routeTripShapeMap;
+        routeModel.trip_shape_map = tripShapeMap;
         routeModel.markModified('trip_shape_map');
+
+        routeModel.shape_direction_map = shapeDirectionMap;
+        routeModel.markModified('shape_direction_map');
+
+        importedRoutesIds.push(routeModel.id);
 
         return routeModel.save();
     });
 
     await Promise.all(routeRelatedPromises);
+
+    if (importedRoutesIds.length > 0) {
+        await RouteModel.deleteMany({"_id" : { $nin : importedRoutesIds}})
+    }
 
     console.log(`${routeRelatedPromises.length} routes processed`);
 
@@ -133,6 +174,37 @@ module.exports = async (req, res, next) => {
     }
 
     console.log(`${stopPromises.length} stops processed`);
+
+    const allStops = _(await StopModel.find({})).keyBy('microgiz_id').value();
+
+    const routeModelsRaw = await RouteModel.find({});
+
+    const routeStopsRelatedPromises = routeModelsRaw.map(async routeModel => {
+        const stopTimes = await gtfs.getStoptimes({
+            agency_key: 'Microgiz',
+            trip_id: {
+                $in: routeModel.sample_trips()
+            }
+        }, {trip_id: 1, stop_id: 1, _id: 0});
+
+        let stopsByShape = new Map();
+        for (key of [0, 1]) {
+            stopsByShape.set(String(key), _(stopTimes)
+                .filter(data => routeModel.trip_direction_map.get(data.trip_id) == key)
+                .filter(st => !!allStops[st.stop_id])
+                .map(st => allStops[st.stop_id].code)
+                .value()
+            )
+        }
+
+        routeModel.stops_by_shape = stopsByShape;
+        routeModel.markModified('stops_by_shape');
+
+        return routeModel.save();
+    });
+
+    await Promise.all(routeStopsRelatedPromises);
+    console.log(`Calculated stops of ${routeStopsRelatedPromises.length} routes`);
 
     res.send('Ok');
 }

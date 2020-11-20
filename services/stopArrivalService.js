@@ -71,11 +71,11 @@ const stopArrivalService = {
                 routeInfo = _.omit(routeInfoRaw.toObject(), ['_id', 'id'])
             } else {
                 const routeObj = routesByRouteId[vh.route_id];
-                console.error(`No binding for route ${appHelpers.formatRouteName(routeObj)} to stop ${stop.name} (${stop.code})`);
+                console.error(`No binding for route ${appHelpers.formatRouteName(routeObj.route_short_name)} to stop ${stop.name} (${stop.code})`);
                 routeInfo = {
-                    color: appHelpers.getRouteColor(routeObj),
-                    route: appHelpers.formatRouteName(routeObj),
-                    vehicle_type: appHelpers.getRouteType(routeObj),
+                    color: appHelpers.getRouteColor(routeObj.route_short_name),
+                    route: appHelpers.formatRouteName(routeObj.route_short_name),
+                    vehicle_type: appHelpers.getRouteType(routeObj.route_short_name),
                 }
             }
 
