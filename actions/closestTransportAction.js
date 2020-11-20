@@ -1,19 +1,18 @@
-const gtfs = require('gtfs');
 const _ = require('lodash');
 const microgizService = require('../services/microgizService');
 const appHelpers = require("../utils/appHelpers");
 const geodist = require('geodist');
 const timetableDb = require('../connections/timetableDb');
 
+const RouteModel = timetableDb.model('Route');
+
 module.exports = async (req, res, next) => {
     const latitude = parseFloat(req.query.latitude).toFixed(3),
           longitude = parseFloat(req.query.longitude).toFixed(3)
     ;
 
-    const RouteModel = timetableDb.model('Route');
-
     const [routesRaw, vehiclesRaw] = await Promise.all([
-        RouteModel.find({}),
+        RouteModel.find(),
         microgizService.getVehiclesLocations()
     ]);
 
@@ -22,6 +21,7 @@ module.exports = async (req, res, next) => {
     .value();
 
     const vehicles = _(vehiclesRaw)
+    .filter(i => !!routes[i.vehicle.trip.routeId])
     .filter(i => {
         const position = i.vehicle.position;
 
