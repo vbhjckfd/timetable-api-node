@@ -44,13 +44,11 @@ module.exports = async (req, res, next) => {
         routeModel.long_name = r.route_long_name;
 
         const shapesRaw = await gtfs.getShapes({
-            shape_id: {
-                $in: mostPopularShapes
-            }
-        }, {shape_id: 1, shape_pt_lat: 1, shape_pt_lon: 1, _id: 0});
+            shape_id: mostPopularShapes
+        }, ['shape_id', 'shape_pt_lat', 'shape_pt_lon']);
 
         let shapesToSave = new Map();
-        shapesRaw[0].forEach(i => {
+        shapesRaw.forEach(i => {
             if (!shapesToSave.has(i.shape_id)) {
                 shapesToSave.set(i.shape_id, []);
             }
@@ -67,8 +65,8 @@ module.exports = async (req, res, next) => {
 
         const trips = await gtfs.getTrips({
             route_id: r.route_id,
-            shape_id: {'$in': Array.from(mostPopularShapes)}
-        }, {trip_id: 1, direction_id: 1, shape_id: 1, _id: 0});
+            shape_id: Array.from(mostPopularShapes)
+        }, ['trip_id', 'direction_id', 'shape_id']);
 
         trips.forEach(t => {
             tripDirectionMap.set(t.trip_id, t.direction_id);
@@ -98,14 +96,19 @@ module.exports = async (req, res, next) => {
 
     console.log(`${routeRelatedPromises.length} routes processed`);
 
-    let stopPromises = [];
-    for (stopRow of importedStops) {
+    const stopPromises = importedStops.map(async stopRow => {
         let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 
         if (null === code) {
             code = stopRow.stop_code
         } else if (Array.isArray(code)) {
             code = code[0]
+        }
+
+        // If still zero - skip it
+        if (null === code) {
+            console.warn(`Skipped stop with microgiz id ${stopRow.stop_id}, bad code in ${stopRow.stop_name}`);
+            return;
         }
 
         for (cleaner of ['(', ')']) {
@@ -115,17 +118,17 @@ module.exports = async (req, res, next) => {
 
         if (!code) {
             console.warn(`Skipped stop with microgiz id ${stopRow.stop_id}, bad code in ${stopRow.stop_name}`);
-            continue;
+            return;
         }
 
         if ([83].includes(code)) {
             console.warn(`Manually skipped stop with code ${code}`);
-            continue;
+            return;
         }
 
         if (["45002"].includes(stopRow.stop_id)) {
             console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id}`);
-            continue;
+            return;
         }
 
         let stop_name = stopRow.stop_name;
@@ -143,7 +146,7 @@ module.exports = async (req, res, next) => {
             microgiz_id: stopRow.stop_id,
             location: {
                 type: "Point",
-                coordinates: stopRow.loc
+                coordinates: [stopRow.stop_lat, stopRow.stop_lon]
             },
             transfers: [],
         };
@@ -162,8 +165,8 @@ module.exports = async (req, res, next) => {
         stopModel.transfers = await microgizService.routesThroughStop(stopModel);
         stopModel.markModified('transfers');
 
-        stopPromises.push(stopModel.save());
-    }
+        return stopModel.save();
+    });
 
     console.log('Firing async process of stops processing');
 
@@ -181,11 +184,8 @@ module.exports = async (req, res, next) => {
 
     const routeStopsRelatedPromises = routeModelsRaw.map(async routeModel => {
         const stopTimes = await gtfs.getStoptimes({
-            agency_key: 'Microgiz',
-            trip_id: {
-                $in: routeModel.sample_trips()
-            }
-        }, {trip_id: 1, stop_id: 1, _id: 0});
+            trip_id: routeModel.sample_trips()
+        }, ['trip_id', 'stop_id']);
 
         let stopsByShape = new Map();
         for (key of [0, 1]) {

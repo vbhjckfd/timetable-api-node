@@ -43,17 +43,13 @@ module.exports = {
         let routes = new Map();
 
         const stopTimes = await gtfs.getStoptimes({
-            agency_key: 'Microgiz',
-            stop_id: stop.microgiz_id,
-            trip_id: {
-                $gt: 0
-            }
-        }, {trip_id: 1, _id: 0});
+            stop_id: stop.microgiz_id
+        }, ['trip_id']);
 
         const [trips, allRoutesRaw] = await Promise.all([
             gtfs.getTrips({
-                trip_id: {$in: stopTimes.map(i => i.trip_id)},
-            }, {route_id: 1, shape_id: 1, trip_id: 1, direction_id: 1, _id: 0}),
+                trip_id: stopTimes.filter(st => st.trip_id).map(i => i.trip_id),
+            }, ['route_id', 'shape_id', 'trip_id', 'direction_id']),
             gtfs.getRoutes({})
         ])
 

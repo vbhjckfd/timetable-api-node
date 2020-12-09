@@ -16,5 +16,8 @@ RUN npm install --only=production
 # Copy local code to the container image.
 COPY . ./
 
+ARG CACHEBUST=1
+RUN node ./gtfs-import.js
+
 # Run the web service on container startup.
 CMD [ "npm", "start" ]

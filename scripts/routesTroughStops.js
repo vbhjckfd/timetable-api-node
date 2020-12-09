@@ -5,15 +5,6 @@ const main = async () => {
 
     const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
-    const dbConfig = {
-      user: process.env.MONGO_IMPORT_USER,
-      pass: process.env.MONGO_IMPORT_PASSWORD,
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useFindAndModify: false
-    }
-    mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
-
     const timetableDb = require('../connections/timetableDb');
     const StopModel = timetableDb.model('Stop');
 

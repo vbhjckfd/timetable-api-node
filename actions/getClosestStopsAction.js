@@ -1,10 +1,9 @@
 const timetableDb = require('../connections/timetableDb');
 const StopModel = timetableDb.model('Stop');
-const appHelpers = require("../utils/appHelpers");
 
 module.exports = async (req, res, next) => {
-    let latitude = parseFloat(req.query.latitude).toFixed(2);
-    let longitude = parseFloat(req.query.longitude).toFixed(2);
+    const latitude = parseFloat(req.query.latitude).toFixed(2);
+    const longitude = parseFloat(req.query.longitude).toFixed(2);
 
     StopModel.find({
         location: {

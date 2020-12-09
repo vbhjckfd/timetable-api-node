@@ -1,13 +1,5 @@
 version: "3.8"
 services:
-    mongo-gtfs:
-        image: mongo
-        restart: always
-        environment:
-            MONGO_INITDB_ROOT_USERNAME: ${MONGO_IMPORT_USER}
-            MONGO_INITDB_ROOT_PASSWORD: ${MONGO_IMPORT_PASSWORD}
-        ports:
-            - "27018:27017"
     mongo-timetable:
         image: mongo
         restart: always
