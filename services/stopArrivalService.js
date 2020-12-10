@@ -38,9 +38,7 @@ const stopArrivalService = {
         .sort((a, b) => a.time - b.time);
 
         const tripsRaw = await gtfs.getTrips({
-            trip_id: {
-                $in: closestVehicles.map(v => v.trip_id)
-            }
+            trip_id: closestVehicles.map(v => v.trip_id)
         });
 
         const trips = _(tripsRaw).keyBy('trip_id').value();
