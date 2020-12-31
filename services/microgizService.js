@@ -3,11 +3,8 @@ const fetch = require("node-fetch");
 const gtfs = require('gtfs');
 const _ = require('lodash');
 const appHelpers = require("../utils/appHelpers");
-const timetableDb = require('../connections/timetableDb');
 
 let Promise = require('bluebird');
-
-const RouteModel = timetableDb.model('Route');
 
 module.exports = {
 
@@ -39,7 +36,7 @@ module.exports = {
             });
     },
 
-    routesThroughStop: async (stop) => {
+    routesThroughStop: async (stop, routesCollection) => {
         let routes = new Map();
 
         const stopTimes = await gtfs.getStoptimes({
@@ -55,7 +52,7 @@ module.exports = {
 
         const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
 
-        const localRoutesRaw = await RouteModel.find();
+        const localRoutesRaw = routesCollection.find({});
         const locaRoutesByExternalId = _(localRoutesRaw).keyBy('external_id').value();
 
         let routeShapeMap = {};
@@ -66,7 +63,7 @@ module.exports = {
                 return;
             }
 
-            if (locaRoutesByExternalId[t.route_id].trip_direction_map.has(t.trip_id)) {
+            if (locaRoutesByExternalId[t.route_id].trip_direction_map[t.trip_id]) {
                 routeShapeMap[t.route_id] = t;
             }
         });

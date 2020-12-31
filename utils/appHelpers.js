@@ -137,6 +137,16 @@ module.exports = {
         }
 
         return '#0E4F95'
+    },
+
+    getSmapleTrips: (route) => {
+        let sampleTrips = [];
+
+        for (const [key, value] of Object.entries(route.trip_direction_map)) {
+            sampleTrips[value] = key;
+        }
+
+        return sampleTrips;
     }
 
 }

@@ -1,5 +1,6 @@
 {
   "sqlitePath": "./database/gtfs",
+  "verbose": true,
   "agencies": [
       {
         "agency_key": "Microgiz",
