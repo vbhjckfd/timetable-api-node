@@ -13,7 +13,7 @@
     "gtfs": "^1.10.4",
     "gtfs-realtime-bindings": "0.0.5",
     "lodash": "^4.17.20",
-    "mongoose": "^5.10.9",
+    "mongoose": "^5.11.9",
     "node-fetch": "^2.6.1",
     "npm-config": "^0.2.0",
     "redis": "^3.0.2"
