@@ -18,7 +18,7 @@ const stopArrivalService = {
 
         const closestVehicles = closestVehiclesRaw
         .filter(entity => {
-            return entity.tripUpdate.stopTimeUpdate.map(stu => parseInt(stu.stopId)).includes(stop.microgiz_id);
+            return entity.tripUpdate.stopTimeUpdate.map(stu => stu.stopId).includes(stop.microgiz_id);
         })
         .map(i => i.tripUpdate)
         .map(i => {
@@ -66,7 +66,7 @@ const stopArrivalService = {
             let routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id);
             let routeInfo = {}
             if (routeInfoRaw) {
-                routeInfo = _.omit(routeInfoRaw.toObject(), ['_id', 'id'])
+                routeInfo = _.omit(routeInfoRaw, ['_id', 'id'])
             } else {
                 const routeObj = routesByRouteId[vh.route_id];
                 console.error(`No binding for route ${appHelpers.formatRouteName(routeObj.route_short_name)} to stop ${stop.name} (${stop.code})`);

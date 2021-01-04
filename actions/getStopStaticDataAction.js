@@ -1,5 +1,4 @@
-const timetableDb = require('../connections/timetableDb');
-const StopModel = timetableDb.model('Stop');
+const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
     const code = Number(req.params.code);
@@ -8,14 +7,14 @@ module.exports = async (req, res, next) => {
         return;
     }
 
-    const stop = await StopModel.findOne({code: code});
+    const stop = timetableDb.getCollection('stops').findOne({code: code})
     if (!stop) {
         res.status(404).send(`Bad argument, stop with code ${code} not found`);
         return;
     }
 
     const transfers = stop.transfers.map(i => {
-        const { _id, ...omitted } = i.toObject();
+        const { _id, ...omitted } = i;
         return omitted;
     });
 

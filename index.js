@@ -6,12 +6,12 @@ const gtfs = require('gtfs');
 const gtfsDbConfig = require('./gtfs-import-config.json');
 gtfs.openDb(gtfsDbConfig);
 
+const timetableDb = require('./connections/timetableSqliteDb');
+
 const cors = require('cors')
 const express = require('express');
 
 const notFoundAction = require('./actions/notFoundAction');
-
-const remapStopsInfoAction = require('./actions/remapStopsInfoAction');
 
 const getClosestStopsAction = require('./actions/getClosestStopsAction');
 const getSingleStopAction = require('./actions/getSingleStopAction');
@@ -40,8 +40,6 @@ app.get('/stops/:code/static', getStopStaticDataAction);
 app.get('/stops/:code', getSingleStopAction);
 app.get('/stops', getAllStopsAction);
 app.get('/closest', getClosestStopsAction);
-
-app.get('/import/remap_stops_info', remapStopsInfoAction);
 
 app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);

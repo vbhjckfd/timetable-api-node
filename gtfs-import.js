@@ -11,7 +11,6 @@ const appHelpers = require("./utils/appHelpers");
 const _ = require('lodash');
 
 (async () => {
-  //await gtfs.openDb(config);
   await gtfs.import(config);
   console.log('Import Successful');
 
