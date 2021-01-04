@@ -10,7 +10,7 @@ module.exports = async (req, res, next) => {
       result += `<tr>
         <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a></td>
         <td>${s.name}</td>
-        <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]},${loc[1]}</a></td>
+        <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[1]}&mlon=${loc[0]}#map=18/${loc[1]}/${loc[0]}">${loc[1]},${loc[0]}</a></td>
         </tr>`;
     }
     result += '</table>';
