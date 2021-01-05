@@ -4,7 +4,7 @@ const appHelpers = require("../utils/appHelpers");
 const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
-    const query = Number(req.params.name) ? {external_id: parseInt(req.params.name) } : {short_name: appHelpers.normalizeRouteName(req.params.name)};
+    const query = Number(req.params.name) ? {external_id: req.params.name } : {short_name: appHelpers.normalizeRouteName(req.params.name)};
 
     const routeLocal = timetableDb.getCollection('routes').findOne(query);
 
@@ -14,8 +14,9 @@ module.exports = async (req, res, next) => {
 
     const vehicles = _(await microgizService.getVehiclesLocations())
     .filter(entity => {
-        return entity.vehicle.trip.routeId == routeLocal.external_id && !!entity.vehicle.trip.tripId && tripDirectionMap.hasOwnProperty(entity.vehicle.trip.tripId.toString());
+        return entity.vehicle.trip.routeId == routeLocal.external_id && !!entity.vehicle.trip.tripId;
     })
+    // .filter(e => tripDirectionMap.hasOwnProperty(e.vehicle.trip.tripId.toString()))
     .map(i => {
         const position = i.vehicle.position;
 

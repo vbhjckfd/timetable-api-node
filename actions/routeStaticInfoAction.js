@@ -3,7 +3,7 @@ const appHelpers = require("../utils/appHelpers");
 const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
-    const query = Number(req.params.name) ? {external_id: parseInt(req.params.name)() } : {short_name: appHelpers.normalizeRouteName(req.params.name)}
+    const query = Number(req.params.name) ? {external_id: req.params.name } : {short_name: appHelpers.normalizeRouteName(req.params.name)}
 
     const routeLocal = timetableDb.getCollection('routes').findOne(query);
 

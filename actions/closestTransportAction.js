@@ -2,21 +2,16 @@ const _ = require('lodash');
 const microgizService = require('../services/microgizService');
 const appHelpers = require("../utils/appHelpers");
 const geodist = require('geodist');
-const timetableDb = require('../connections/timetableDb');
-
-const RouteModel = timetableDb.model('Route');
+const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
     const latitude = parseFloat(req.query.latitude).toFixed(3),
           longitude = parseFloat(req.query.longitude).toFixed(3)
     ;
 
-    const [routesRaw, vehiclesRaw] = await Promise.all([
-        RouteModel.find(),
-        microgizService.getVehiclesLocations()
-    ]);
+    const vehiclesRaw = await microgizService.getVehiclesLocations();
 
-    const routes = _(routesRaw)
+    const routes = _(timetableDb.getCollection('routes').find({}))
     .keyBy('external_id')
     .value();
 

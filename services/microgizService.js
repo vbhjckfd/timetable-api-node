@@ -84,7 +84,7 @@ module.exports = {
             });
         }
 
-        routes = Array.from(routes.values()).sort((a, b) => {
+        const transfers = Array.from(routes.values()).sort((a, b) => {
             if (a.route < b.route) {
                 return -1;
             }
@@ -95,7 +95,7 @@ module.exports = {
             return 0;
         });
 
-        return routes;
+        return transfers;
     }
 
 };
