@@ -147,6 +147,16 @@ module.exports = {
         }
 
         return sampleTrips;
+    },
+
+    shapes_by_direction: (route) => {
+        let shapes = [];
+
+        for (key in route.shape_direction_map) {
+            shapes[route.shape_direction_map[key]] = key;
+        }
+
+        return shapes;
     }
 
 }

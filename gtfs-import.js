@@ -13,6 +13,7 @@ const _ = require('lodash');
 (async () => {
   await gtfs.import(config);
   console.log('Import Successful');
+//   await gtfs.openDb(config);
 
   const importedStops = await gtfs.getStops();
   const importedRoutes = await gtfs.getRoutes();
@@ -91,6 +92,7 @@ const _ = require('lodash');
   console.log(`${routeModels.length} routes processed`);
 
   const stopPromises = importedStops.map(async stopRow => {
+      console.log(stopRow.stop_id, stopRow.stop_name);
       let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 
       if (null === code) {
@@ -120,7 +122,7 @@ const _ = require('lodash');
           return null;
       }
 
-      if (["45002"].includes(stopRow.stop_id)) {
+      if (["45002", "45001", "4671"].includes(stopRow.stop_id)) {
           console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id}`);
           return;
       }

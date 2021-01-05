@@ -1,38 +1,34 @@
-const gtfs = require('gtfs');
 const _ = require('lodash');
-const timetableDb = require('../connections/timetableDb');
 const appHelpers = require("../utils/appHelpers");
-
-const StopModel = timetableDb.model('Stop');
-const RouteModel = timetableDb.model('Route');
+const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
     const query = Number(req.params.name) ? {external_id: parseInt(req.params.name)() } : {short_name: appHelpers.normalizeRouteName(req.params.name)}
 
-    const routeLocal = await RouteModel.findOne(query)
+    const routeLocal = timetableDb.getCollection('routes').findOne(query);
 
     if (!routeLocal) return res.sendStatus(404);
 
     if (routeLocal.shapes.size < 2) return res.sendStatus(500);
 
-    const allStops = _(await StopModel.find({
+    const allStops = _(timetableDb.getCollection('stops').find({
         code: {
-            $in: Array.from(routeLocal.stops_by_shape.values()).flat()
+            $in: Object.values(routeLocal.stops_by_shape).flat()
         }
     })).keyBy('code').value();
 
     let stopsByShape = [];
 
-    let shapes = routeLocal.shapes_by_direction();
+    let shapes = appHelpers.shapes_by_direction(routeLocal);
 
     for (key of [0, 1]) {
-        stopsByShape[key] = _(routeLocal.stops_by_shape.get(String(key)))
+        stopsByShape[key] = _(routeLocal.stops_by_shape[String(key)])
             .filter(st => !!allStops[st])
             .map(st => allStops[st])
             .map(s => {
                 const transfers = s.transfers
                 .map(i => {
-                    const { _id, shape_id, ...omitted } = i.toObject();
+                    const { _id, shape_id, ...omitted } = i;
                     return omitted;
                 })
                 .filter(i => routeLocal.external_id != i.id)
