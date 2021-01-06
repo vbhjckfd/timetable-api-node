@@ -7,7 +7,7 @@ const StopModel = timetableDb.model('Stop');
 const RouteModel = timetableDb.model('Route');
 
 module.exports = async (req, res, next) => {
-    const query = Number(req.params.name) ? {external_id: parseInt(req.params.name)() } : {short_name: appHelpers.normalizeRouteName(req.params.name)}
+    const query = Number(req.params.name) ? {external_id: parseInt(req.params.name) } : {short_name: appHelpers.normalizeRouteName(req.params.name)}
 
     const routeLocal = await RouteModel.findOne(query)
 
