@@ -92,7 +92,6 @@ const _ = require('lodash');
   console.log(`${routeModels.length} routes processed`);
 
   const stopPromises = importedStops.map(async stopRow => {
-      console.log(stopRow.stop_id, stopRow.stop_name);
       let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
 
       if (null === code) {
