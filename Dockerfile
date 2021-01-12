@@ -1,6 +1,6 @@
 # Use the official lightweight Node.js 12 image.
 # https://hub.docker.com/_/node
-FROM node:12-alpine
+FROM node:12-alpine AS BUILD_IMAGE
 
 # Create and change to the app directory.
 WORKDIR /usr/src/app
@@ -18,6 +18,17 @@ COPY . ./
 
 ARG CACHEBUST=1
 RUN node ./gtfs-import.js
+
+FROM node:12-alpine
+
+WORKDIR /usr/src/app
+
+COPY . ./
+COPY --from=BUILD_IMAGE /usr/src/app/node_modules ./node_modules
+COPY --from=BUILD_IMAGE /usr/src/app/database/Timetable ./database/Timetable
+
+ARG CACHEBUST=1
+RUN node ./gtfs-import-slim.js
 
 # Run the web service on container startup.
 CMD [ "npm", "start" ]
