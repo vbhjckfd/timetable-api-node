@@ -121,7 +121,7 @@ const _ = require('lodash');
           return null;
       }
 
-      if (["45002", "45001", "4671"].includes(stopRow.stop_id)) {
+      if (["45002", "45001", "4671", "2551851"].includes(stopRow.stop_id)) {
           console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id}`);
           return;
       }
