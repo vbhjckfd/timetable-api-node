@@ -1,12 +1,9 @@
 const mongoose = require('mongoose');
+
 const dotenv = require('dotenv');
 dotenv.config();
 
-const gtfs = require('gtfs');
-const gtfsDbConfig = require('./gtfs-import-config.json');
-gtfs.openDb(gtfsDbConfig);
-
-const timetableDb = require('./connections/timetableSqliteDb');
+const PORT = process.env.PORT || 8080;
 
 const cors = require('cors')
 const express = require('express');
@@ -55,4 +52,17 @@ app.use(notFoundAction);
 
 process.on('exit', mongoose.disconnect);
 
-exports.timetable = app;
+app.on('ready', () => {
+  app.listen(PORT, () => {
+    console.log('Started!');
+  })
+});
+
+const timetableDb = require('./connections/timetableSqliteDb');
+timetableDb.loadDatabase({}, async () => {
+  const gtfs = require('gtfs');
+  const gtfsDbConfig = require('./gtfs-import-config.json');
+  await gtfs.openDb(gtfsDbConfig);
+
+  app.emit('ready');
+});

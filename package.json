@@ -4,9 +4,7 @@
   "description": "API for lad.lviv.ua service",
   "main": "index.js",
   "dependencies": {
-    "@google-cloud/functions-framework": "^1.7.1",
     "cors": "^2.8.5",
-    "csv-writer": "^1.6.0",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "geodist": "^0.2.1",
@@ -16,13 +14,12 @@
     "lokijs": "^1.5.11",
     "mongoose": "^5.11.11",
     "node-fetch": "^2.6.1",
-    "npm-config": "^0.2.0",
-    "redis": "^3.0.2"
+    "npm-config": "^0.2.0"
   },
   "devDependencies": {},
   "scripts": {
-    "start": "functions-framework --target=timetable",
-    "profileapp": "node --prof node_modules/@google-cloud/functions-framework --target=timetable",
+    "start": "node index.js",
+    "profileapp": "node --prof index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "vbhjckfd@gmail.com",
