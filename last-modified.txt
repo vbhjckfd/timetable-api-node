@@ -1,0 +1,1 @@
+dummy last modified date of gtfs.static, is overwritten during build

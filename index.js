@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 dotenv.config();
 
+const path = require('path');
+
 const PORT = process.env.PORT || 8080;
 
 const cors = require('cors')
@@ -47,6 +49,11 @@ app.options('/feedback', cors());
 app.post('/feedback', postFeedbackAction);
 app.get('/feedback/:id', getFeedbackAction);
 app.get('/messages', getGlobalMessagesAction);
+
+app.get('/last-modified.txt', (req, res, next) => {
+  res.set('Cache-Control', `public, max-age=0, s-maxage=${5 * 60}`)
+  res.sendFile(path.join(__dirname, 'last-modified.txt'));
+})
 
 app.use(notFoundAction);
 
