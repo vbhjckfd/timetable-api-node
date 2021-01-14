@@ -33,8 +33,8 @@ module.exports = async (req, res, next) => {
             return {
                 code: s.code,
                 name: s.name,
-                longitude: s.location.coordinates[0],
-                latitude: s.location.coordinates[1]
+                longitude: s.location.coordinates[1],
+                latitude: s.location.coordinates[0]
             };
         }))
     ;
