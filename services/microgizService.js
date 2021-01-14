@@ -46,7 +46,7 @@ module.exports = {
         const [trips, allRoutesRaw] = await Promise.all([
             gtfs.getTrips({
                 trip_id: stopTimes.filter(st => st.trip_id).map(i => i.trip_id),
-            }, ['route_id', 'shape_id', 'trip_id', 'direction_id']),
+            }, ['route_id', 'shape_id', 'trip_id', 'direction_id', 'trip_headsign']),
             gtfs.getRoutes({})
         ])
 
@@ -80,7 +80,8 @@ module.exports = {
                 route: routeName,
                 vehicle_type: appHelpers.getRouteType(allRoutes[routeId].route_short_name),
                 shape_id: mostPopularShape,
-                direction_id: routeShapeMap[routeId].direction_id
+                direction_id: routeShapeMap[routeId].direction_id,
+                end_stop_name: appHelpers.cleanUpStopName(routeShapeMap[routeId].trip_headsign)
             });
         }
 
