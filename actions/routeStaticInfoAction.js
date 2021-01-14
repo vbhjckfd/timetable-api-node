@@ -44,7 +44,7 @@ module.exports = async (req, res, next) => {
                 return {
                     code: s.code,
                     name: s.name,
-                    loc: [s.location.coordinates[1], s.location.coordinates[0]],
+                    loc: [s.location.coordinates[0], s.location.coordinates[1]],
                     transfers: transfers,
                 }
             })
