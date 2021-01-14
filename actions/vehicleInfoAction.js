@@ -45,12 +45,12 @@ module.exports = async (req, res, next) => {
             ],
             routeId: vehiclePosition.trip.routeId,
             bearing: vehiclePosition.position.bearing,
-            direction: routeLocal.trip_direction_map.get(vehiclePosition.trip.tripId.toString()),
+            direction: routeLocal.trip_direction_map[vehiclePosition.trip.tripId.toString()],
             licensePlate: vehiclePosition.vehicle.licensePlate,
             arrivals: arrivalTimes.map(item => {
                 const transfers = stopIdsMap[item.stopId].transfers
                 .map(i => {
-                    const { _id, ...omitted } = i.toObject();
+                    const { _id, ...omitted } = i;
                     return omitted;
                 })
                 .filter(i => vehiclePosition.trip.routeId != i.id)
