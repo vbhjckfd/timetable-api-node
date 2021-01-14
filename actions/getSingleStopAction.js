@@ -35,8 +35,8 @@ module.exports = async (req, res, next) => {
         .set('Cache-Control', `public, max-age=0, s-maxage=${skipTimetableData ? 10 * 24 * 3600 : cacheAge}`)
         .json({
             name: stop.name,
-            longitude: stop.location.coordinates[0],
-            latitude: stop.location.coordinates[1],
+            longitude: stop.location.coordinates[1],
+            latitude: stop.location.coordinates[0],
             transfers: transfers,
             code: stop.code,
             timetable: timetableData

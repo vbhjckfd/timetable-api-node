@@ -22,8 +22,8 @@ module.exports = async (req, res, next) => {
         .set('Cache-Control', `public, max-age=0, s-maxage=${10 * 24 * 3600}`)
         .json({
             name: stop.name,
-            longitude: stop.location.coordinates[0],
-            latitude: stop.location.coordinates[1],
+            longitude: stop.location.coordinates[1],
+            latitude: stop.location.coordinates[0],
             code: stop.code,
             transfers: transfers,
         })
