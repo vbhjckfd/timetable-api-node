@@ -1,44 +1,41 @@
-const timetableDb = require('../connections/timetableDb');
-const StopModel = timetableDb.model('Stop');
-const appHelpers = require("../utils/appHelpers");
+const geodist = require('geodist');
+
+const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
-    let latitude = parseFloat(req.query.latitude).toFixed(2);
-    let longitude = parseFloat(req.query.longitude).toFixed(2);
+    const stopsCollection = timetableDb.getCollection('stops');
 
-    StopModel.find({
-        location: {
-            $near: {
-                $maxDistance: 1000, //meters
-                $geometry: {
-                    type: "Point",
-                    coordinates: [longitude, latitude]
-                }
-            }
-        }
-    }).find((error, results) => {
-        if (error) {
-            console.error(error);
+    const latitude = parseFloat(req.query.latitude).toFixed(2);
+    const longitude = parseFloat(req.query.longitude).toFixed(2);
 
-            return res.status(500).send(`Bad argument: ${JSON.stringify([latitude, longitude])}`);
-        }
+    const results = stopsCollection
+    .find({})
+    .filter(s => {
+        const position = s.location.coordinates;
 
-        let cacheLine = `public, max-age=0, s-maxage=${10 * 24 * 3600}, stale-while-revalidate=15`;
-        if (!results.length) {
-            cacheLine = 'no-cache'; // Do not cache if no stops around point
-        }
+        const dist = geodist(
+            {lat: position[0], lon: position[1]},
+            {lat: latitude, lon: longitude},
+            {unit: 'meters'}
+        );
 
-        res
-            .set('Cache-Control', cacheLine)
-            .json(results.map(s => {
-                return {
-                    code: s.code,
-                    name: s.name,
-                    longitude: s.location.coordinates[0],
-                    latitude: s.location.coordinates[1]
-                };
-            }))
-        ;
+        return dist < 1000;
     });
 
+    let cacheLine = `public, max-age=0, s-maxage=${10 * 24 * 3600}, stale-while-revalidate=15`;
+    if (!results.length) {
+        cacheLine = 'no-cache'; // Do not cache if no stops around point
+    }
+
+    res
+        .set('Cache-Control', cacheLine)
+        .json(results.map(s => {
+            return {
+                code: s.code,
+                name: s.name,
+                longitude: s.location.coordinates[1],
+                latitude: s.location.coordinates[0]
+            };
+        }))
+    ;
 }

@@ -3,22 +3,25 @@ const _ = require('lodash');
 const appHelpers = require("../utils/appHelpers");
 const microgizService = require("./microgizService");
 
+const timetableDb = require('../connections/timetableSqliteDb');
+
 const stopArrivalService = {
 
     getTimetableForStop: async function(stop) {
         const now = (new Date()).setMilliseconds(0);
 
-        const [closestVehiclesRaw, vehiclesLocationsRaw, allRoutesRaw] = await Promise.all([
+        const allRoutesRaw = timetableDb.getCollection('routes').find({});
+
+        const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
             microgizService.getArrivalTimes(),
-            microgizService.getVehiclesLocations(),
-            gtfs.getRoutes()
+            microgizService.getVehiclesLocations()
         ]);
 
-        const routesByRouteId = _(allRoutesRaw).keyBy('route_id').value();
+        const routesByRouteId = _(allRoutesRaw).keyBy('external_id').value();
 
         const closestVehicles = closestVehiclesRaw
         .filter(entity => {
-            return entity.tripUpdate.stopTimeUpdate.map(stu => parseInt(stu.stopId)).includes(stop.microgiz_id);
+            return entity.tripUpdate.stopTimeUpdate.map(stu => stu.stopId).includes(stop.microgiz_id);
         })
         .map(i => i.tripUpdate)
         .map(i => {
@@ -38,9 +41,7 @@ const stopArrivalService = {
         .sort((a, b) => a.time - b.time);
 
         const tripsRaw = await gtfs.getTrips({
-            trip_id: {
-                $in: closestVehicles.map(v => v.trip_id)
-            }
+            trip_id: closestVehicles.map(v => v.trip_id)
         });
 
         const trips = _(tripsRaw).keyBy('trip_id').value();
@@ -68,14 +69,14 @@ const stopArrivalService = {
             let routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id);
             let routeInfo = {}
             if (routeInfoRaw) {
-                routeInfo = _.omit(routeInfoRaw.toObject(), ['_id', 'id'])
+                routeInfo = _.omit(routeInfoRaw, ['_id', 'id'])
             } else {
                 const routeObj = routesByRouteId[vh.route_id];
-                console.error(`No binding for route ${appHelpers.formatRouteName(routeObj.route_short_name)} to stop ${stop.name} (${stop.code})`);
+                console.error(`No binding for route ${appHelpers.formatRouteName(routeObj.short_name)} to stop ${stop.name} (${stop.code})`);
                 routeInfo = {
-                    color: appHelpers.getRouteColor(routeObj.route_short_name),
-                    route: appHelpers.formatRouteName(routeObj.route_short_name),
-                    vehicle_type: appHelpers.getRouteType(routeObj.route_short_name),
+                    color: appHelpers.getRouteColor(routeObj.short_name),
+                    route: appHelpers.formatRouteName(routeObj.short_name),
+                    vehicle_type: appHelpers.getRouteType(routeObj.short_name),
                 }
             }
 

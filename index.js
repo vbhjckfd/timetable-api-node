@@ -1,25 +1,16 @@
 const mongoose = require('mongoose');
+
 const dotenv = require('dotenv');
 dotenv.config();
+
+const path = require('path');
+
+const PORT = process.env.PORT || 8080;
 
 const cors = require('cors')
 const express = require('express');
 
-const dbConfig = {
-  user: process.env.MONGO_IMPORT_USER,
-  pass: process.env.MONGO_IMPORT_PASSWORD,
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  useFindAndModify: false,
-  poolSize: 20,
-  socketTimeoutMS: 30000 * 5
-}
-mongoose.connect(process.env.MONGO_GTFS_URL, dbConfig);
-
 const notFoundAction = require('./actions/notFoundAction');
-
-const remapStopsInfoAction = require('./actions/remapStopsInfoAction');
-const importGtfsStaticAction = require('./actions/importGtfsStaticAction');
 
 const getClosestStopsAction = require('./actions/getClosestStopsAction');
 const getSingleStopAction = require('./actions/getSingleStopAction');
@@ -49,9 +40,6 @@ app.get('/stops/:code', getSingleStopAction);
 app.get('/stops', getAllStopsAction);
 app.get('/closest', getClosestStopsAction);
 
-app.get('/import/gtfs_static', importGtfsStaticAction);
-app.get('/import/remap_stops_info', remapStopsInfoAction);
-
 app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
 app.get('/vehicle/:vehicleId', vehicleInfoAction);
@@ -62,8 +50,26 @@ app.post('/feedback', postFeedbackAction);
 app.get('/feedback/:id', getFeedbackAction);
 app.get('/messages', getGlobalMessagesAction);
 
+app.get('/last-modified.txt', (req, res, next) => {
+  res.set('Cache-Control', `public, max-age=0, s-maxage=${5 * 60}`)
+  res.sendFile(path.join(__dirname, 'last-modified.txt'));
+})
+
 app.use(notFoundAction);
 
 process.on('exit', mongoose.disconnect);
 
-exports.timetable = app;
+app.on('ready', () => {
+  app.listen(PORT, () => {
+    console.log('Started!');
+  })
+});
+
+const timetableDb = require('./connections/timetableSqliteDb');
+timetableDb.loadDatabase({}, async () => {
+  const gtfs = require('gtfs');
+  const gtfsDbConfig = require('./gtfs-import-config.json');
+  await gtfs.openDb(gtfsDbConfig);
+
+  app.emit('ready');
+});

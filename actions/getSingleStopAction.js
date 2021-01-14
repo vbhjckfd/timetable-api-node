@@ -1,6 +1,5 @@
 const timetableService = require('../services/stopArrivalService');
-const timetableDb = require('../connections/timetableDb');
-const StopModel = timetableDb.model('Stop');
+const timetableDb = require('../connections/timetableSqliteDb');
 
 module.exports = async (req, res, next) => {
     const code = Number(req.params.code);
@@ -9,7 +8,8 @@ module.exports = async (req, res, next) => {
         return;
     }
 
-    const stop = await StopModel.findOne({code: code});
+    const stop = timetableDb.getCollection('stops').findOne({code: code})
+
     if (!stop) {
         res.status(404).send(`Bad argument, stop with code ${code} not found`);
         return;
@@ -27,7 +27,7 @@ module.exports = async (req, res, next) => {
     const cacheAge = timetableData.length > 0 ? 10 : 5;
 
     const transfers = stop.transfers.map(i => {
-        const { _id, ...omitted } = i.toObject();
+        const { _id, ...omitted } = i;
         return omitted;
     });
 
@@ -35,8 +35,8 @@ module.exports = async (req, res, next) => {
         .set('Cache-Control', `public, max-age=0, s-maxage=${skipTimetableData ? 10 * 24 * 3600 : cacheAge}`)
         .json({
             name: stop.name,
-            longitude: stop.location.coordinates[0],
-            latitude: stop.location.coordinates[1],
+            longitude: stop.location.coordinates[1],
+            latitude: stop.location.coordinates[0],
             transfers: transfers,
             code: stop.code,
             timetable: timetableData

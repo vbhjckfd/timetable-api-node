@@ -1,7 +1,5 @@
 const _ = require('lodash');
-const timetableDb = require('../connections/timetableDb');
-const StopModel = timetableDb.model('Stop');
-const RouteModel = timetableDb.model('Route');
+const timetableDb = require('../connections/timetableSqliteDb');
 const microgizService = require('../services/microgizService');
 
 module.exports = async (req, res, next) => {
@@ -26,7 +24,7 @@ module.exports = async (req, res, next) => {
 
     const stopIds = arrivalTimes.map(i => i.stopId);
 
-    const stopIdsMap = _(await StopModel.find({
+    const stopIdsMap = _(timetableDb.getCollection('stops').find({
         microgiz_id: {
             $in: stopIds
         }
@@ -36,7 +34,7 @@ module.exports = async (req, res, next) => {
 
     arrivalTimes = arrivalTimes.filter(item => !!stopIdsMap[item.stopId])
 
-    const routeLocal = await RouteModel.findOne({external_id: vehiclePosition.trip.routeId});
+    const routeLocal = timetableDb.getCollection('routes').findOne({external_id: vehiclePosition.trip.routeId});
 
     res
         .set('Cache-Control', `public, s-maxage=5`)
@@ -47,12 +45,12 @@ module.exports = async (req, res, next) => {
             ],
             routeId: vehiclePosition.trip.routeId,
             bearing: vehiclePosition.position.bearing,
-            direction: routeLocal.trip_direction_map.get(vehiclePosition.trip.tripId.toString()),
+            direction: routeLocal.trip_direction_map[vehiclePosition.trip.tripId.toString()],
             licensePlate: vehiclePosition.vehicle.licensePlate,
-            arrivals: arrivalTimes.map((item) => {
+            arrivals: arrivalTimes.map(item => {
                 const transfers = stopIdsMap[item.stopId].transfers
                 .map(i => {
-                    const { _id, ...omitted } = i.toObject();
+                    const { _id, ...omitted } = i;
                     return omitted;
                 })
                 .filter(i => vehiclePosition.trip.routeId != i.id)

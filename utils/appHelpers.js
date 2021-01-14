@@ -72,15 +72,13 @@ module.exports = {
             (await gtfs.getTrips({
                 route_id: routeId
             },
-            {shape_id: 1, _id: 0}))
+            ['shape_id']))
             .map(i => i.shape_id)
         );
 
         const existingShapeRaw = await gtfs.getShapes({
-            shape_id: {
-                '$in': Array.from(tripsShapes)
-            }
-        }, {shape_id: 1, _id: 0});
+            shape_id: Array.from(tripsShapes)
+        }, ['shape_id']);
 
         const existingShapeIds = new Set(
             Array.from(existingShapeRaw)
@@ -90,8 +88,8 @@ module.exports = {
 
         const trips = await gtfs.getTrips({
             route_id: routeId,
-            shape_id: {'$in': Array.from(existingShapeIds)}
-        }, {shape_id: 1, _id: 0});
+            shape_id: Array.from(existingShapeIds)
+        }, ['shape_id']);
 
         const shapeIdsStat = trips.map(t => t.shape_id);
 
@@ -139,6 +137,26 @@ module.exports = {
         }
 
         return '#0E4F95'
+    },
+
+    getSmapleTrips: (route) => {
+        let sampleTrips = [];
+
+        for (const [key, value] of Object.entries(route.trip_direction_map)) {
+            sampleTrips[value] = key;
+        }
+
+        return sampleTrips;
+    },
+
+    shapes_by_direction: (route) => {
+        let shapes = [];
+
+        for (key in route.shape_direction_map) {
+            shapes[route.shape_direction_map[key]] = route.shapes[key];
+        }
+
+        return shapes;
     }
 
 }

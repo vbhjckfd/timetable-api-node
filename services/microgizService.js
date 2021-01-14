@@ -3,11 +3,8 @@ const fetch = require("node-fetch");
 const gtfs = require('gtfs');
 const _ = require('lodash');
 const appHelpers = require("../utils/appHelpers");
-const timetableDb = require('../connections/timetableDb');
 
 let Promise = require('bluebird');
-
-const RouteModel = timetableDb.model('Route');
 
 module.exports = {
 
@@ -39,27 +36,23 @@ module.exports = {
             });
     },
 
-    routesThroughStop: async (stop) => {
+    routesThroughStop: async (stop, routesCollection) => {
         let routes = new Map();
 
         const stopTimes = await gtfs.getStoptimes({
-            agency_key: 'Microgiz',
-            stop_id: stop.microgiz_id,
-            trip_id: {
-                $gt: 0
-            }
-        }, {trip_id: 1, _id: 0});
+            stop_id: stop.microgiz_id
+        }, ['trip_id']);
 
         const [trips, allRoutesRaw] = await Promise.all([
             gtfs.getTrips({
-                trip_id: {$in: stopTimes.map(i => i.trip_id)},
-            }, {route_id: 1, shape_id: 1, trip_id: 1, direction_id: 1, _id: 0}),
+                trip_id: stopTimes.filter(st => st.trip_id).map(i => i.trip_id),
+            }, ['route_id', 'shape_id', 'trip_id', 'direction_id', 'trip_headsign']),
             gtfs.getRoutes({})
         ])
 
         const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
 
-        const localRoutesRaw = await RouteModel.find();
+        const localRoutesRaw = routesCollection.find({});
         const locaRoutesByExternalId = _(localRoutesRaw).keyBy('external_id').value();
 
         let routeShapeMap = {};
@@ -70,7 +63,7 @@ module.exports = {
                 return;
             }
 
-            if (locaRoutesByExternalId[t.route_id].trip_direction_map.has(t.trip_id)) {
+            if (locaRoutesByExternalId[t.route_id].trip_direction_map[t.trip_id]) {
                 routeShapeMap[t.route_id] = t;
             }
         });
@@ -87,11 +80,12 @@ module.exports = {
                 route: routeName,
                 vehicle_type: appHelpers.getRouteType(allRoutes[routeId].route_short_name),
                 shape_id: mostPopularShape,
-                direction_id: routeShapeMap[routeId].direction_id
+                direction_id: routeShapeMap[routeId].direction_id,
+                end_stop_name: appHelpers.cleanUpStopName(routeShapeMap[routeId].trip_headsign)
             });
         }
 
-        routes = Array.from(routes.values()).sort((a, b) => {
+        const transfers = Array.from(routes.values()).sort((a, b) => {
             if (a.route < b.route) {
                 return -1;
             }
@@ -102,7 +96,7 @@ module.exports = {
             return 0;
         });
 
-        return routes;
+        return transfers;
     }
 
 };
