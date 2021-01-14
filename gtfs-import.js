@@ -49,8 +49,13 @@ const _ = require('lodash');
       routeModel.long_name = r.route_long_name;
 
       const shapesRaw = await gtfs.getShapes({
-          shape_id: mostPopularShapes
-      }, ['shape_id', 'shape_pt_lat', 'shape_pt_lon']);
+            shape_id: mostPopularShapes
+        },
+        ['shape_id', 'shape_pt_lat', 'shape_pt_lon'],
+        [
+            ['shape_pt_sequence', 'ASC']
+        ]
+      );
 
       let shapesToSave = {};
       shapesRaw.forEach(i => {
