@@ -5,8 +5,8 @@ const timetableDb = require('../connections/timetableSqliteDb');
 module.exports = async (req, res, next) => {
     const stopsCollection = timetableDb.getCollection('stops');
 
-    const latitude = parseFloat(req.query.latitude).toFixed(2);
-    const longitude = parseFloat(req.query.longitude).toFixed(2);
+    const latitude = parseFloat(req.query.latitude).toFixed(3);
+    const longitude = parseFloat(req.query.longitude).toFixed(3);
 
     const results = stopsCollection
     .find({})
