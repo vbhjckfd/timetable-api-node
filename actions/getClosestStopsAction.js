@@ -21,25 +21,25 @@ module.exports = async (req, res, next) => {
 
         return dist < 1000;
     })
-    // .sort((a, b) => {
-    //     const positionA = a.location.coordinates;
-    //     const positionB = b.location.coordinates;
+    .sort((a, b) => {
+        const positionA = a.location.coordinates;
+        const positionB = b.location.coordinates;
 
-    //     const distA = geodist(
-    //         {lat: positionA[0], lon: positionA[1]},
-    //         {lat: latitude, lon: longitude},
-    //         {unit: 'meters'}
-    //     );
+        const distA = geodist(
+            {lat: positionA[0], lon: positionA[1]},
+            {lat: latitude, lon: longitude},
+            {unit: 'meters'}
+        );
 
-    //     const distB = geodist(
-    //         {lat: positionB[0], lon: positionB[1]},
-    //         {lat: latitude, lon: longitude},
-    //         {unit: 'meters'}
-    //     );
+        const distB = geodist(
+            {lat: positionB[0], lon: positionB[1]},
+            {lat: latitude, lon: longitude},
+            {unit: 'meters'}
+        );
 
 
-    //     return distA - distB;
-    // });
+        return distA - distB;
+    });
 
     let cacheLine = `public, max-age=0, s-maxage=${10 * 24 * 3600}, stale-while-revalidate=15`;
     if (!results.length) {
