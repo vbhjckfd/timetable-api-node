@@ -63,12 +63,12 @@ module.exports = {
                 return;
             }
 
-            if (locaRoutesByExternalId[t.route_id].trip_direction_map[t.trip_id]) {
+            if (locaRoutesByExternalId[t.route_id].trip_direction_map.hasOwnProperty(t.trip_id)) {
                 routeShapeMap[t.route_id] = t;
             }
         });
 
-        for (let routeId in routeShapeMap) {
+        for (const routeId in routeShapeMap) {
             const mostPopularShape = routeShapeMap[routeId].shape_id
 
             if (!mostPopularShape) continue;
