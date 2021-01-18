@@ -16,9 +16,10 @@ RUN npm install --only=production
 # Copy local code to the container image.
 COPY . ./
 
+RUN echo "$CACHEBUST"
+
 RUN apk --no-cache add curl && curl --silent --head "http://track.ua-gis.com/gtfs/lviv/static.zip" | grep 'Last-Modified:' | cut -c 16- > ./last-modified.txt
 
-ARG CACHEBUST=1
 RUN node ./gtfs-import.js
 
 FROM node:12-alpine
@@ -30,7 +31,6 @@ COPY --from=BUILD_IMAGE /usr/src/app/node_modules ./node_modules
 COPY --from=BUILD_IMAGE /usr/src/app/database/Timetable ./database/Timetable
 COPY --from=BUILD_IMAGE /usr/src/app/last-modified.txt ./last-modified.txt
 
-ARG CACHEBUST=1
 RUN node ./gtfs-import-slim.js
 
 # Run the web service on container startup.
