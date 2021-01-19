@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 8080;
 
 const cors = require('cors')
 const express = require('express');
+const bodyParser = require('body-parser');
 
 const notFoundAction = require('./actions/notFoundAction');
 
@@ -28,6 +29,8 @@ const getGlobalMessagesAction = require('./actions/getGlobalMessagesAction');
 const app = express();
 
 app.use(cors());
+
+app.use(bodyParser.json())
 
 app.use(function (err, req, res, next) {
   console.error(err.stack);
