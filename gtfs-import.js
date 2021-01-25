@@ -162,7 +162,7 @@ const _ = require('lodash');
 
   const allStops = _(stopsModels).keyBy('microgiz_id').value();
 
-  const routeStopsRelatedPromises = routesCollection.find({external_id: "994"}).map(async routeModel => {
+  const routeStopsRelatedPromises = routesCollection.find().map(async routeModel => {
       const stopTimes = await gtfs.getStoptimes(
         {
             trip_id: appHelpers.getSmapleTrips(routeModel)
