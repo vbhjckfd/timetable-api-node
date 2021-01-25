@@ -25,6 +25,7 @@ const closestTransportAction = require('./actions/closestTransportAction');
 const postFeedbackAction = require('./actions/postFeedbackAction');
 const getFeedbackAction = require('./actions/getFeedbackAction');
 const getGlobalMessagesAction = require('./actions/getGlobalMessagesAction');
+const getAllRoutesAction = require('./actions/getAllRoutesAction');
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.get('/stops/:code', getSingleStopAction);
 app.get('/stops', getAllStopsAction);
 app.get('/closest', getClosestStopsAction);
 
+app.get('/routes', getAllRoutesAction);
 app.get('/routes/dynamic/:name', routeInfoDynamicAction);
 app.get('/routes/static/:name', routeInfoStaticAction);
 app.get('/vehicle/:vehicleId', vehicleInfoAction);
