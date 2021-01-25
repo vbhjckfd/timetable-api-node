@@ -175,9 +175,21 @@ const _ = require('lodash');
       for (key of [0, 1]) {
           stopsByShape[String(key)] = _(stopTimes)
               .filter(data => routeModel.trip_direction_map[data.trip_id] == key)
-              .filter(st => !!allStops[st.stop_id])
-              .map(st => allStops[st.stop_id].code)
+              .map(st => allStops[st.stop_id] ? allStops[st.stop_id].code : null)
               .value();
+      }
+
+      for (key of ["0", "1"]) {
+        const otherShapeStops = stopsByShape[String(Math.abs(key - 1))];
+
+        if (!stopsByShape[key][0]) {
+            stopsByShape[key][0] = _(otherShapeStops).last();
+        }
+
+        if (!_(stopsByShape[key]).last()) {
+            stopsByShape[key].pop();
+            stopsByShape[key].push(otherShapeStops[0]);
+        }
       }
 
       routeModel.stops_by_shape = stopsByShape;
