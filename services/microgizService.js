@@ -36,56 +36,34 @@ module.exports = {
             });
     },
 
-    routesThroughStop: async (stop, routesCollection) => {
-        let routes = new Map();
-
-        const stopTimes = await gtfs.getStoptimes({
-            stop_id: stop.microgiz_id
-        }, ['trip_id']);
-
-        const [trips, allRoutesRaw] = await Promise.all([
-            gtfs.getTrips({
-                trip_id: stopTimes.filter(st => st.trip_id).map(i => i.trip_id),
-            }, ['route_id', 'shape_id', 'trip_id', 'direction_id', 'trip_headsign']),
-            gtfs.getRoutes({})
-        ])
-
-        const allRoutes = _(allRoutesRaw).keyBy('route_id').value();
-
-        const localRoutesRaw = routesCollection.find({});
-        const locaRoutesByExternalId = _(localRoutesRaw).keyBy('external_id').value();
-
-        let routeShapeMap = {};
-        trips
-        .filter(t => !!t.shape_id)
-        .forEach(t => {
-            if (routeShapeMap[t.route_id]) {
-                return;
+    routesThroughStop: async (stop, routesCollection, stopsCollection) => {
+        const transfers = routesCollection
+        .find({})
+        .filter(r => {
+            for (key of ["0", "1"]) {
+                if (-1 !== r.stops_by_shape[key].slice(0, -1).indexOf(stop.code)) {
+                    return true;
+                }
             }
 
-            if (locaRoutesByExternalId[t.route_id].trip_direction_map.hasOwnProperty(t.trip_id)) {
-                routeShapeMap[t.route_id] = t;
-            }
-        });
+            return false;
+        })
+        .map(r => {
+            const directionId = _(r.stops_by_shape).findKey(i => -1 !== i.slice(0, -1).indexOf(stop.code));
+            const lastStopCode = _(r.stops_by_shape[directionId]).last();
+            const shapeId = _(r.shape_direction_map).findKey(d => d == directionId);
 
-        for (const routeId in routeShapeMap) {
-            const mostPopularShape = routeShapeMap[routeId].shape_id
-
-            if (!mostPopularShape) continue;
-
-            const routeName = appHelpers.formatRouteName(allRoutes[routeId].route_short_name);
-            routes.set(routeName, {
-                id: routeId,
-                color: appHelpers.getRouteColor(allRoutes[routeId].route_short_name),
-                route: routeName,
-                vehicle_type: appHelpers.getRouteType(allRoutes[routeId].route_short_name),
-                shape_id: mostPopularShape,
-                direction_id: routeShapeMap[routeId].direction_id,
-                end_stop_name: appHelpers.cleanUpStopName(routeShapeMap[routeId].trip_headsign)
-            });
-        }
-
-        const transfers = Array.from(routes.values()).sort((a, b) => {
+            return {
+                id: r.external_id,
+                color: appHelpers.getRouteColor(r.short_name),
+                route: appHelpers.formatRouteName(r.short_name),
+                vehicle_type: appHelpers.getRouteType(r.short_name),
+                shape_id: shapeId,
+                direction_id: Number(directionId),
+                end_stop_name: stopsCollection.findOne({code: lastStopCode}).name,
+            };
+        })
+        .sort((a, b) => {
             if (a.route < b.route) {
                 return -1;
             }

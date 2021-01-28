@@ -10,16 +10,19 @@ const microgizService = require("./services/microgizService");
 const appHelpers = require("./utils/appHelpers");
 const _ = require('lodash');
 
+const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
+
 (async () => {
   await gtfs.import(config);
   console.log('Import Successful');
-//   await gtfs.openDb(config);
+  await gtfs.openDb(config);
 
   const importedStops = await gtfs.getStops();
   const importedRoutes = await gtfs.getRoutes();
 
   if (!importedStops.length) {
-      return res.sendStatus(500);
+      console.error('GTFS import error!');
+      return;
   }
 
   ['routes', 'stops'].map(c => db.removeCollection(c));
@@ -126,8 +129,8 @@ const _ = require('lodash');
           return null;
       }
 
-      if (["45002", "45001", "4671", "2551851"].includes(stopRow.stop_id)) {
-          console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id}`);
+      if (globalIgnoreStopList.includes(stopRow.stop_id)) {
+          console.warn(`Manually skipped stop with microgiz id ${stopRow.stop_id} - ${stopRow.stop_name}`);
           return;
       }
 
@@ -148,8 +151,6 @@ const _ = require('lodash');
           },
           transfers: [],
       };
-
-      stopModel.transfers = await microgizService.routesThroughStop(stopModel, routesCollection);
 
       return stopModel;
   });
@@ -175,6 +176,7 @@ const _ = require('lodash');
       for (key of [0, 1]) {
           stopsByShape[String(key)] = _(stopTimes)
               .filter(data => routeModel.trip_direction_map[data.trip_id] == key)
+              .filter(st => !globalIgnoreStopList.includes(st.stop_id))
               .map(st => allStops[st.stop_id] ? allStops[st.stop_id].code : null)
               .value();
       }
@@ -192,6 +194,16 @@ const _ = require('lodash');
         }
       }
 
+      for (key of ["0", "1"]) {
+        const otherShapeStops = stopsByShape[String(Math.abs(key - 1))];
+
+        const lastStopOfThisShape = _(stopsByShape[key]).last();
+        const firstStopOfOtherShape = _(otherShapeStops).first();
+        if (lastStopOfThisShape !== firstStopOfOtherShape) {
+            stopsByShape[key].push(firstStopOfOtherShape)
+        }
+      }
+
       routeModel.stops_by_shape = stopsByShape;
 
       routesCollection.update(routeModel);
@@ -201,6 +213,17 @@ const _ = require('lodash');
 
   console.log('Firing async process of route stops processing');
   await Promise.all(routeStopsRelatedPromises);
+
+  const stopTransferPromises = stopsCollection.find().map(async (s) => {
+      s.transfers = await microgizService.routesThroughStop(s, routesCollection, stopsCollection);
+
+      stopsCollection.update(s);
+
+      return s;
+  });
+
+  console.log('Firing async process of stops transfers processing');
+  await Promise.all(stopTransferPromises);
 
   db.saveDatabase();
   console.log(`Calculated stops of ${routeStopsRelatedPromises.length} routes`);
