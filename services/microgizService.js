@@ -61,6 +61,7 @@ module.exports = {
                 shape_id: shapeId,
                 direction_id: Number(directionId),
                 end_stop_name: stopsCollection.findOne({code: lastStopCode}).name,
+                end_stop_code: lastStopCode
             };
         })
         .sort((a, b) => {
