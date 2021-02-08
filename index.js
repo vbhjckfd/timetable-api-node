@@ -41,6 +41,7 @@ app.use(function (err, req, res, next) {
 app.get('/stops/:code/timetable', getStopTimetableAction);
 app.get('/stops/:code/static', getStopStaticDataAction);
 app.get('/stops/:code', getSingleStopAction);
+app.get('/stops.json', getAllStopsAction);
 app.get('/stops', getAllStopsAction);
 app.get('/closest', getClosestStopsAction);
 
