@@ -28,6 +28,8 @@ steps:
       - '--quiet'
     id: Deploy
     entrypoint: gcloud
+  - name: gcr.io/cloud-builders/curl
+    args: ['https://us-central1-timetable-252615.cloudfunctions.net/drop-cloudflare-cache','-s','--max-time','10']
 images:
   - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME'
 options:
