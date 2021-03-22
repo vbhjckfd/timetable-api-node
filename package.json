@@ -18,6 +18,8 @@
   },
   "devDependencies": {},
   "scripts": {
+    "import": "node gtfs-import.js",
+    "import-slim": "node gtfs-import-slim.js",
     "start": "node index.js",
     "profileapp": "node --prof index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
