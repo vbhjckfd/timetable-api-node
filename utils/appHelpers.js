@@ -49,6 +49,15 @@ module.exports = {
         return stopName.replace(/(\([\-\d]+\))/gi, '').trim();
     },
 
+    getDirectionByTrip: (tripId, routeModel) => {
+        if (!tripId || !routeModel.trip_shape_map[tripId]) {
+            return null;
+        }
+
+        const shapesSortedById = Object.keys(routeModel.shapes).sort((a, b) => a - b);
+        return shapesSortedById.indexOf(routeModel.trip_shape_map[tripId]);
+    },
+
     getTextWaitTime: (busArrivalTime) => {
         let minutesLeft = Math.round((busArrivalTime - new Date()) / 1000 / 60);
         return ((minutesLeft > 0) ? minutesLeft : '< 1') + 'хв';

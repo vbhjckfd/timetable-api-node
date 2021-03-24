@@ -60,18 +60,14 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         ]
       );
 
-      let shapesToSave = {};
-      shapesRaw.forEach(i => {
-          if (!shapesToSave[i.shape_id]) {
-              shapesToSave[i.shape_id] = [];
-          }
+      routeModel.shapes = shapesRaw.reduce((acc, i) => {
+        if (!acc[i.shape_id]) {
+            acc[i.shape_id] = [];
+        }
+        acc[i.shape_id].push([i.shape_pt_lat, i.shape_pt_lon]);
+        return acc;
+      }, {});
 
-          shapesToSave[i.shape_id].push([i.shape_pt_lat, i.shape_pt_lon])
-      })
-
-      routeModel.shapes = shapesToSave;
-
-      let tripDirectionMap = {};
       let tripShapeMap = {};
       let shapeDirectionMap = {};
 
@@ -81,14 +77,17 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
       }, ['trip_id', 'direction_id', 'shape_id']);
 
       trips.forEach(t => {
-          tripDirectionMap[t.trip_id] = t.direction_id;
           tripShapeMap[t.trip_id] = t.shape_id;
           shapeDirectionMap[t.shape_id] = t.direction_id;
       });
 
-      routeModel.trip_direction_map = tripDirectionMap;
       routeModel.trip_shape_map = tripShapeMap;
       routeModel.shape_direction_map = shapeDirectionMap;
+
+      routeModel.trip_direction_map = trips.reduce((acc, t) => {
+        acc[t.trip_id] = appHelpers.getDirectionByTrip(t.trip_id, routeModel);
+        return acc;
+      }, {});
 
       return routeModel;
   });
