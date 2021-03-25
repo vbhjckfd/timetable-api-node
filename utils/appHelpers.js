@@ -20,19 +20,24 @@ module.exports = {
     },
 
     normalizeRouteName: (routeName) => {
-        let rawNumber = parseInt(routeName.replace(/\D/g,''));
+        const rawNumber = parseInt(routeName.replace(/\D/g,''));
         let prefix = 'А';
+        const isTramOrTrol = ['Т', 'T'].some(n => routeName.startsWith(n));
+        const inNightBus = ['Н', 'H'].some(n => routeName.startsWith(n));
 
-        if (routeName.startsWith('Т') || routeName.startsWith('T')) {
+        if (isTramOrTrol) {
             // tram or trol
             prefix = (rawNumber >= 20) ? 'Тр' : 'Т';
 
-        } else if (routeName.startsWith('Н') || routeName.startsWith('H')) {
+        } else if (inNightBus) {
             // night bus
             prefix = 'Н-А'
         }
 
-        return prefix + ((rawNumber >= 10) ? rawNumber : ('0' + rawNumber));
+        // Stupid 23A trol
+        const postfix = (isTramOrTrol && rawNumber == 23 && routeName.endsWith('А')) ? 'А' : '';
+
+        return prefix + ((rawNumber >= 10) ? rawNumber : ('0' + rawNumber)) + postfix;
     },
 
     getRouteType: (routeName) => {
