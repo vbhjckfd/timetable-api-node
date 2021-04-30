@@ -97,14 +97,17 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
   routesCollection.insert(routeModels.filter(r => !!r));
 
   console.log(`${routeModels.length} routes processed`);
+  let imported_stop_codes = {}
 
   const stopPromises = importedStops.map(async stopRow => {
-      let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
+      let code = stopRow.stop_code
 
       if (null === code) {
-          code = stopRow.stop_code
-      } else if (Array.isArray(code)) {
-          code = code[0]
+          code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
+
+          if (Array.isArray(code)) {
+            code = code[0]
+          }
       }
 
       // If still zero - skip it
@@ -151,6 +154,13 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
           transfers: [],
       };
 
+
+      if (imported_stop_codes[code]) {
+          console.error(`Double stop code ${code} in row ${JSON.stringify(stopRow)}`)
+          return null
+      }
+
+      imported_stop_codes[code] = true
       return stopModel;
   });
 
