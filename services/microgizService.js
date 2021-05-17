@@ -1,10 +1,20 @@
 const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 const fetch = require("node-fetch");
-const gtfs = require('gtfs');
 const _ = require('lodash');
 const appHelpers = require("../utils/appHelpers");
 
-let Promise = require('bluebird');
+const fetchPlus = (url, options = {}, retries) =>
+    fetch(url, options)
+      .then(res => {
+        if (res.ok) {
+          return res
+        }
+        if (retries > 0) {
+          return fetchPlus(url, options, retries - 1)
+        }
+        throw new Error(res.status)
+      })
+      .catch(error => console.error(error.message))
 
 module.exports = {
 
@@ -17,23 +27,23 @@ module.exports = {
     },
 
     getVehiclesLocations: () => {
-        return fetch(process.env.VEHICLES_LOCATION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position')
-            .then(response => response.buffer())
-            .then(data => GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity)
-            .catch(err => {
-                console.error(err);
-                return module.exports.getVehiclesLocations();
-            });
+        return fetchPlus(
+            process.env.VEHICLES_LOCATION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position',
+            {},
+            3
+        )
+        .then(response => response.buffer())
+        .then(data => GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity);
     },
 
     getArrivalTimes: () => {
-        return fetch(process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates')
-            .then(response => response.buffer())
-            .then(data => GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity)
-            .catch(err => {
-                console.error(err);
-                return module.exports.getArrivalTimes();
-            });
+        return fetchPlus(
+            process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates',
+            {},
+            3
+        )
+        .then(response => response.buffer())
+        .then(data => GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity);
     },
 
     routesThroughStop: async (stop, routesCollection, stopsCollection) => {
