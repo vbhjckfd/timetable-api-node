@@ -187,6 +187,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
               .filter(data => routeModel.trip_direction_map[data.trip_id] == key)
               .filter(st => !globalIgnoreStopList.includes(st.stop_id))
               .map(st => allStops[st.stop_id] ? allStops[st.stop_id].code : null)
+              .filter(st => !!st)
               .value();
       }
 
