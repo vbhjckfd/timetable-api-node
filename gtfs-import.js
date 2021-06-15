@@ -100,7 +100,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
   let imported_stop_codes = {}
 
   const stopPromises = importedStops.map(async stopRow => {
-      let code = stopRow.stop_code
+      let code = Number(stopRow.stop_code) ? stopRow.stop_code : null
 
       if (null === code) {
           code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
