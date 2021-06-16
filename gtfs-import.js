@@ -100,14 +100,9 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
   let imported_stop_codes = {}
 
   const stopPromises = importedStops.map(async stopRow => {
-      let code = Number(stopRow.stop_code) ? stopRow.stop_code : null
-
-      if (null === code) {
-          code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
-
-          if (Array.isArray(code)) {
-            code = code[0]
-          }
+      let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
+      if (Array.isArray(code)) {
+          code = code[0]
       }
 
       // If still zero - skip it
@@ -156,11 +151,11 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
 
       if (imported_stop_codes[code]) {
-          console.error(`Double stop code ${code} in row ${JSON.stringify(stopRow)}`)
+          console.error(`Double stop code ${code} in row ${JSON.stringify(stopRow)}, already present in ${JSON.stringify(imported_stop_codes[code])}`)
           return null
       }
 
-      imported_stop_codes[code] = true
+      imported_stop_codes[code] = stopRow
       return stopModel;
   });
 
