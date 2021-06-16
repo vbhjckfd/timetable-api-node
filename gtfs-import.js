@@ -78,7 +78,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       trips.forEach(t => {
           tripShapeMap[t.trip_id] = t.shape_id;
-          shapeDirectionMap[t.shape_id] = t.direction_id;
+          shapeDirectionMap[t.shape_id] = Object.keys(routeModel.shapes).indexOf(t.shape_id);
       });
 
       routeModel.trip_shape_map = tripShapeMap;
