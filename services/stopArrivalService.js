@@ -65,13 +65,16 @@ const stopArrivalService = {
             .value()
         ;
 
-        return closestVehicles.map(vh => {
+        result = closestVehicles.map(vh => {
             let routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id);
             let routeInfo = {}
             if (routeInfoRaw) {
                 routeInfo = _.omit(routeInfoRaw, ['_id', 'id'])
             } else {
                 const routeObj = routesByRouteId[vh.route_id];
+                if (!routeObj) {
+                    return null;
+                }
                 console.error(`No binding for route ${appHelpers.formatRouteName(routeObj.short_name)} to stop ${stop.name} (${stop.code})`);
                 routeInfo = {
                     color: appHelpers.getRouteColor(routeObj.short_name),
@@ -91,6 +94,8 @@ const stopArrivalService = {
                 ...routeInfo,
             }}
         );
+
+        return result.filter(i => !!i);
     }
 
 }
