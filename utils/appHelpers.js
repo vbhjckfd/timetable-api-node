@@ -34,8 +34,10 @@ module.exports = {
             prefix = 'Н-А'
         }
 
-        // Stupid 23A trol
-        const postfix = (isTramOrTrol && rawNumber == 23 && routeName.endsWith('А')) ? 'А' : '';
+        let postfix = '';
+        if (routeName.endsWith('а') || routeName.endsWith('А')) {
+            postfix = 'a';
+        }
 
         return prefix + ((rawNumber >= 10) ? rawNumber : ('0' + rawNumber)) + postfix;
     },

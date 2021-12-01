@@ -13,7 +13,7 @@ module.exports = async (req, res, next) => {
     let result = '<table>';
     for (let r of routesRaw) {
       result += `<tr>
-        <td><a target="blank" href="https://lad.lviv.ua/route/${r.short_name}">${r.short_name}</a></td>
+        <td><a target="blank" href="https://lad.lviv.ua/route/${r.external_id}">${r.short_name}</a></td>
         <td>${r.long_name}</td>
         </tr>`;
     }

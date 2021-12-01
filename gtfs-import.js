@@ -39,11 +39,12 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         shapes: {},
         short_name: '',
         long_name: '',
+        shape_direction_map: {},
       }
 
-      if (r.route_short_name == 'Експрес') {
-          return null;
-      }
+      if (['Е', 'А08-А'].includes(r.route_short_name)) {
+        return null;
+    }
 
       const mostPopularShapes = await appHelpers.getMostPopularShapes(r.route_id);
 
