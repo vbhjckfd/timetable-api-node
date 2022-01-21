@@ -20,7 +20,10 @@ module.exports = async (req, res, next) => {
                 return {
                     code: s.code,
                     name: s.name,
-                    location: [loc[0], loc[1]]
+                    location: [loc[0], loc[1]],
+                    routes: s.transfers.map(i => {
+                        return i['route']
+                    }).sort()
                 }
             })
         );
@@ -28,10 +31,16 @@ module.exports = async (req, res, next) => {
         let result = '<table>';
         for (let s of stopsRaw) {
           const loc = s.location.coordinates;
+
+          const transfers = s.transfers.map(i => {
+            return i['route']
+          }).sort()
+
           result += `<tr>
             <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a></td>
             <td>${s.name}</td>
             <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]},${loc[1]}</a></td>
+            <td>${transfers.join(' ')}</td>
             </tr>`;
         }
         result += '</table>';
