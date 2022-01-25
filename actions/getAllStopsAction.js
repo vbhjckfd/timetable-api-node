@@ -19,16 +19,31 @@ module.exports = async (req, res, next) => {
                 const loc = s.location.coordinates;
                 return {
                     code: s.code,
+                    sign: `https://offline.lad.lviv.ua/${s.code}`,
                     name: s.name,
                     location: [loc[0], loc[1]],
-                    routes: s.transfers.map(i => {
-                        return i['route']
-                    }).sort()
+                    routes: s.transfers.map(i => i['route']).sort(),
                 }
             })
         );
     } else {
-        let result = '<table>';
+        let result = `
+        <style>
+        table, th{
+            text-align: left;
+        }
+        </style>
+        <table>
+        `;
+
+        result += `<tr>
+        <th>Код</th>
+        <th>Макет</th>
+        <th>Назва</th>
+        <th>Розташування</th>
+        <th>Маршрути</th>
+        </tr>`;
+
         for (let s of stopsRaw) {
           const loc = s.location.coordinates;
 
@@ -38,6 +53,7 @@ module.exports = async (req, res, next) => {
 
           result += `<tr>
             <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a></td>
+            <td><a target="blank" href="https://offline.lad.lviv.ua/${s.code}">SVG</td>
             <td>${s.name}</td>
             <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]},${loc[1]}</a></td>
             <td>${transfers.join(' ')}</td>
