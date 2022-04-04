@@ -20,7 +20,7 @@ module.exports = async (req, res, next) => {
                 return {
                     code: s.code,
                     sign: `https://offline.lad.lviv.ua/${s.code}`,
-                    sign_pdf: `https://pdf.lad.lviv.ua/${s.code}`,
+                    sign_pdf: `https://pdf.lad.lviv.ua/${s.code}.pdf`,
                     name: s.name,
                     location: [loc[0], loc[1]],
                     routes: s.transfers.map(i => i['route']).sort(),
@@ -60,7 +60,7 @@ module.exports = async (req, res, next) => {
             <td>
                 <a target="blank" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
                 &nbsp;
-                <a target="blank" href="https://pdf.lad.lviv.ua/${s.code}">PDF</a>
+                <a target="blank" href="https://pdf.lad.lviv.ua/${s.code}.pdf">PDF</a>
             </td>
             <td>${s.name}</td>
             <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]}, ${loc[1]}</a></td>
