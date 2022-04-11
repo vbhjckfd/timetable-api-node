@@ -3,6 +3,7 @@ const microgizService = require('../services/microgizService');
 const appHelpers = require("../utils/appHelpers");
 const geodist = require('geodist');
 const timetableDb = require('../connections/timetableSqliteDb');
+const gtfs = require('gtfs');
 
 module.exports = async (req, res, next) => {
     const latitude = parseFloat(req.query.latitude).toFixed(3),
@@ -27,8 +28,15 @@ module.exports = async (req, res, next) => {
         );
 
         return dist < 1000;
-    })
-    .map(i => {
+    }).value();
+
+
+    const tripsRaw = await gtfs.getTrips({
+        trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n)
+    }).catch(e => console.log(e));
+    const trips = _(tripsRaw).keyBy('trip_id').value();
+
+    const result = vehicles.map(i => {
         const position = i.vehicle.position;
         const route = routes[i.vehicle.trip.routeId];
 
@@ -41,11 +49,12 @@ module.exports = async (req, res, next) => {
                 position.latitude,
                 position.longitude
             ],
-            bearing: position.bearing
+            bearing: position.bearing,
+            lowfloor: !!trips[i.vehicle.trip.tripId]?.wheelchair_accessible ?? false,
         };
     });
 
     res
         .set('Cache-Control', `public, s-maxage=10`)
-        .send(vehicles);
+        .send(result);
 }
