@@ -2,6 +2,7 @@ const _ = require('lodash');
 const microgizService = require('../services/microgizService');
 const appHelpers = require("../utils/appHelpers");
 const timetableDb = require('../connections/timetableSqliteDb');
+const gtfs = require('gtfs');
 
 module.exports = async (req, res, next) => {
     const query = Number(req.params.name) ? {external_id: req.params.name } : {short_name: appHelpers.normalizeRouteName(req.params.name)};
@@ -15,9 +16,15 @@ module.exports = async (req, res, next) => {
     const vehicles = _(await microgizService.getVehiclesLocations())
     .filter(entity => {
         return entity.vehicle.trip.routeId == routeLocal.external_id && !!entity.vehicle.trip.tripId;
-    })
+    });
     // .filter(e => tripDirectionMap.hasOwnProperty(e.vehicle.trip.tripId.toString()))
-    .map(i => {
+
+    const tripsRaw = await gtfs.getTrips({
+        trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n).value()
+    });
+    const trips = _(tripsRaw).keyBy('trip_id').value();
+
+    const result = vehicles.map(i => {
         const position = i.vehicle.position;
 
         return {
@@ -27,11 +34,12 @@ module.exports = async (req, res, next) => {
                 position.latitude,
                 position.longitude
             ],
-            bearing: position.bearing
+            bearing: position.bearing,
+            lowfloor: !!trips[i.vehicle.trip.tripId]?.wheelchair_accessible ?? false,
         };
     });
 
     res
         .set('Cache-Control', `public, s-maxage=10`)
-        .send(vehicles);
+        .send(result);
 }

@@ -33,7 +33,7 @@ module.exports = async (req, res, next) => {
 
     const tripsRaw = await gtfs.getTrips({
         trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n)
-    }).catch(e => console.log(e));
+    });
     const trips = _(tripsRaw).keyBy('trip_id').value();
 
     const result = vehicles.map(i => {
