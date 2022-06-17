@@ -1,4 +1,3 @@
-# Use the official lightweight Node.js 12 image.
 # https://hub.docker.com/_/node
 FROM node:16-alpine AS BUILD_IMAGE
 ARG CACHEBUST=1
@@ -23,7 +22,7 @@ RUN apk --no-cache add curl && curl --silent --head "http://track.ua-gis.com/gtf
 
 RUN node ./gtfs-import.js
 
-FROM node:14-alpine
+FROM node:16-alpine
 
 WORKDIR /usr/src/app
 
