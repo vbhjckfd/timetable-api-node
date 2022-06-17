@@ -1,11 +1,11 @@
-const _ = require('lodash');
-const timetableDb = require('../connections/timetableSqliteDb');
-const microgizService = require('../services/microgizService');
+import _ from 'lodash';
+import db from '../connections/timetableSqliteDb.js';
+import { getVehiclesLocations, getArrivalTimes } from '../services/microgizService.js';
 
-module.exports = async (req, res, next) => {
+export default async (req, res, next) => {
     const [vehiclePositionRaw, arrivalTimeItemsRaw] = await Promise.all([
-        microgizService.getVehiclesLocations(),
-        microgizService.getArrivalTimes()
+        getVehiclesLocations(),
+        getArrivalTimes()
     ]);
 
     let vehiclePosition = _(vehiclePositionRaw)
@@ -24,7 +24,7 @@ module.exports = async (req, res, next) => {
 
     const stopIds = arrivalTimes.map(i => i.stopId);
 
-    const stopIdsMap = _(timetableDb.getCollection('stops').find({
+    const stopIdsMap = _(db.getCollection('stops').find({
         microgiz_id: {
             $in: stopIds
         }
@@ -34,7 +34,7 @@ module.exports = async (req, res, next) => {
 
     arrivalTimes = arrivalTimes.filter(item => !!stopIdsMap[item.stopId])
 
-    const routeLocal = timetableDb.getCollection('routes').findOne({external_id: vehiclePosition.trip.routeId});
+    const routeLocal = db.getCollection('routes').findOne({external_id: vehiclePosition.trip.routeId});
 
     res
         .set('Cache-Control', `public, s-maxage=5`)

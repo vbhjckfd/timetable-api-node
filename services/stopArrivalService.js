@@ -1,9 +1,9 @@
-const gtfs = require('gtfs');
-const _ = require('lodash');
-const appHelpers = require("../utils/appHelpers");
-const microgizService = require("./microgizService");
+import { getTrips } from 'gtfs';
+import _ from 'lodash';
+import { formatRouteName, getRouteColor, getRouteType, getDirectionByTrip, cleanUpStopName, getTextWaitTime } from "../utils/appHelpers.js";
+import { getArrivalTimes, getVehiclesLocations } from "./microgizService.js";
 
-const timetableDb = require('../connections/timetableSqliteDb');
+import timetableDb from '../connections/timetableSqliteDb.js';
 
 const stopArrivalService = {
 
@@ -13,8 +13,8 @@ const stopArrivalService = {
         const allRoutesRaw = timetableDb.getCollection('routes').find({});
 
         const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
-            microgizService.getArrivalTimes(),
-            microgizService.getVehiclesLocations()
+            getArrivalTimes(),
+            getVehiclesLocations()
         ]);
 
         const routesByRouteId = _(allRoutesRaw).keyBy('external_id').value();
@@ -40,7 +40,7 @@ const stopArrivalService = {
         .filter(i => new Date(i.time) >= now)
         .sort((a, b) => a.time - b.time);
 
-        const tripsRaw = await gtfs.getTrips({
+        const tripsRaw = await getTrips({
             trip_id: closestVehicles.map(v => v.trip_id)
         });
 
@@ -65,7 +65,7 @@ const stopArrivalService = {
             .value()
         ;
 
-        result = closestVehicles.map(vh => {
+        const result = closestVehicles.map(vh => {
             let routeInfoRaw = stop.transfers.find(i => i.id == vh.route_id);
             let routeInfo = {}
             if (routeInfoRaw) {
@@ -75,21 +75,21 @@ const stopArrivalService = {
                 if (!routeObj) {
                     return null;
                 }
-                console.error(`No binding for route ${appHelpers.formatRouteName(routeObj.short_name)} to stop ${stop.name} (${stop.code})`);
+                console.error(`No binding for route ${formatRouteName(routeObj.short_name)} to stop ${stop.name} (${stop.code})`);
                 routeInfo = {
-                    color: appHelpers.getRouteColor(routeObj.short_name),
-                    route: appHelpers.formatRouteName(routeObj.short_name),
-                    vehicle_type: appHelpers.getRouteType(routeObj.short_name),
+                    color: getRouteColor(routeObj.short_name),
+                    route: formatRouteName(routeObj.short_name),
+                    vehicle_type: getRouteType(routeObj.short_name),
                 }
             }
 
             return {
                 route_id: vh.route_id,
-                direction: appHelpers.getDirectionByTrip(vh.trip_id, routesByRouteId[vh.route_id]),
+                direction: getDirectionByTrip(vh.trip_id, routesByRouteId[vh.route_id]),
                 lowfloor: !!trips[vh.trip_id]?.wheelchair_accessible ?? false,
-                end_stop: appHelpers?.cleanUpStopName(trips[vh.trip_id].trip_headsign) ?? '',
+                end_stop: cleanUpStopName(trips[vh.trip_id].trip_headsign) ?? '',
                 arrival_time: (new Date(vh.time)).toUTCString(),
-                time_left: appHelpers.getTextWaitTime(vh.time),
+                time_left: getTextWaitTime(vh.time),
                 ...vehiclesLocations[vh.vehicle],
                 ...routeInfo,
             }}
@@ -100,4 +100,4 @@ const stopArrivalService = {
 
 }
 
-module.exports = stopArrivalService;
+export default stopArrivalService;

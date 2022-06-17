@@ -1,7 +1,7 @@
-const timetableDb = require('../connections/timetableDb');
+import timetableDb from '../connections/timetableDb.js';
 const FeedbackModel = timetableDb.model('Feedback');
 
-module.exports = async (req, res, next) => {
+export default async (req, res, next) => {
     let dataToSave = {
         message: req.body.message,
         user_uuid: req.body.uuid,

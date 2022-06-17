@@ -1,10 +1,8 @@
-const timetableDb = require('../connections/timetableSqliteDb');
-const _ = require('lodash');
+import db from '../connections/timetableSqliteDb.js';
+import _ from 'lodash';
 
-module.exports = async (req, res, next) => {
-    await timetableDb.loadDatabase();
-
-    const routesRaw = timetableDb.getCollection('routes')
+export default async (req, res, next) => {
+    const routesRaw = db.getCollection('routes')
         .chain()
         .find({})
         .simplesort('short_name')
@@ -29,14 +27,14 @@ module.exports = async (req, res, next) => {
     `;
     for (let r of routesRaw) {
 
-        const allStops = _(timetableDb.getCollection('stops').find({
+        const allStops = _(db.getCollection('stops').find({
             code: {
                 $in: Object.values(r.stops_by_shape).flat()
             }
         })).keyBy('code').value();
 
-        stopsByShape = []
-        for (key of [0, 1]) {
+        let stopsByShape = []
+        for (const key of [0, 1]) {
             stopsByShape[key] = _(r.stops_by_shape[String(key)])
                 .filter(st => !!allStops[st])
                 .map(st => allStops[st])

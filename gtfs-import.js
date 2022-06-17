@@ -1,24 +1,28 @@
-const gtfs = require('gtfs');
-const config = require('./gtfs-import-config.json');
+import { importGtfs, openDb, getStops, getRoutes, getShapes, getTrips, getStoptimes } from 'gtfs';
 
-const loki = require('lokijs')
+import { readFile } from 'fs/promises';
+const config = JSON.parse(
+    await readFile(new URL('./gtfs-import-config.json', import.meta.url))
+);
+
+import loki from 'lokijs';
 const db = new loki('./database/Timetable', {
     autoload: true
 });
 
-const microgizService = require("./services/microgizService");
-const appHelpers = require("./utils/appHelpers");
-const _ = require('lodash');
+import { routesThroughStop } from "./services/microgizService.js";
+import { getMostPopularShapes, normalizeRouteName, getDirectionByTrip, getSmapleTrips } from "./utils/appHelpers.js";
+import _ from 'lodash';
 
 const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
 (async () => {
-  await gtfs.import(config);
+  await importGtfs(config);
   console.log('Import Successful');
-  await gtfs.openDb(config);
+  await openDb(config);
 
-  const importedStops = await gtfs.getStops();
-  const importedRoutes = await gtfs.getRoutes();
+  const importedStops = await getStops();
+  const importedRoutes = await getRoutes();
 
   if (!importedStops.length) {
       console.error('GTFS import error!');
@@ -46,17 +50,17 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         return null;
     }
 
-      const mostPopularShapes = await appHelpers.getMostPopularShapes(r.route_id);
+      const mostPopularShapes = await getMostPopularShapes(r.route_id);
 
       if (!mostPopularShapes.length) {
           console.error(`Route ${r.route_id} - ${r.route_short_name} has no shapes`);
           return null;
       }
 
-      routeModel.short_name = appHelpers.normalizeRouteName(r.route_short_name);
+      routeModel.short_name = normalizeRouteName(r.route_short_name);
       routeModel.long_name = r.route_long_name;
 
-      const shapesRaw = await gtfs.getShapes({
+      const shapesRaw = await getShapes({
             shape_id: mostPopularShapes
         },
         ['shape_id', 'shape_pt_lat', 'shape_pt_lon'],
@@ -76,7 +80,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
       let tripShapeMap = {};
       let shapeDirectionMap = {};
 
-      const trips = await gtfs.getTrips({
+      const trips = await getTrips({
           route_id: r.route_id,
           shape_id: Array.from(mostPopularShapes)
       }, ['trip_id', 'direction_id', 'shape_id']);
@@ -90,7 +94,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
       routeModel.shape_direction_map = shapeDirectionMap;
 
       routeModel.trip_direction_map = trips.reduce((acc, t) => {
-        acc[t.trip_id] = appHelpers.getDirectionByTrip(t.trip_id, routeModel);
+        acc[t.trip_id] = getDirectionByTrip(t.trip_id, routeModel);
         return acc;
       }, {});
 
@@ -116,7 +120,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
           return null;
       }
 
-      for (cleaner of ['(', ')']) {
+      for (const cleaner of ['(', ')']) {
           code = code.replace(cleaner, '')
       }
       code = Number(code);
@@ -138,7 +142,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       let stop_name = stopRow.stop_name;
 
-      for (cleaner of [`00${code}`, `0${code}`, code, '()', '" "', '(Т6)', '(0)', 'уточнити' , /^"{1}/ , /\s+$/, "\\"]) {
+      for (const cleaner of [`00${code}`, `0${code}`, code, '()', '" "', '(Т6)', '(0)', 'уточнити' , /^"{1}/ , /\s+$/, "\\"]) {
           stop_name = stop_name.replace(cleaner, '')
       }
       stop_name = stop_name.replace('""', '"')
@@ -173,16 +177,16 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
   const allStops = _(stopsModels).keyBy('microgiz_id').value();
 
   const routeStopsRelatedPromises = routesCollection.find().map(async routeModel => {
-      const stopTimes = await gtfs.getStoptimes(
+      const stopTimes = await getStoptimes(
         {
-            trip_id: appHelpers.getSmapleTrips(routeModel)
+            trip_id: getSmapleTrips(routeModel)
         },
         ['trip_id', 'stop_id', 'stop_sequence'],
         [['stop_sequence', 'ASC']]
       );
 
       let stopsByShape = {};
-      for (key of [0, 1]) {
+      for (const key of [0, 1]) {
           stopsByShape[String(key)] = _(stopTimes)
               .filter(data => routeModel.trip_direction_map[data.trip_id] == key)
               .filter(st => !globalIgnoreStopList.includes(st.stop_id))
@@ -191,7 +195,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
               .value();
       }
 
-      for (key of ["0", "1"]) {
+      for (const key of ["0", "1"]) {
         const otherShapeStops = stopsByShape[String(Math.abs(key - 1))];
 
         if (!stopsByShape[key][0]) {
@@ -204,7 +208,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         }
       }
 
-      for (key of ["0", "1"]) {
+      for (const key of ["0", "1"]) {
         const otherShapeStops = stopsByShape[String(Math.abs(key - 1))];
 
         const lastStopOfThisShape = _(stopsByShape[key]).last();
@@ -225,7 +229,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
   await Promise.all(routeStopsRelatedPromises);
 
   const stopTransferPromises = stopsCollection.find().map(async (s) => {
-      s.transfers = await microgizService.routesThroughStop(s, routesCollection, stopsCollection);
+      s.transfers = await routesThroughStop(s, routesCollection, stopsCollection);
 
       stopsCollection.update(s);
 

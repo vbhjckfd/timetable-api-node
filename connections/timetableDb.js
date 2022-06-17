@@ -1,6 +1,6 @@
-const mongoose = require('mongoose');
-const feedbackSchema = require('./../schemas/feedback');
-const messageSchema = require('./../schemas/message');
+import mongoose from 'mongoose';
+import feedbackSchema from './../schemas/feedback.js';
+import messageSchema from './../schemas/message.js';
 
 const dbConfig = {
     user: process.env.MONGO_LOCAL_USER,
@@ -14,4 +14,4 @@ const timetableDb = mongoose.createConnection(process.env.MONGO_URL, dbConfig)
 timetableDb.model('Feedback', feedbackSchema);
 timetableDb.model('Message', messageSchema);
 
-module.exports = timetableDb;
+export default timetableDb;

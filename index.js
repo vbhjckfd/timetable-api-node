@@ -1,32 +1,34 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-const dotenv = require('dotenv');
-dotenv.config();
+import 'dotenv/config'
 
-const path = require('path');
-
+import path from 'path';
 const PORT = process.env.PORT || 8080;
 
-const cors = require('cors')
-const express = require('express');
-const bodyParser = require('body-parser');
+import {openDb} from 'gtfs';
+import { readFile } from 'fs/promises';
+import cors from 'cors';
+import express from 'express';
+import bodyParser from 'body-parser';
+import localDb from './connections/timetableSqliteDb.js';
 
-const notFoundAction = require('./actions/notFoundAction');
+import notFoundAction from './actions/notFoundAction.js';
 
-const getClosestStopsAction = require('./actions/getClosestStopsAction');
-const getSingleStopAction = require('./actions/getSingleStopAction');
-const getStopTimetableAction = require('./actions/getStopTimetableAction');
-const getStopStaticDataAction = require('./actions/getStopStaticDataAction');
-const getAllStopsAction = require('./actions/getAllStopsAction');
-const routeInfoDynamicAction = require('./actions/routeDynamicInfoAction');
-const routeInfoStaticAction = require('./actions/routeStaticInfoAction');
-const vehicleInfoAction = require('./actions/vehicleInfoAction');
-const closestTransportAction = require('./actions/closestTransportAction');
-const postFeedbackAction = require('./actions/postFeedbackAction');
-const getFeedbackAction = require('./actions/getFeedbackAction');
-const getGlobalMessagesAction = require('./actions/getGlobalMessagesAction');
-const getAllRoutesAction = require('./actions/getAllRoutesAction');
+import getClosestStopsAction from './actions/getClosestStopsAction.js';
+import getSingleStopAction from './actions/getSingleStopAction.js';
+import getStopTimetableAction from './actions/getStopTimetableAction.js';
+import getStopStaticDataAction from './actions/getStopStaticDataAction.js';
+import getAllStopsAction from './actions/getAllStopsAction.js';
+import routeInfoDynamicAction from './actions/routeDynamicInfoAction.js';
+import routeInfoStaticAction from './actions/routeStaticInfoAction.js';
+import vehicleInfoAction from './actions/vehicleInfoAction.js';
+import closestTransportAction from './actions/closestTransportAction.js';
+import postFeedbackAction from './actions/postFeedbackAction.js';
+import getFeedbackAction from './actions/getFeedbackAction.js';
+import getGlobalMessagesAction from './actions/getGlobalMessagesAction.js';
+import getAllRoutesAction from './actions/getAllRoutesAction.js';
 
+const __dirname = path.resolve();
 const app = express();
 
 app.use(cors());
@@ -76,11 +78,12 @@ app.on('ready', () => {
   })
 });
 
-const timetableDb = require('./connections/timetableSqliteDb');
-timetableDb.loadDatabase({}, async () => {
-  const gtfs = require('gtfs');
-  const gtfsDbConfig = require('./gtfs-import-config.json');
-  await gtfs.openDb(gtfsDbConfig);
+localDb.loadDatabase({}, async () => {  
+  const gtfsDbConfig = JSON.parse(
+    await readFile(new URL('./gtfs-import-config.json', import.meta.url))
+  );
+
+  await openDb(gtfsDbConfig);
 
   app.emit('ready');
 });
