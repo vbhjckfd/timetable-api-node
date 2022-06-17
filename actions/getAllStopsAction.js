@@ -1,9 +1,7 @@
-const timetableDb = require('../connections/timetableSqliteDb');
+import db from '../connections/timetableSqliteDb.js';
 
-module.exports = async (req, res, next) => {
-    await timetableDb.loadDatabase();
-
-    const stopsRaw = timetableDb.getCollection('stops')
+export default async (req, res, next) => {
+    const stopsRaw = db.getCollection('stops')
         .chain()
         .find({})
         .simplesort('code')

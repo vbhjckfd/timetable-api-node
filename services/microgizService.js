@@ -1,7 +1,7 @@
-const GtfsRealtimeBindings = require('gtfs-realtime-bindings');
-const fetch = require("node-fetch");
-const _ = require('lodash');
-const appHelpers = require("../utils/appHelpers");
+import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
+import fetch from "node-fetch";
+import _ from 'lodash';
+import { getRouteColor, formatRouteName, getRouteType } from "../utils/appHelpers.js";
 
 const fetchPlus = (url, options = {}, retries) =>
     fetch(url, options)
@@ -16,41 +16,36 @@ const fetchPlus = (url, options = {}, retries) =>
       })
       .catch(error => console.error(error.message))
 
-module.exports = {
-
-    getTimeOfLastStaticUpdate: () => {
-        return fetch('http://track.ua-gis.com/gtfs/lviv/static.zip', {
-            method: 'HEAD'
-        }).then(response => {
-            return new Date(response.headers.get('last-modified'));
-        })
-    },
-
-    getVehiclesLocations: () => {
-        return fetchPlus(
-            process.env.VEHICLES_LOCATION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position',
-            {},
-            3
-        )
+export function getTimeOfLastStaticUpdate() {
+    return fetch('http://track.ua-gis.com/gtfs/lviv/static.zip', {
+        method: 'HEAD'
+    }).then(response => {
+        return new Date(response.headers.get('last-modified'));
+    });
+}
+export function getVehiclesLocations() {
+    return fetchPlus(
+        process.env.VEHICLES_LOCATION_URL || 'http://track.ua-gis.com/gtfs/lviv/vehicle_position',
+        {},
+        3
+    )
         .then(response => response.buffer())
         .then(data => GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity);
-    },
-
-    getArrivalTimes: () => {
-        return fetchPlus(
-            process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates',
-            {},
-            3
-        )
+}
+export function getArrivalTimes() {
+    return fetchPlus(
+        process.env.TRIP_UDPDATES_URL || 'http://track.ua-gis.com/gtfs/lviv/trip_updates',
+        {},
+        3
+    )
         .then(response => response.buffer())
         .then(data => GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(data).entity);
-    },
-
-    routesThroughStop: async (stop, routesCollection, stopsCollection) => {
-        const transfers = routesCollection
+}
+export async function routesThroughStop(stop, routesCollection, stopsCollection) {
+    const transfers = routesCollection
         .find({})
         .filter(r => {
-            for (key of ["0", "1"]) {
+            for (const key of ["0", "1"]) {
                 if (-1 !== r.stops_by_shape[key].slice(0, -1).indexOf(stop.code)) {
                     return true;
                 }
@@ -65,12 +60,12 @@ module.exports = {
 
             return {
                 id: r.external_id,
-                color: appHelpers.getRouteColor(r.short_name),
-                route: appHelpers.formatRouteName(r.short_name),
-                vehicle_type: appHelpers.getRouteType(r.short_name),
+                color: getRouteColor(r.short_name),
+                route: formatRouteName(r.short_name),
+                vehicle_type: getRouteType(r.short_name),
                 shape_id: shapeId,
                 direction_id: Number(directionId),
-                end_stop_name: stopsCollection.findOne({code: lastStopCode}).name,
+                end_stop_name: stopsCollection.findOne({ code: lastStopCode }).name,
                 end_stop_code: lastStopCode
             };
         })
@@ -85,7 +80,5 @@ module.exports = {
             return 0;
         });
 
-        return transfers;
-    }
-
-};
+    return transfers;
+}

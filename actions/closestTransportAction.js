@@ -1,18 +1,18 @@
-const _ = require('lodash');
-const microgizService = require('../services/microgizService');
-const appHelpers = require("../utils/appHelpers");
-const geodist = require('geodist');
-const timetableDb = require('../connections/timetableSqliteDb');
-const gtfs = require('gtfs');
+import _ from 'lodash';
+import { getVehiclesLocations } from '../services/microgizService.js';
+import { getRouteColor, formatRouteName, getRouteType } from "../utils/appHelpers.js";
+import geodist from 'geodist';
+import db from '../connections/timetableSqliteDb.js';
+import { getTrips } from 'gtfs';
 
-module.exports = async (req, res, next) => {
+export default async (req, res, next) => {
     const latitude = parseFloat(req.query.latitude).toFixed(3),
           longitude = parseFloat(req.query.longitude).toFixed(3)
     ;
 
-    const vehiclesRaw = await microgizService.getVehiclesLocations();
+    const vehiclesRaw = await getVehiclesLocations();
 
-    const routes = _(timetableDb.getCollection('routes').find({}))
+    const routes = _(db.getCollection('routes').find({}))
     .keyBy('external_id')
     .value();
 
@@ -31,7 +31,7 @@ module.exports = async (req, res, next) => {
     }).value();
 
 
-    const tripsRaw = await gtfs.getTrips({
+    const tripsRaw = await getTrips({
         trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n)
     });
     const trips = _(tripsRaw).keyBy('trip_id').value();
@@ -42,9 +42,9 @@ module.exports = async (req, res, next) => {
 
         return {
             id: i.vehicle.vehicle.id,
-            color: appHelpers.getRouteColor(route.short_name),
-            route: appHelpers.formatRouteName(route.short_name),
-            vehicle_type: appHelpers.getRouteType(route.short_name),
+            color: getRouteColor(route.short_name),
+            route: formatRouteName(route.short_name),
+            vehicle_type: getRouteType(route.short_name),
             location: [
                 position.latitude,
                 position.longitude

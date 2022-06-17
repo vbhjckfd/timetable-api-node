@@ -1,4 +1,4 @@
-const loki = require('lokijs');
+import loki from 'lokijs';
 
 const db = new loki('./database/Timetable', {
     autoload: true,
@@ -8,4 +8,4 @@ const db = new loki('./database/Timetable', {
     },
 });
 
-module.exports = db;
+export default db;

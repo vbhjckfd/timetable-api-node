@@ -1,25 +1,25 @@
-const _ = require('lodash');
-const microgizService = require('../services/microgizService');
-const appHelpers = require("../utils/appHelpers");
-const timetableDb = require('../connections/timetableSqliteDb');
-const gtfs = require('gtfs');
+import _ from 'lodash';
+import { getVehiclesLocations } from '../services/microgizService.js';
+import { normalizeRouteName } from "../utils/appHelpers.js";
+import db from '../connections/timetableSqliteDb.js';
+import { getTrips } from 'gtfs';
 
-module.exports = async (req, res, next) => {
-    const query = Number(req.params.name) ? {external_id: req.params.name } : {short_name: appHelpers.normalizeRouteName(req.params.name)};
+export default async (req, res, next) => {
+    const query = Number(req.params.name) ? {external_id: req.params.name } : {short_name: normalizeRouteName(req.params.name)};
 
-    const routeLocal = timetableDb.getCollection('routes').findOne(query);
+    const routeLocal = db.getCollection('routes').findOne(query);
 
     if (!routeLocal) return res.sendStatus(404);
 
     const tripDirectionMap = routeLocal.trip_direction_map;
 
-    const vehicles = _(await microgizService.getVehiclesLocations())
+    const vehicles = _(await getVehiclesLocations())
     .filter(entity => {
         return entity.vehicle.trip.routeId == routeLocal.external_id && !!entity.vehicle.trip.tripId;
     });
     // .filter(e => tripDirectionMap.hasOwnProperty(e.vehicle.trip.tripId.toString()))
 
-    const tripsRaw = await gtfs.getTrips({
+    const tripsRaw = await getTrips({
         trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n).value()
     });
     const trips = _(tripsRaw).keyBy('trip_id').value();

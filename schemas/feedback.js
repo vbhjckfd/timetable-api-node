@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const PointSchema = new mongoose.Schema({
   type: {
@@ -37,4 +37,4 @@ const FeedbackSchema = new mongoose.Schema({
 { timestamps: true }
 );
 
-module.exports = FeedbackSchema
+export default FeedbackSchema

@@ -1,7 +1,7 @@
-const timetableDb = require('../connections/timetableDb');
+import timetableDb from '../connections/timetableDb.js';
 const MessageModel = timetableDb.model('Message');
 
-module.exports = async (req, res, next) => {
+export default async (req, res, next) => {
     let dateSince = new Date(1970, 0);
     if (req.query.since) {
         dateSince = new Date(req.query.since.replace(/"/g, ''));

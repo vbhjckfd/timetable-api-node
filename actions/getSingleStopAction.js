@@ -1,14 +1,14 @@
-const timetableService = require('../services/stopArrivalService');
-const timetableDb = require('../connections/timetableSqliteDb');
+import getTimetableForStop from '../services/stopArrivalService.js';
+import db from '../connections/timetableSqliteDb.js';
 
-module.exports = async (req, res, next) => {
+export default async (req, res, next) => {
     const code = Number(req.params.code);
     if (!code)  {
         res.status(400).send(`Bad argument, ${req.params.code} is not a number`);
         return;
     }
 
-    const stop = timetableDb.getCollection('stops').findOne({code: code})
+    const stop = db.getCollection('stops').findOne({code: code})
 
     if (!stop) {
         res.status(404).send(`Bad argument, stop with code ${code} not found`);
@@ -19,7 +19,7 @@ module.exports = async (req, res, next) => {
     let timetableData = [];
     try {
         if (!skipTimetableData) {
-            timetableData = await timetableService.getTimetableForStop(stop);
+            timetableData = await getTimetableForStop(stop);
         }
     } catch (e) {
         console.error(e);

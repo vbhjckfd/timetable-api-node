@@ -1,9 +1,9 @@
-const geodist = require('geodist');
+import geodist from 'geodist';
 
-const timetableDb = require('../connections/timetableSqliteDb');
+import db from '../connections/timetableSqliteDb.js';
 
-module.exports = async (req, res, next) => {
-    const stopsCollection = timetableDb.getCollection('stops');
+export default async (req, res, next) => {
+    const stopsCollection = db.getCollection('stops');
 
     const latitude = parseFloat(req.query.latitude).toFixed(3);
     const longitude = parseFloat(req.query.longitude).toFixed(3);
