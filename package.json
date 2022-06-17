@@ -16,7 +16,8 @@
     "mongoose": "^5.13.14",
     "node-fetch": "^2.6.7",
     "npm-config": "^0.2.0",
-    "tar": ">=4.4.18"
+    "tar": ">=4.4.18",
+    "protobufjs": ">=6.11.3"
   },
   "devDependencies": {},
   "scripts": {
