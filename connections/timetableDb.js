@@ -7,7 +7,7 @@ const dbConfig = {
     pass: process.env.MONGO_LOCAL_PASSWORD,
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    useFindAndModify: false
+    // useFindAndModify: false
 }
 
 const timetableDb = mongoose.createConnection(process.env.MONGO_URL, dbConfig)
