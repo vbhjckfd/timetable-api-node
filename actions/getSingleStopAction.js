@@ -1,4 +1,4 @@
-import getTimetableForStop from '../services/stopArrivalService.js';
+import stopArrivalService from '../services/stopArrivalService.js';
 import db from '../connections/timetableSqliteDb.js';
 
 export default async (req, res, next) => {
@@ -19,7 +19,7 @@ export default async (req, res, next) => {
     let timetableData = [];
     try {
         if (!skipTimetableData) {
-            timetableData = await getTimetableForStop(stop);
+            timetableData = await stopArrivalService.getTimetableForStop(stop);
         }
     } catch (e) {
         console.error(e);

@@ -8,7 +8,7 @@ import timetableDb from '../connections/timetableSqliteDb.js';
 const stopArrivalService = {
 
     getTimetableForStop: async function(stop) {
-        const now = (new Date()).setMilliseconds(0);
+        const now = new Date();
 
         const allRoutesRaw = timetableDb.getCollection('routes').find({});
 
