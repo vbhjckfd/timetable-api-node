@@ -18,10 +18,10 @@ export function secondsUntilImportDone() {
 }
 
 export function isLowFloor(trip, vehiclesLocation, routeLocal) {
-    const is_low_floor = !!trip?.wheelchair_accessible ?? false
-    if (is_low_floor) {
-        return true;
-    }
+    // const is_low_floor = !!trip?.wheelchair_accessible ?? false
+    // if (is_low_floor) {
+    //     return true;
+    // }
 
     const type = getRouteType(routeLocal.short_name)
 
