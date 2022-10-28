@@ -46,7 +46,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         shape_direction_map: {},
       }
 
-      if (['Е', 'А08-А'].includes(r.route_short_name)) {
+      if (['Е'].includes(r.route_short_name)) {
         return null;
     }
 
