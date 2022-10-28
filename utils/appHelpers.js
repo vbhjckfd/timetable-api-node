@@ -25,20 +25,51 @@ export function isLowFloor(trip, vehiclesLocation, routeLocal) {
 
     const type = getRouteType(routeLocal.short_name)
 
+    const licensePlate = vehiclesLocation.vehicle.vehicle.licensePlate;
+
+    // Electron trolleys and maybe some LAZs
     if (type == 'trol') {
-        const licensePlate = parseInt(vehiclesLocation.vehicle.vehicle.licensePlate);
-        return licensePlate >= 100 && licensePlate < 512;
+        const intLicensePlate = parseInt(licensePlate);
+        return intLicensePlate >= 100 && intLicensePlate < 512;
     }
 
+    // Electron trams
     if (type == 'tram') {
-        const licensePlate = parseInt(vehiclesLocation.vehicle.vehicle.licensePlate);
-        return (licensePlate >= 1218) || (licensePlate >= 1179 && licensePlate <= 1187);
+        const intLicensePlate = parseInt(licensePlate);
+        return (intLicensePlate >= 1218) || (intLicensePlate >= 1179 && intLicensePlate <= 1187);
     }
 
-    return [
-        'А01', 'А03', 'А05', 'А06', 'А08', 'А09', 'А10', 'А16',
-        'А18', 'А29', 'А40', 'А46', 'А47', 'А52', 'А61'
-    ].includes(routeLocal.short_name)
+    // Electrons or MAZs
+    if ([
+        'А01', 'А03', 'А05', 'А06', 'А08a', 'А09', 'А10', 'А16',
+        'А18', 'А19', 'А29', 'А40', 'А46', 'А47', 'А49', 'А52', 'А61'
+    ].includes(routeLocal.short_name)) {
+        return true
+    }
+
+    if ([
+        'BC-4166-ET', 'BC-4167-ET', 'BC-4168-ET', 'BC-4169-ET',
+        'BC-7306-EP', 'BC-7313-EP', 'BC-7342-EP', 'BC-7346-EP',
+
+        'AC-8634-EM',
+        'AC-4293-EM',
+        'AC-4294-EM',
+        'AC-8629-EM',
+        'BC-0144-OC',
+        'BC-0243-MC',
+        'BC-0245-MC',
+        'BC-1349-MC',
+        'BC-1371-MC',
+        'BC-8466-ME',
+        'BC-8467-ME',
+        'BC-8732-MI',
+        'BC-8734-MI',
+    ].includes(licensePlate)) {
+        return true;
+    }
+
+    console.log(licensePlate)
+    return false;
 }
 
 export function normalizeRouteName(routeName) {
