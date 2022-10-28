@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { getVehiclesLocations } from '../services/microgizService.js';
-import { getRouteColor, formatRouteName, getRouteType } from "../utils/appHelpers.js";
+import { getRouteColor, formatRouteName, getRouteType, isLowFloor } from "../utils/appHelpers.js";
 import geodist from 'geodist';
 import db from '../connections/timetableSqliteDb.js';
 import { getTrips } from 'gtfs';
@@ -50,7 +50,7 @@ export default async (req, res, next) => {
                 position.longitude
             ],
             bearing: position.bearing,
-            lowfloor: !!trips[i.vehicle.trip.tripId]?.wheelchair_accessible ?? false,
+            lowfloor: isLowFloor(trips[i.vehicle.trip.tripId], i, route),
         };
     });
 

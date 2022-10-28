@@ -1,6 +1,6 @@
 import { getTrips } from 'gtfs';
 import _ from 'lodash';
-import { formatRouteName, getRouteColor, getRouteType, getDirectionByTrip, cleanUpStopName, getTextWaitTime } from "../utils/appHelpers.js";
+import { formatRouteName, getRouteColor, getRouteType, getDirectionByTrip, cleanUpStopName, getTextWaitTime, isLowFloor } from "../utils/appHelpers.js";
 import { getArrivalTimes, getVehiclesLocations } from "./microgizService.js";
 
 import timetableDb from '../connections/timetableSqliteDb.js';
@@ -49,19 +49,6 @@ const stopArrivalService = {
         const vehiclesIds = closestVehicles.map(v => v.vehicle)
         const vehiclesLocations = _(vehiclesLocationsRaw)
             .filter(entity => vehiclesIds.includes(entity.vehicle.vehicle.id))
-            .map(i => {
-                const position = i.vehicle.position;
-
-                return {
-                    vehicle_id: i.vehicle.vehicle.id,
-                    location: [
-                        position.latitude.toFixed(5),
-                        position.longitude.toFixed(5)
-                    ],
-                    bearing: position.bearing
-                };
-            })
-            .keyBy('vehicle_id')
             .value()
         ;
 
@@ -83,14 +70,25 @@ const stopArrivalService = {
                 }
             }
 
+            const vehicleLocation = _.find(vehiclesLocations, entity => entity.vehicle.vehicle.id == vh.vehicle)
+            const position = vehicleLocation.vehicle.position;
+            const vehicleInfo = {
+                vehicle_id: vehicleLocation.vehicle.vehicle.id,
+                location: [
+                    position.latitude.toFixed(5),
+                    position.longitude.toFixed(5)
+                ],
+                bearing: position.bearing
+            };
+
             return {
                 route_id: vh.route_id,
                 direction: getDirectionByTrip(vh.trip_id, routesByRouteId[vh.route_id]),
-                lowfloor: !!trips[vh.trip_id]?.wheelchair_accessible ?? false,
+                lowfloor: isLowFloor(trips[vh.trip_id], vehicleLocation, routesByRouteId[vh.route_id]),
                 end_stop: cleanUpStopName(trips[vh.trip_id].trip_headsign) ?? '',
                 arrival_time: (new Date(vh.time)).toUTCString(),
                 time_left: getTextWaitTime(vh.time),
-                ...vehiclesLocations[vh.vehicle],
+                ...vehicleInfo,
                 ...routeInfo,
             }}
         );

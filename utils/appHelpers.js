@@ -17,6 +17,30 @@ export function secondsUntilImportDone() {
     return Math.round((nextImportDate() - new Date()) / 1000);
 }
 
+export function isLowFloor(trip, vehiclesLocation, routeLocal) {
+    const is_low_floor = !!trip?.wheelchair_accessible ?? false
+    if (is_low_floor) {
+        return true;
+    }
+
+    const type = getRouteType(routeLocal.short_name)
+
+    if (type == 'trol') {
+        const licensePlate = parseInt(vehiclesLocation.vehicle.vehicle.licensePlate);
+        return licensePlate >= 100 && licensePlate < 512;
+    }
+
+    if (type == 'tram') {
+        const licensePlate = parseInt(vehiclesLocation.vehicle.vehicle.licensePlate);
+        return (licensePlate >= 1218) || (licensePlate >= 1179 && licensePlate <= 1187);
+    }
+
+    return [
+        'А01', 'А03', 'А05', 'А06', 'А08', 'А09', 'А10', 'А16',
+        'А18', 'А29', 'А40', 'А46', 'А47', 'А52', 'А61'
+    ].includes(routeLocal.short_name)
+}
+
 export function normalizeRouteName(routeName) {
     const rawNumber = parseInt(routeName.replace(/\D/g,''));
     let prefix = 'А';
