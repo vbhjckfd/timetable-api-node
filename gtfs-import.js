@@ -237,8 +237,6 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       routesCollection.update(routeModel);
 
-      console.log(routeModel.stop_departure_time_map)
-
       return routeModel;
   });
 
