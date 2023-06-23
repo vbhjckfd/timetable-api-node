@@ -44,6 +44,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         short_name: '',
         long_name: '',
         shape_direction_map: {},
+        stop_departure_time_map: {},
       }
 
       if (['Е'].includes(r.route_short_name)) {
@@ -220,7 +221,23 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       routeModel.stops_by_shape = stopsByShape;
 
+      const allRouteTrips = Object.keys(routeModel.trip_direction_map)
+      const allStopTimes = await getStoptimes(
+        {
+            trip_id: allRouteTrips
+        },
+        ['stop_id', 'departure_time'],
+        [['departure_time', 'ASC']]
+      );
+
+      routeModel.stop_departure_time_map = _(allStopTimes)
+        .groupBy('stop_id')
+        .mapValues(t => _(t).map('departure_time').value())
+        .value()
+
       routesCollection.update(routeModel);
+
+      console.log(routeModel.stop_departure_time_map)
 
       return routeModel;
   });

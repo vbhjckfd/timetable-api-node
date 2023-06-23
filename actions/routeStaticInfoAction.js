@@ -25,7 +25,7 @@ export default async (req, res, next) => {
         stopsByShape[key] = _(routeLocal.stops_by_shape[String(key)])
             .filter(st => !!allStops[st])
             .map(st => allStops[st])
-            .map(s => {
+            .map((s, index) => {
                 const transfers = s.transfers
                 .map(i => {
                     const { _id, shape_id, ...omitted } = i;
@@ -41,11 +41,17 @@ export default async (req, res, next) => {
                 })
                 ;
 
+                let departures = []
+                if (0 == index) {
+                    departures = routeLocal.stop_departure_time_map[s.microgiz_id]
+                }
+
                 return {
                     code: s.code,
                     name: s.name,
                     loc: [s.location.coordinates[0], s.location.coordinates[1]],
                     transfers: transfers,
+                    departures: departures,
                 }
             })
             .value();
