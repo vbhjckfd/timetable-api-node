@@ -232,7 +232,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       routeModel.stop_departure_time_map = _(allStopTimes)
         .groupBy('stop_id')
-        .mapValues(t => _(t).map('departure_time').value())
+        .mapValues(t => _(t).map('departure_time').map(t => t.slice(0, 5)).uniq().value())
         .value()
 
       routesCollection.update(routeModel);
