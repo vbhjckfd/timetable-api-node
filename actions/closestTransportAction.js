@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { getVehiclesLocations } from '../services/microgizService.js';
-import { getRouteColor, formatRouteName, getRouteType, isLowFloor } from "../utils/appHelpers.js";
+import { getRouteColor, formatRouteName, getRouteType, isLowFloor, getTodayServiceIds } from "../utils/appHelpers.js";
 import geodist from 'geodist';
 import db from '../connections/timetableSqliteDb.js';
 import { getTrips } from 'gtfs';
@@ -32,7 +32,8 @@ export default async (req, res, next) => {
 
 
     const tripsRaw = await getTrips({
-        trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n)
+        trip_id: vehicles.map(v => v.vehicle.trip.tripId).filter(n => n),
+        service_id: await getTodayServiceIds(),
     });
     const trips = _(tripsRaw).keyBy('trip_id').value();
 

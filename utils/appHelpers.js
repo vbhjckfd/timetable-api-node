@@ -1,4 +1,4 @@
-import { getShapes, getTrips } from 'gtfs';
+import { getShapes, getTrips, getCalendars } from 'gtfs';
 import _ from 'lodash';
 
 function nextImportDate() {
@@ -15,6 +15,26 @@ function nextImportDate() {
 
 export function secondsUntilImportDone() {
     return Math.round((nextImportDate() - new Date()) / 1000);
+}
+
+export async function getTodayServiceIds() {
+    const days = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+    ]
+
+    const dayname = days[(new Date()).getDay()]
+
+    const service_ids = (await getCalendars({
+        [dayname] : 1
+    }, ['service_id'])).map(i => i.service_id)
+
+    return service_ids
 }
 
 export function isLowFloor(trip, vehiclesLocation, routeLocal) {
@@ -139,7 +159,8 @@ export function formatRouteName(name) {
 export async function getMostPopularShapes(routeId) {
     const tripsShapes = new Set(
         (await getTrips({
-            route_id: routeId
+            route_id: routeId,
+            service_id: await getTodayServiceIds(),
         },
         ['shape_id']))
         .map(i => i.shape_id)

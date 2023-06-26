@@ -1,4 +1,5 @@
 import { importGtfs, openDb, getStops, getRoutes, getShapes, getTrips, getStoptimes } from 'gtfs';
+import { getTodayServiceIds } from "./utils/appHelpers.js";
 
 import { readFile } from 'fs/promises';
 const config = JSON.parse(
@@ -83,7 +84,8 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       const trips = await getTrips({
           route_id: r.route_id,
-          shape_id: Array.from(mostPopularShapes)
+          shape_id: Array.from(mostPopularShapes),
+          service_id: await getTodayServiceIds(),
       }, ['trip_id', 'direction_id', 'shape_id']);
 
       trips.forEach(t => {

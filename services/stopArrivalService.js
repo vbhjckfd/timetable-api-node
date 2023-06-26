@@ -1,6 +1,6 @@
 import { getTrips } from 'gtfs';
 import _ from 'lodash';
-import { formatRouteName, getRouteColor, getRouteType, getDirectionByTrip, cleanUpStopName, getTextWaitTime, isLowFloor } from "../utils/appHelpers.js";
+import { formatRouteName, getRouteColor, getRouteType, getDirectionByTrip, cleanUpStopName, getTextWaitTime, isLowFloor, getTodayServiceIds } from "../utils/appHelpers.js";
 import { getArrivalTimes, getVehiclesLocations } from "./microgizService.js";
 
 import timetableDb from '../connections/timetableSqliteDb.js';
@@ -41,7 +41,8 @@ const stopArrivalService = {
         .sort((a, b) => a.time - b.time);
 
         const tripsRaw = await getTrips({
-            trip_id: closestVehicles.map(v => v.trip_id)
+            trip_id: closestVehicles.map(v => v.trip_id),
+            service_id: await getTodayServiceIds(),
         });
 
         const trips = _(tripsRaw).keyBy('trip_id').value();
