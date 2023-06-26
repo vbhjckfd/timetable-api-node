@@ -14,7 +14,7 @@
     "lodash": "^4.17.21",
     "lokijs": "^1.5.12",
     "mongoose": "^6.4.6",
-    "node-fetch": "^3.2.6",
+    "node-fetch": "^3.2.10",
     "npm-config": "^0.2.0",
     "tar": ">=4.4.18",
     "protobufjs": ">=6.11.3"
