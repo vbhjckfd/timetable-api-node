@@ -13,6 +13,9 @@ COPY package*.json ./
 # Install production dependencies.
 RUN npm install --only=production
 
+RUN apk add --no-cache tzdata
+ENV TZ=Europe/Kyiv
+
 # Copy local code to the container image.
 COPY . ./
 
