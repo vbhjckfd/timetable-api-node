@@ -88,7 +88,6 @@ export function isLowFloor(trip, vehiclesLocation, routeLocal) {
         return true;
     }
 
-    console.log(licensePlate)
     return false;
 }
 

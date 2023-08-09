@@ -54,10 +54,10 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
 
       const mostPopularShapes = await getMostPopularShapes(r.route_id);
 
-      if (!mostPopularShapes.length) {
-          console.error(`Route ${r.route_id} - ${r.route_short_name} has no shapes`);
-          return null;
-      }
+    //   if (!mostPopularShapes.length) {
+    //       console.error(`Route ${r.route_id} - ${r.route_short_name} has no shapes`);
+    //       return null;
+    //   }
 
       routeModel.short_name = normalizeRouteName(r.route_short_name);
       routeModel.long_name = r.route_long_name;
