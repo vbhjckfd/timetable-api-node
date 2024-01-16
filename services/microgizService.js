@@ -66,6 +66,7 @@ export async function routesThroughStop(stop, routesCollection, stopsCollection)
                 shape_id: shapeId,
                 direction_id: Number(directionId),
                 end_stop_name: stopsCollection.findOne({ code: lastStopCode }).name,
+                end_stop_eng_name: stopsCollection.findOne({ code: lastStopCode }).eng_name,
                 end_stop_code: lastStopCode
             };
         })

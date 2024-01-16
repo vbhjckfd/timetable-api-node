@@ -16,10 +16,10 @@
     "mongoose": "^6.4.6",
     "node-fetch": "^3.2.10",
     "npm-config": "^0.2.0",
-    "tar": ">=4.4.18",
-    "protobufjs": ">=6.11.3"
+    "protobufjs": ">=6.11.3",
+    "public-google-sheets-parser": "^1.3.2",
+    "tar": ">=4.4.18"
   },
-  "devDependencies": {},
   "scripts": {
     "import": "node gtfs-import.js",
     "import-slim": "node gtfs-import-slim.js",

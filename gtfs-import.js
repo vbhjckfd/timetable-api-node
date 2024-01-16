@@ -1,6 +1,9 @@
 import { importGtfs, openDb, getStops, getRoutes, getShapes, getTrips, getStoptimes } from 'gtfs';
 import { getTodayServiceIds } from "./utils/appHelpers.js";
 
+import PublicGoogleSheetsParser from 'public-google-sheets-parser'
+const spreadsheetId = '1AXRYgB4QqFaUCBEHJ8gueMnpYR2tI2NMgi2d8Ai7nAY'
+
 import { readFile } from 'fs/promises';
 const config = JSON.parse(
     await readFile(new URL('./gtfs-import-config.json', import.meta.url))
@@ -111,6 +114,14 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
   console.log(`${routeModels.length} routes processed`);
   let imported_stop_codes = {}
 
+  const parser = new PublicGoogleSheetsParser(spreadsheetId);
+  const items = await parser.parse();
+
+  const engNames = items.reduce((acc, cur) => {
+    acc[cur['№ зупин-ки']] = cur['Назва зупинки латиницею'];
+    return acc;
+  }, {});
+
   const stopPromises = importedStops.map(async stopRow => {
       let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
       if (Array.isArray(code)) {
@@ -153,6 +164,7 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
       let stopModel = {
           code: code,
           name: stop_name,
+          eng_name: engNames[code] || '',
           microgiz_id: stopRow.stop_id,
           location: {
               type: "Point",
