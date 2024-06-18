@@ -6,7 +6,7 @@
         "agency_key": "Microgiz",
         "url": "http://track.ua-gis.com/gtfs/lviv/static.zip",
         "exclude": [
-
+          "agency"
         ]
       }
     ]
