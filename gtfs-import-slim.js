@@ -7,7 +7,7 @@ const config = JSON.parse(
 
 (async () => {
     config.agencies[0].exclude = [
-        "stop_times", "shapes", "stops"
+        "stop_times", "shapes", "stops", "agency"
     ];
 
     await importGtfs(config);
