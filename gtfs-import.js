@@ -85,11 +85,20 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
       let tripShapeMap = {};
       let shapeDirectionMap = {};
 
-      const trips = await getTrips({
+      let trips = []
+
+      trips = await getTrips({
           route_id: r.route_id,
           shape_id: Array.from(mostPopularShapes),
           service_id: await getTodayServiceIds(),
       }, ['trip_id', 'direction_id', 'shape_id']);
+
+      if (trips.length == 0) {
+        trips = await getTrips({
+            route_id: r.route_id,
+            service_id: await getTodayServiceIds(),
+        }, ['trip_id', 'direction_id', 'shape_id']);
+      }
 
       trips.forEach(t => {
           tripShapeMap[t.trip_id] = t.shape_id;
@@ -100,7 +109,14 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
       routeModel.shape_direction_map = shapeDirectionMap;
 
       routeModel.trip_direction_map = trips.reduce((acc, t) => {
-        acc[t.trip_id] = getDirectionByTrip(t.trip_id, routeModel);
+        let direction = getDirectionByTrip(t.trip_id, routeModel);
+
+        if (direction === null) {
+            direction = t.direction_id;
+        }
+
+        acc[t.trip_id] = direction
+
         return acc;
       }, {});
 
