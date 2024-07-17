@@ -51,9 +51,9 @@ const globalIgnoreStopList = ['45002', '45001', '2551851', '4671'];
         stop_departure_time_map: {},
       }
 
-      if (['Е'].includes(r.route_short_name)) {
+      if (['Е', 'А07'].includes(r.route_short_name)) {
         return null;
-    }
+      }
 
       const mostPopularShapes = await getMostPopularShapes(r.route_id);
 
