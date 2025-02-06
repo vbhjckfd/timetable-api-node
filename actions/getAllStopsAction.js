@@ -20,6 +20,7 @@ export default async (req, res, next) => {
                     sign: `https://offline.lad.lviv.ua/${s.code}`,
                     sign_pdf: `https://pdf.lad.lviv.ua/${s.code}.pdf`,
                     name: s.name,
+                    eng_name: s.eng_name,
                     location: [loc[0], loc[1]],
                     routes: s.transfers.map(i => i['route']).sort(),
                 }
