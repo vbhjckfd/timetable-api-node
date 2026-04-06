@@ -2,17 +2,17 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args:
       - build
-      - '--no-cache'
-      - '-t'
-      - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME'
+      - "--no-cache"
+      - "-t"
+      - "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
       - .
-      - '-f'
+      - "-f"
       - Dockerfile
     id: Build
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME'
+      - "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
     id: Push
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     args:
@@ -20,18 +20,24 @@ steps:
       - services
       - update
       - $_SERVICE_NAME
-      - '--platform=managed'
-      - '--image=$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME'
+      - "--platform=managed"
+      - "--image=$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
       - >-
         --labels=managed-by=gcp-cloud-build-deploy-cloud-run,branch-name=$BRANCH_NAME,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
-      - '--region=$_DEPLOY_REGION'
-      - '--quiet'
+      - "--region=$_DEPLOY_REGION"
+      - "--quiet"
     id: Deploy
     entrypoint: gcloud
   - name: gcr.io/cloud-builders/curl
-    args: ['https://drop-cloudflare-cache-1041251696619.us-central1.run.app','-s','--max-time','10']
+    args:
+      [
+        "https://drop-cloudflare-cache-1041251696619.us-central1.run.app",
+        "-s",
+        "--max-time",
+        "10",
+      ]
 images:
-  - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME'
+  - "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
 options:
   substitutionOption: ALLOW_LOOSE
 substitutions:

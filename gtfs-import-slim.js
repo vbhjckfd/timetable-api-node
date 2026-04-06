@@ -1,15 +1,13 @@
-import { importGtfs } from 'gtfs';
+import { importGtfs } from "gtfs";
 
-import { readFile } from 'fs/promises';
+import { readFile } from "fs/promises";
 const config = JSON.parse(
-    await readFile(new URL('./gtfs-import-config.json', import.meta.url))
+  await readFile(new URL("./gtfs-import-config.json", import.meta.url)),
 );
 
 (async () => {
-    config.agencies[0].exclude = [
-        "stop_times", "shapes", "stops", "agency"
-    ];
+  config.agencies[0].exclude = ["stop_times", "shapes", "stops", "agency"];
 
-    await importGtfs(config);
-    console.log('Import Successful');
+  await importGtfs(config);
+  console.log("Import Successful");
 })();

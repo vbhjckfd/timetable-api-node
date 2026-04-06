@@ -1,3 +1,3 @@
 export default (req, res, next) => {
-    res.sendStatus(404); 
+  res.sendStatus(404);
 };
