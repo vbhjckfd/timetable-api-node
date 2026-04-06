@@ -24,8 +24,12 @@
     "import-slim": "node gtfs-import-slim.js",
     "start": "node index.js",
     "profileapp": "node --prof index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "vbhjckfd@gmail.com",
-  "license": "WTFPL"
+  "license": "WTFPL",
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  }
 }
