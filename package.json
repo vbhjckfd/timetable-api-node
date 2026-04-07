@@ -29,6 +29,6 @@
   "author": "vbhjckfd@gmail.com",
   "license": "WTFPL",
   "devDependencies": {
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.3"
   }
 }
