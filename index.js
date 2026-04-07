@@ -22,6 +22,7 @@ import routeInfoStaticAction from "./actions/routeStaticInfoAction.js";
 import vehicleInfoAction from "./actions/vehicleInfoAction.js";
 import closestTransportAction from "./actions/closestTransportAction.js";
 import getAllRoutesAction from "./actions/getAllRoutesAction.js";
+import sitemapAction from "./actions/sitemapAction.js";
 
 const __dirname = path.resolve();
 const app = express();
@@ -47,6 +48,8 @@ app.get("/routes/dynamic/:name", routeInfoDynamicAction);
 app.get("/routes/static/:name", routeInfoStaticAction);
 app.get("/vehicle/:vehicleId", vehicleInfoAction);
 app.get("/transport", closestTransportAction);
+
+app.get("/sitemap.xml", sitemapAction);
 
 app.get("/last-modified.txt", (req, res, next) => {
   res.set("Cache-Control", `public, max-age=0, s-maxage=${5 * 60}`);

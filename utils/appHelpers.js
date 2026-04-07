@@ -141,6 +141,23 @@ export function normalizeRouteName(routeName) {
   return prefix + (rawNumber >= 10 ? rawNumber : "0" + rawNumber) + postfix;
 }
 
+export function routeNameToUrlFriendly(routeName) {
+  const normalized = normalizeRouteName(routeName);
+  const prefixMap = [
+    ["Тр", "Tp"],
+    ["Т", "T"],
+    ["А", "A"],
+  ];
+
+  https: for (const [cyrillic, latin] of prefixMap) {
+    if (normalized.startsWith(cyrillic)) {
+      return latin + normalized.slice(cyrillic.length);
+    }
+  }
+
+  return normalized;
+}
+
 export function getRouteType(routeName) {
   let type = "bus";
   if (routeName.startsWith("Тр")) {
