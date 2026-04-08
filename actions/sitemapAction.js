@@ -1,5 +1,8 @@
 import db from "../connections/timetableSqliteDb.js";
-import { normalizeRouteName, routeNameToUrlFriendly } from "../utils/appHelpers.js";
+import {
+  normalizeRouteName,
+  routeNameToUrlFriendly,
+} from "../utils/appHelpers.js";
 
 const BASE_URL = "https://lad.lviv.ua";
 
@@ -28,11 +31,19 @@ export default (req, res) => {
     )
     .join("\n");
 
+  const scheduleUrls = routes
+    .map(
+      (r) =>
+        `  <url><loc>${BASE_URL}/route/${routeNameToUrlFriendly(normalizeRouteName(r.short_name))}/schedule</loc></url>`,
+    )
+    .join("\n");
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${BASE_URL}/</loc></url>
 ${stopUrls}
 ${routeUrls}
+${scheduleUrls}
 </urlset>`;
 
   res.set("Content-Type", "application/xml");

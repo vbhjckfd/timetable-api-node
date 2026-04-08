@@ -71,6 +71,15 @@ describe("sitemapAction", () => {
     expect(xml).toContain("/route/Tp20");
   });
 
+  it("includes a schedule URL for each route", () => {
+    const { req, res } = makeReqRes();
+    sitemapAction(req, res);
+    const xml = res.send.mock.calls[0][0];
+    expect(xml).toContain("/route/A01/schedule");
+    expect(xml).toContain("/route/T05/schedule");
+    expect(xml).toContain("/route/Tp20/schedule");
+  });
+
   it("includes the homepage URL", () => {
     const { req, res } = makeReqRes();
     sitemapAction(req, res);
