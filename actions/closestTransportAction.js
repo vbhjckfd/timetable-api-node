@@ -6,8 +6,8 @@ import {
   getRouteType,
   isLowFloor,
   getTodayServiceIds,
+  distanceMeters,
 } from "../utils/appHelpers.js";
-import geodist from "geodist";
 import db from "../connections/timetableSqliteDb.js";
 import { getTrips } from "gtfs";
 
@@ -16,10 +16,18 @@ export default async (req, res, next) => {
   const longitude = parseFloat(req.query.longitude);
 
   if (
-    !isFinite(latitude) || latitude < -90 || latitude > 90 ||
-    !isFinite(longitude) || longitude < -180 || longitude > 180
+    !isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
   ) {
-    res.status(400).send("Bad argument: latitude must be between -90 and 90, longitude between -180 and 180");
+    res
+      .status(400)
+      .send(
+        "Bad argument: latitude must be between -90 and 90, longitude between -180 and 180",
+      );
     return;
   }
   const vehiclesRaw = await getVehiclesLocations();
@@ -33,10 +41,11 @@ export default async (req, res, next) => {
     .filter((i) => {
       const position = i.vehicle.position;
 
-      const dist = geodist(
-        { lat: position.latitude, lon: position.longitude },
-        { lat: latitude, lon: longitude },
-        { unit: "meters" },
+      const dist = distanceMeters(
+        position.latitude,
+        position.longitude,
+        latitude,
+        longitude,
       );
 
       return dist < 1000;

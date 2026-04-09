@@ -8,13 +8,17 @@ vi.mock("../../services/microgizService.js", () => ({
   getVehiclesLocations: vi.fn(),
 }));
 
-vi.mock("../../utils/appHelpers.js", () => ({
-  getRouteColor: vi.fn(() => "#ff0000"),
-  formatRouteName: vi.fn((n) => n),
-  getRouteType: vi.fn(() => "bus"),
-  isLowFloor: vi.fn(() => false),
-  getTodayServiceIds: vi.fn().mockResolvedValue(["SVC1"]),
-}));
+vi.mock("../../utils/appHelpers.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getRouteColor: vi.fn(() => "#ff0000"),
+    formatRouteName: vi.fn((n) => n),
+    getRouteType: vi.fn(() => "bus"),
+    isLowFloor: vi.fn(() => false),
+    getTodayServiceIds: vi.fn().mockResolvedValue(["SVC1"]),
+  };
+});
 
 vi.mock("gtfs", () => ({
   getTrips: vi.fn(),

@@ -33,20 +33,12 @@ beforeEach(() => {
 });
 
 describe("getStopTimetableAction", () => {
-  it("returns 400 for non-numeric code", async () => {
-    const req = { params: { code: "abc" } };
-    const res = makeRes();
-    await getStopTimetableAction(req, res, vi.fn());
-
-    expect(res.status).toHaveBeenCalledWith(400);
-  });
-
   it("returns 404 when stop is not found", async () => {
     db.getCollection.mockReturnValue({
       findOne: vi.fn().mockReturnValue(null),
     });
 
-    const req = { params: { code: "9999" } };
+    const req = { stopCode: 9999, params: { code: "9999" } };
     const res = makeRes();
     await getStopTimetableAction(req, res, vi.fn());
 
@@ -61,7 +53,7 @@ describe("getStopTimetableAction", () => {
       { route: "А01", direction: 0, shape_id: "S1", arrival_time: "soon" },
     ]);
 
-    const req = { params: { code: "1001" } };
+    const req = { stopCode: 1001, params: { code: "1001" } };
     const res = makeRes();
     await getStopTimetableAction(req, res, vi.fn());
 
@@ -82,7 +74,7 @@ describe("getStopTimetableAction", () => {
     );
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const req = { params: { code: "1001" } };
+    const req = { stopCode: 1001, params: { code: "1001" } };
     const res = makeRes();
     await getStopTimetableAction(req, res, vi.fn());
 
@@ -95,7 +87,7 @@ describe("getStopTimetableAction", () => {
     });
     stopArrivalService.getTimetableForStop.mockResolvedValue([]);
 
-    const req = { params: { code: "1001" } };
+    const req = { stopCode: 1001, params: { code: "1001" } };
     const res = makeRes();
     await getStopTimetableAction(req, res, vi.fn());
 
@@ -113,7 +105,7 @@ describe("getStopTimetableAction", () => {
       { route: "А01", direction: 0, shape_id: "S1" },
     ]);
 
-    const req = { params: { code: "1001" } };
+    const req = { stopCode: 1001, params: { code: "1001" } };
     const res = makeRes();
     await getStopTimetableAction(req, res, vi.fn());
 

@@ -1,5 +1,4 @@
-import geodist from "geodist";
-
+import { distanceMeters } from "../utils/appHelpers.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
@@ -9,10 +8,18 @@ export default async (req, res, next) => {
   const longitude = parseFloat(req.query.longitude);
 
   if (
-    !isFinite(latitude) || latitude < -90 || latitude > 90 ||
-    !isFinite(longitude) || longitude < -180 || longitude > 180
+    !isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
   ) {
-    res.status(400).send("Bad argument: latitude must be between -90 and 90, longitude between -180 and 180");
+    res
+      .status(400)
+      .send(
+        "Bad argument: latitude must be between -90 and 90, longitude between -180 and 180",
+      );
     return;
   }
 
@@ -20,10 +27,11 @@ export default async (req, res, next) => {
     .find({})
     .map((s) => {
       const position = s.location.coordinates;
-      const dist = geodist(
-        { lat: position[0], lon: position[1] },
-        { lat: latitude, lon: longitude },
-        { unit: "meters" },
+      const dist = distanceMeters(
+        position[0],
+        position[1],
+        latitude,
+        longitude,
       );
       return { ...s, _dist: dist };
     })

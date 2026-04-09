@@ -11,6 +11,7 @@ import bodyParser from "body-parser";
 import localDb from "./connections/timetableSqliteDb.js";
 
 import notFoundAction from "./actions/notFoundAction.js";
+import validateStopCode from "./utils/stopCodeMiddleware.js";
 
 import getClosestStopsAction from "./actions/getClosestStopsAction.js";
 import getSingleStopAction from "./actions/getSingleStopAction.js";
@@ -29,11 +30,11 @@ const app = express();
 
 app.use(cors());
 
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "100kb" }));
 
-app.get("/stops/:code/timetable", getStopTimetableAction);
-app.get("/stops/:code/static", getStopStaticDataAction);
-app.get("/stops/:code", getSingleStopAction);
+app.get("/stops/:code/timetable", validateStopCode, getStopTimetableAction);
+app.get("/stops/:code/static", validateStopCode, getStopStaticDataAction);
+app.get("/stops/:code", validateStopCode, getSingleStopAction);
 app.get("/stops.json", getAllStopsAction);
 app.get("/stops", getAllStopsAction);
 app.get("/closest", getClosestStopsAction);
