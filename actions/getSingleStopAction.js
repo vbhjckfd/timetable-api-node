@@ -2,11 +2,7 @@ import stopArrivalService from "../services/stopArrivalService.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
-  const code = Number(req.params.code);
-  if (!code) {
-    res.status(400).send(`Bad argument, ${req.params.code} is not a number`);
-    return;
-  }
+  const code = req.stopCode;
 
   const stop = db.getCollection("stops").findOne({ code: code });
 
@@ -15,7 +11,9 @@ export default async (req, res, next) => {
     return;
   }
 
-  const skipTimetableData = req.query.skipTimetableData === 'true' || req.query.skipTimetableData === '1';
+  const skipTimetableData =
+    req.query.skipTimetableData === "true" ||
+    req.query.skipTimetableData === "1";
   let timetableData = [];
   try {
     if (!skipTimetableData) {

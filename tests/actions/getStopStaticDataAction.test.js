@@ -29,20 +29,12 @@ beforeEach(() => {
 });
 
 describe("getStopStaticDataAction", () => {
-  it("returns 400 when code is not a number", async () => {
-    const req = { params: { code: "bad" } };
-    const res = makeRes();
-    await getStopStaticDataAction(req, res, vi.fn());
-
-    expect(res.status).toHaveBeenCalledWith(400);
-  });
-
   it("returns 404 when stop does not exist", async () => {
     db.getCollection.mockReturnValue({
       findOne: vi.fn().mockReturnValue(null),
     });
 
-    const req = { params: { code: "9999" } };
+    const req = { stopCode: 9999, params: { code: "9999" } };
     const res = makeRes();
     await getStopStaticDataAction(req, res, vi.fn());
 

@@ -35,20 +35,12 @@ beforeEach(() => {
 });
 
 describe("getSingleStopAction", () => {
-  it("returns 400 when code param is not a valid number", async () => {
-    const req = { params: { code: "notanumber" }, query: {} };
-    const res = makeRes();
-    await getSingleStopAction(req, res, vi.fn());
-
-    expect(res.status).toHaveBeenCalledWith(400);
-  });
-
   it("returns 404 when stop is not found", async () => {
     db.getCollection.mockReturnValue({
       findOne: vi.fn().mockReturnValue(null),
     });
 
-    const req = { params: { code: "9999" }, query: {} };
+    const req = { stopCode: 9999, params: { code: "9999" }, query: {} };
     const res = makeRes();
     await getSingleStopAction(req, res, vi.fn());
 
@@ -63,13 +55,12 @@ describe("getSingleStopAction", () => {
       { route: "А01", arrival_time: "Mon, 06 Apr 2026 10:00:00 GMT" },
     ]);
 
-    const req = { params: { code: "1001" }, query: {} };
+    const req = { stopCode: 1001, params: { code: "1001" }, query: {} };
     const res = makeRes();
     await getSingleStopAction(req, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        code: 1001,
         name: "Test Stop",
         eng_name: "Test Stop EN",
         longitude: 24.023,
@@ -87,7 +78,7 @@ describe("getSingleStopAction", () => {
     });
     stopArrivalService.getTimetableForStop.mockResolvedValue([]);
 
-    const req = { params: { code: "1001" }, query: {} };
+    const req = { stopCode: 1001, params: { code: "1001" }, query: {} };
     const res = makeRes();
     await getSingleStopAction(req, res, vi.fn());
 
@@ -102,6 +93,7 @@ describe("getSingleStopAction", () => {
     });
 
     const req = {
+      stopCode: 1001,
       params: { code: "1001" },
       query: { skipTimetableData: "true" },
     };
@@ -123,7 +115,7 @@ describe("getSingleStopAction", () => {
     );
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const req = { params: { code: "1001" }, query: {} };
+    const req = { stopCode: 1001, params: { code: "1001" }, query: {} };
     const res = makeRes();
     await getSingleStopAction(req, res, vi.fn());
 

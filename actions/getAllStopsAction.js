@@ -1,4 +1,5 @@
 import db from "../connections/timetableSqliteDb.js";
+import { escapeHtml } from "../utils/appHelpers.js";
 
 export default async (req, res, next) => {
   const stopsRaw = db
@@ -61,9 +62,9 @@ export default async (req, res, next) => {
                 &nbsp;
                 <a target="blank" href="https://pdf.lad.lviv.ua/${s.code}.pdf">PDF</a>
             </td>
-            <td>${s.name}</td>
+            <td>${escapeHtml(s.name)}</td>
             <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]}, ${loc[1]}</a></td>
-            <td>${transfers.join(" ")}</td>
+            <td>${transfers.map(escapeHtml).join(" ")}</td>
             </tr>`;
     }
     result += "</table>";
