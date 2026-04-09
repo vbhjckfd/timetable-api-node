@@ -15,7 +15,7 @@ export default async (req, res, next) => {
     return;
   }
 
-  const skipTimetableData = req.query.skipTimetableData || false;
+  const skipTimetableData = req.query.skipTimetableData === 'true' || req.query.skipTimetableData === '1';
   let timetableData = [];
   try {
     if (!skipTimetableData) {

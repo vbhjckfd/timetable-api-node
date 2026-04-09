@@ -12,8 +12,16 @@ import db from "../connections/timetableSqliteDb.js";
 import { getTrips } from "gtfs";
 
 export default async (req, res, next) => {
-  const latitude = parseFloat(req.query.latitude).toFixed(3),
-    longitude = parseFloat(req.query.longitude).toFixed(3);
+  const latitude = parseFloat(req.query.latitude);
+  const longitude = parseFloat(req.query.longitude);
+
+  if (
+    !isFinite(latitude) || latitude < -90 || latitude > 90 ||
+    !isFinite(longitude) || longitude < -180 || longitude > 180
+  ) {
+    res.status(400).send("Bad argument: latitude must be between -90 and 90, longitude between -180 and 180");
+    return;
+  }
   const vehiclesRaw = await getVehiclesLocations();
 
   const routes = _(db.getCollection("routes").find({}))

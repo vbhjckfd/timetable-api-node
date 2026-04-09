@@ -5,40 +5,30 @@ import db from "../connections/timetableSqliteDb.js";
 export default async (req, res, next) => {
   const stopsCollection = db.getCollection("stops");
 
-  const latitude = parseFloat(req.query.latitude).toFixed(3);
-  const longitude = parseFloat(req.query.longitude).toFixed(3);
+  const latitude = parseFloat(req.query.latitude);
+  const longitude = parseFloat(req.query.longitude);
+
+  if (
+    !isFinite(latitude) || latitude < -90 || latitude > 90 ||
+    !isFinite(longitude) || longitude < -180 || longitude > 180
+  ) {
+    res.status(400).send("Bad argument: latitude must be between -90 and 90, longitude between -180 and 180");
+    return;
+  }
 
   const results = stopsCollection
     .find({})
-    .filter((s) => {
+    .map((s) => {
       const position = s.location.coordinates;
-
       const dist = geodist(
         { lat: position[0], lon: position[1] },
         { lat: latitude, lon: longitude },
         { unit: "meters" },
       );
-
-      return dist < 1000;
+      return { ...s, _dist: dist };
     })
-    .sort((a, b) => {
-      const positionA = a.location.coordinates;
-      const positionB = b.location.coordinates;
-
-      const distA = geodist(
-        { lat: positionA[0], lon: positionA[1] },
-        { lat: latitude, lon: longitude },
-        { unit: "meters" },
-      );
-
-      const distB = geodist(
-        { lat: positionB[0], lon: positionB[1] },
-        { lat: latitude, lon: longitude },
-        { unit: "meters" },
-      );
-
-      return distA - distB;
-    });
+    .filter((s) => s._dist < 1000)
+    .sort((a, b) => a._dist - b._dist);
 
   let cacheLine = `public, max-age=0, s-maxage=${10 * 24 * 3600}, stale-while-revalidate=15`;
   if (!results.length) {
