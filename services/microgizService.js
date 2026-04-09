@@ -21,7 +21,7 @@ const fetchPlus = (url, options = {}, retries) =>
     .catch((error) => console.error(error.message));
 
 export function getTimeOfLastStaticUpdate() {
-  return fetch("http://track.ua-gis.com/gtfs/lviv/static.zip", {
+  return fetch("https://track.ua-gis.com/gtfs/lviv/static.zip", {
     method: "HEAD",
   }).then((response) => {
     return new Date(response.headers.get("last-modified"));
@@ -30,7 +30,7 @@ export function getTimeOfLastStaticUpdate() {
 export function getVehiclesLocations() {
   return fetchPlus(
     process.env.VEHICLES_LOCATION_URL ||
-      "http://track.ua-gis.com/gtfs/lviv/vehicle_position",
+      "https://track.ua-gis.com/gtfs/lviv/vehicle_position",
     {},
     3,
   )
@@ -45,7 +45,7 @@ export function getVehiclesLocations() {
 export function getArrivalTimes() {
   return fetchPlus(
     process.env.TRIP_UDPDATES_URL ||
-      "http://track.ua-gis.com/gtfs/lviv/trip_updates",
+      "https://track.ua-gis.com/gtfs/lviv/trip_updates",
     {},
     3,
   )

@@ -21,7 +21,7 @@ COPY . ./
 
 RUN echo "$CACHEBUST"
 
-RUN apk --no-cache add curl && curl --silent --head "http://track.ua-gis.com/gtfs/lviv/static.zip" | grep 'Last-Modified:' | cut -c 16- > ./last-modified.txt
+RUN apk --no-cache add curl && curl --silent --head "https://track.ua-gis.com/gtfs/lviv/static.zip" | grep 'Last-Modified:' | cut -c 16- > ./last-modified.txt
 
 RUN node ./gtfs-import.js
 

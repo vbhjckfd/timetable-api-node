@@ -31,11 +31,6 @@ app.use(cors());
 
 app.use(bodyParser.json());
 
-app.use(function (err, req, res, next) {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
-});
-
 app.get("/stops/:code/timetable", getStopTimetableAction);
 app.get("/stops/:code/static", getStopStaticDataAction);
 app.get("/stops/:code", getSingleStopAction);
@@ -62,6 +57,11 @@ app.get("/favicon.ico", (req, res, next) => {
 });
 
 app.use(notFoundAction);
+
+app.use(function (err, req, res, next) {
+  console.error(err.stack);
+  res.status(500).send("Something broke!");
+});
 
 app.on("ready", () => {
   app.listen(PORT, () => {
