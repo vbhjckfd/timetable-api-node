@@ -1,2 +1,39 @@
 node_modules
 database/*
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+timetable-api-node-armv8.image
+
+# CI/CD and build scripts
+cloudbuild.yaml
+.gcloudignore
+build.sh
+process-profile.sh
+
+# Documentation
+CLAUDE.md
+LICENSE
+README.md
+
+# Environment
+.env
+.env.*
+!.env.dist
+
+# Claude Code
+.claude
+
+# Misc
+.nvmrc
+last-modified.txt
