@@ -39,6 +39,7 @@ app.get("/stops.json", getAllStopsAction);
 app.get("/stops", getAllStopsAction);
 app.get("/closest", getClosestStopsAction);
 
+app.get("/routes.json", getAllRoutesAction);
 app.get("/routes", getAllRoutesAction);
 app.get("/routes/dynamic/:name", routeInfoDynamicAction);
 app.get("/routes/static/:name", routeInfoStaticAction);

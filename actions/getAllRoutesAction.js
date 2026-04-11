@@ -9,6 +9,12 @@ export default async (req, res, next) => {
     .find({})
     .simplesort("short_name")
     .data();
+
+  if (req.path.endsWith(".json")) {
+    // Return all data in JSON format
+    return res.json(routesRaw);
+  }
+
   let result = `
         <style>
         table {border-collapse: collapse;}
