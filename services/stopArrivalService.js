@@ -94,15 +94,17 @@ const stopArrivalService = {
         bearing: position.bearing,
       };
 
+      const trip = trips[vh.trip_id];
       return {
         route_id: vh.route_id,
         direction: getDirectionByTrip(vh.trip_id, routesByRouteId[vh.route_id]),
         lowfloor: isLowFloor(
-          trips[vh.trip_id],
+          trip,
           vehicleLocation,
           routesByRouteId[vh.route_id],
         ),
-        end_stop: cleanUpStopName(trips[vh.trip_id].trip_headsign) ?? "",
+        end_stop:
+          trip && trip.trip_headsign ? cleanUpStopName(trip.trip_headsign) : "",
         arrival_time: new Date(vh.time).toUTCString(),
         time_left: getTextWaitTime(vh.time),
         ...vehicleInfo,
