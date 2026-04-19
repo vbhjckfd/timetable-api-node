@@ -1,0 +1,14 @@
+---
+description: Run the test suite with nvm and Make from repo root
+alwaysApply: true
+---
+
+# Tests
+
+From the repository root, run the test suite with:
+
+```bash
+nvm use && make test
+```
+
+Do not run `npm test` alone without switching Node first; the project targets Node 22 (see `.nvmrc` and the `Makefile`).

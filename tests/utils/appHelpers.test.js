@@ -77,8 +77,8 @@ describe("normalizeRouteName", () => {
 });
 
 describe("routeNameToUrlFriendly", () => {
-  it("converts Тр prefix to Tp", () => {
-    expect(routeNameToUrlFriendly("Т22")).toBe("Tp22");
+  it("converts Тр trolley prefix to T", () => {
+    expect(routeNameToUrlFriendly("Т22")).toBe("T22");
   });
   it("converts Т tram prefix to T", () => {
     expect(routeNameToUrlFriendly("Т01")).toBe("T01");

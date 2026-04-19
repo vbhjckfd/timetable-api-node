@@ -164,7 +164,7 @@ export function normalizeRouteName(routeName) {
 export function routeNameToUrlFriendly(routeName) {
   const normalized = normalizeRouteName(routeName);
   const prefixMap = [
-    ["Тр", "Tp"],
+    ["Тр", "T"],
     ["Т", "T"],
     ["А", "A"],
   ];
