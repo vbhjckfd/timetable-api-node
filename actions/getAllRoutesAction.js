@@ -56,7 +56,7 @@ export default async (req, res, next) => {
     }
 
     result += `<tr>
-        <td><a target="_blank" href="https://lad.lviv.ua/route/${r.external_id}">${escapeHtml(r.short_name)}</a></td>
+        <td><a target="_blank" href="https://lad.lviv.ua/route/${r.short_name}">${escapeHtml(r.short_name)}</a></td>
         <td>${escapeHtml(r.long_name)}</td>
         <td><ol>${stopsByShape[0]}</ol></td>
         <td><ol>${stopsByShape[1]}</ol></td>
