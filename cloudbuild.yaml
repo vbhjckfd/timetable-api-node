@@ -31,7 +31,7 @@ steps:
   - name: gcr.io/cloud-builders/curl
     args:
       [
-        "https://drop-cloudflare-cache-1041251696619.us-central1.run.app",
+        "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=short-cache",
         "-s",
         "--max-time",
         "10",
