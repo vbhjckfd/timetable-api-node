@@ -2,13 +2,13 @@ import _ from "lodash";
 import {
   normalizeRouteName,
   shapes_by_direction,
-  secondsUntilImportDone,
   getRouteColor,
   getRouteType,
 } from "../utils/appHelpers.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
+  const longCacheAgeSeconds = 30 * 24 * 3600;
   const query = Number(req.params.name)
     ? { external_id: req.params.name }
     : { short_name: normalizeRouteName(req.params.name) };
@@ -72,8 +72,9 @@ export default async (req, res, next) => {
   res
     .set(
       "Cache-Control",
-      `public, max-age=0, s-maxage=${secondsUntilImportDone()}, stale-while-revalidate=15`,
+      `public, max-age=0, s-maxage=${longCacheAgeSeconds}`,
     )
+    .set("Cache-Tag", "long")
     .send({
       id: routeLocal.external_id,
       color: getRouteColor(routeLocal.short_name),

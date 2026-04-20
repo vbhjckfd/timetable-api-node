@@ -2,6 +2,7 @@ import { distanceMeters } from "../utils/appHelpers.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
+  const longCacheAgeSeconds = 30 * 24 * 3600;
   const stopsCollection = db.getCollection("stops");
 
   const latitude = parseFloat(req.query.latitude);
@@ -38,12 +39,17 @@ export default async (req, res, next) => {
     .filter((s) => s._dist < 1000)
     .sort((a, b) => a._dist - b._dist);
 
-  let cacheLine = `public, max-age=0, s-maxage=${10 * 24 * 3600}, stale-while-revalidate=15`;
+  let cacheLine = `public, max-age=0, s-maxage=${longCacheAgeSeconds}, stale-while-revalidate=15`;
   if (!results.length) {
     cacheLine = "no-cache"; // Do not cache if no stops around point
   }
 
-  res.set("Cache-Control", cacheLine).json(
+  const response = res.set("Cache-Control", cacheLine);
+  if (cacheLine !== "no-cache") {
+    response.set("Cache-Tag", "long");
+  }
+
+  response.json(
     results.map((s) => {
       return {
         code: s.code,

@@ -1,6 +1,7 @@
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
+  const longCacheAgeSeconds = 30 * 24 * 3600;
   const code = req.stopCode;
 
   const stop = db.getCollection("stops").findOne({ code: code });
@@ -15,7 +16,8 @@ export default async (req, res, next) => {
   });
 
   res
-    .set("Cache-Control", `public, max-age=0, s-maxage=${10 * 24 * 3600}`)
+    .set("Cache-Control", `public, max-age=0, s-maxage=${longCacheAgeSeconds}`)
+    .set("Cache-Tag", "long")
     .json({
       name: stop.name,
       eng_name: stop.eng_name,

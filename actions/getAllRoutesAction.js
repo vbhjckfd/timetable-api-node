@@ -3,6 +3,7 @@ import _ from "lodash";
 import { escapeHtml } from "../utils/appHelpers.js";
 
 export default async (req, res, next) => {
+  const longCacheAgeSeconds = 30 * 24 * 3600;
   const routesRaw = db
     .getCollection("routes")
     .chain()
@@ -63,5 +64,8 @@ export default async (req, res, next) => {
   }
   result += "</table>";
 
-  res.set("Cache-Control", `public, max-age=0, s-maxage=3600`).send(result);
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${longCacheAgeSeconds}`)
+    .set("Cache-Tag", "long")
+    .send(result);
 };

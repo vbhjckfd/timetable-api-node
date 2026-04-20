@@ -39,8 +39,9 @@ describe("sitemapAction", () => {
     sitemapAction(req, res);
     expect(res.set).toHaveBeenCalledWith(
       "Cache-Control",
-      expect.stringContaining("s-maxage="),
+      "public, max-age=0, s-maxage=2592000",
     );
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
   });
 
   it("returns valid XML with urlset root", () => {

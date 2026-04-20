@@ -16,8 +16,8 @@ test:
 	$(NVM_USE) && npm test
 
 CF_CACHE_PURGE_URL := https://drop-cloudflare-cache-1041251696619.us-central1.run.app
-SHORT_CACHE_TAGS ?= short-cache
-LONG_CACHE_TAGS ?= long-cache
+SHORT_CACHE_TAGS ?= short
+LONG_CACHE_TAGS ?= long
 
 clear-short-cache:
 	curl -sS "$(CF_CACHE_PURGE_URL)?tags=$(SHORT_CACHE_TAGS)"

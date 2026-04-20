@@ -54,7 +54,9 @@ app.get("/last-modified.txt", (req, res, next) => {
 });
 
 app.get("/favicon.ico", (req, res, next) => {
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24 * 31}`);
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24 * 31}`)
+    .set("Cache-Tag", "long");
   res.sendFile(path.join(__dirname, "favicon.ico"));
 });
 

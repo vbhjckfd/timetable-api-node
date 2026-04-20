@@ -103,7 +103,7 @@ describe("getClosestStopsAction", () => {
     expect(res.set).toHaveBeenCalledWith("Cache-Control", "no-cache");
   });
 
-  it("sets long cache when stops are found", async () => {
+  it("sets long cache headers when stops are found", async () => {
     db.getCollection.mockReturnValue({
       find: vi.fn().mockReturnValue([nearStop]),
     });
@@ -116,7 +116,8 @@ describe("getClosestStopsAction", () => {
 
     expect(res.set).toHaveBeenCalledWith(
       "Cache-Control",
-      expect.stringContaining("s-maxage="),
+      "public, max-age=0, s-maxage=2592000, stale-while-revalidate=15",
     );
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
   });
 });

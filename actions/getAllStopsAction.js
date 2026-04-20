@@ -2,13 +2,16 @@ import db from "../connections/timetableSqliteDb.js";
 import { escapeHtml } from "../utils/appHelpers.js";
 
 export default async (req, res, next) => {
+  const longCacheAgeSeconds = 30 * 24 * 3600;
   const stopsRaw = db
     .getCollection("stops")
     .chain()
     .find({})
     .simplesort("code")
     .data();
-  res.set("Cache-Control", `public, max-age=0, s-maxage=3600`);
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${longCacheAgeSeconds}`)
+    .set("Cache-Tag", "long");
 
   if (req.path.endsWith(".json")) {
     res.json(

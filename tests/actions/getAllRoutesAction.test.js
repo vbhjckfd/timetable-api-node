@@ -40,13 +40,14 @@ describe("getAllRoutesAction", () => {
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining("Route One"));
   });
 
-  it("sets cache-control header", async () => {
+  it("sets long cache headers for Cloudflare", async () => {
     const { req, res, next } = makeReqRes();
     await getAllRoutesAction(req, res, next);
 
     expect(res.set).toHaveBeenCalledWith(
       "Cache-Control",
-      expect.stringContaining("s-maxage=3600"),
+      "public, max-age=0, s-maxage=2592000",
     );
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
   });
 });

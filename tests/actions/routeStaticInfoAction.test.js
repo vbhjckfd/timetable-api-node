@@ -86,6 +86,11 @@ describe("routeStaticInfoAction", () => {
     const res = makeRes();
     await routeStaticInfoAction(req, res, vi.fn());
 
+    expect(res.set).toHaveBeenCalledWith(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=2592000",
+    );
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
     expect(res.send).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "EXT1",
