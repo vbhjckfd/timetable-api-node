@@ -24,6 +24,10 @@ import vehicleInfoAction from "./actions/vehicleInfoAction.js";
 import closestTransportAction from "./actions/closestTransportAction.js";
 import getAllRoutesAction from "./actions/getAllRoutesAction.js";
 import sitemapAction from "./actions/sitemapAction.js";
+import {
+  buildMcpServerCard,
+  handleMcpPostRequest,
+} from "./mcp/timetableMcpServer.js";
 
 const __dirname = path.resolve();
 const app = express();
@@ -47,6 +51,52 @@ app.get("/vehicle/:vehicleId", vehicleInfoAction);
 app.get("/transport", closestTransportAction);
 
 app.get("/sitemap.xml", sitemapAction);
+
+app.post("/mcp", async (req, res) => {
+  try {
+    await handleMcpPostRequest(req, res);
+  } catch (error) {
+    console.error("MCP request handling failed", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32603,
+          message: "Internal server error",
+        },
+        id: null,
+      });
+    }
+  }
+});
+
+app.all("/mcp", (req, res) => {
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: "Method not allowed.",
+    },
+    id: null,
+  });
+});
+
+app.get("/.well-known/mcp/server-card.json", (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  res.json(buildMcpServerCard(baseUrl));
+});
+
+app.get("/robots.txt", (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const lines = [
+    "User-agent: *",
+    "Disallow: /private/",
+    "",
+    "# Non-standard hint for AI agent discovery:",
+    `# mcp-server: ${baseUrl}/.well-known/mcp/server-card.json`,
+  ];
+  res.type("text/plain").send(lines.join("\n"));
+});
 
 app.get("/last-modified.txt", (req, res, next) => {
   res.set("Cache-Control", `public, max-age=0, s-maxage=${5 * 60}`);
