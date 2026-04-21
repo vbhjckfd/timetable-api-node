@@ -94,6 +94,106 @@ function formatToolResult(toolName, actionResult) {
   };
 }
 
+const MCP_RESOURCES = {
+  about: `## Lviv Timetable MCP
+
+Read-only access to **public** timetable and live vehicle data for municipal transit in **Lviv, Ukraine** (lad.lviv.ua ecosystem).
+
+### How to work with this server
+
+- Prefer **tools** for structured JSON from the API.
+- Use **prompts** for ready-made Ukrainian/English workflows (route status, nearby stops, slang phrasing).
+- Use **resources** (this page and siblings under \`timetable://\`) for human-readable reference without calling tools.
+
+### Data notes
+
+- Times and positions come from upstream feeds; gaps or delays are possible.
+- For precise "when does my bus arrive at *this* stop", combine a **stop code** with \`get_stop_timetable\` or location with \`get_closest_stops\`.
+`,
+
+  tools: `## Tools reference
+
+| Tool | Purpose |
+|------|---------|
+| \`get_stop_by_code\` | Stop details by numeric **stop code**; optional embedded timetable. |
+| \`get_stop_timetable\` | Upcoming arrivals at a stop. |
+| \`get_closest_stops\` | Stops within **1 km** of lat/lon, sorted by distance. |
+| \`get_route_static\` | Route shape, stops, directions, transfers (static). |
+| \`get_route_dynamic\` | Live vehicle positions and direction info. |
+| \`get_route_final_stop_schedule\` | Departure times from each direction's **terminus**. |
+
+All tools are **read-only** and safe to retry.
+`,
+
+  prompts: `## Prompts reference
+
+Prompts are reusable instruction templates. Pass the listed **arguments** when invoking a prompt.
+
+### English
+
+| Prompt | Arguments | Use case |
+|--------|-----------|----------|
+| \`route-overview\` | \`route_name\`, optional \`include_live_positions\` | Route status report (static + optional live). |
+| \`route-final-stop-schedule\` | \`route_name\` | Timetables from final stops / terminuses. |
+| \`commute-planner\` | \`from_stop_code\`, \`to_stop_code\` | Compare options between two stops. |
+| \`nearby-stops\` | \`latitude\`, \`longitude\`, optional \`limit\` | Closest stops + arrivals table. |
+
+### Ukrainian
+
+| Prompt | Arguments | Use case |
+|--------|-----------|----------|
+| \`route-overview-ua\` | same as \`route-overview\` | Огляд маршруту. |
+| \`route-final-stop-schedule-ua\` | \`route_name\` | Розклад з кінцевих. |
+| \`commute-planner-ua\` | \`from_stop_code\`, \`to_stop_code\` | Планування поїздки. |
+| \`nearby-stops-ua\` | \`latitude\`, \`longitude\`, optional \`limit\` | Найближчі зупинки. |
+| \`ua-slang-koly-bude-avtobus\` | \`route_name\` | «Коли буде … автобус?» |
+| \`ua-slang-rozklad-marshrutky\` | \`route_name\` | «Розклад маршрутки …» |
+| \`ua-slang-de-tram\` | \`route_name\` | «Де трамвай …?» |
+| \`ua-slang-de-trolejbus\` | \`route_name\` | «Де тролейбус …?» |
+`,
+};
+
+function registerResources(server) {
+  server.registerResource(
+    "about",
+    "timetable://about",
+    {
+      title: "About Lviv Timetable MCP",
+      description: "Scope, usage, and data caveats for this server.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, text: MCP_RESOURCES.about }],
+    }),
+  );
+
+  server.registerResource(
+    "tools-reference",
+    "timetable://reference/tools",
+    {
+      title: "Tools reference",
+      description: "What each MCP tool returns and when to use it.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, text: MCP_RESOURCES.tools }],
+    }),
+  );
+
+  server.registerResource(
+    "prompts-reference",
+    "timetable://reference/prompts",
+    {
+      title: "Prompts reference",
+      description: "Catalog of prompt templates (EN/UA) and their arguments.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, text: MCP_RESOURCES.prompts }],
+    }),
+  );
+}
+
 function registerTools(server) {
   server.registerTool(
     "get_stop_by_code",
@@ -749,6 +849,7 @@ export function createTimetableMcpServer() {
   );
 
   registerTools(server);
+  registerResources(server);
   registerPrompts(server);
   return server;
 }

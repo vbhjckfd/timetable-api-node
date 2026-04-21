@@ -134,6 +134,21 @@ describe("timetable MCP server", () => {
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
 
     await client.connect(transport);
+    const listedResources = await client.listResources();
+    const resourceUris = listedResources.resources.map((r) => r.uri);
+    expect(resourceUris).toEqual(
+      expect.arrayContaining([
+        "timetable://about",
+        "timetable://reference/tools",
+        "timetable://reference/prompts",
+      ]),
+    );
+
+    const aboutResource = await client.readResource({ uri: "timetable://about" });
+    const aboutText = aboutResource.contents[0].text;
+    expect(aboutText).toContain("Lviv");
+    expect(aboutText).toContain("get_stop_timetable");
+
     const tools = await client.listTools();
     const toolNames = tools.tools.map((tool) => tool.name);
 
