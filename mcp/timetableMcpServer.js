@@ -7,6 +7,7 @@ import getSingleStopAction from "../actions/getSingleStopAction.js";
 import getStopTimetableAction from "../actions/getStopTimetableAction.js";
 import routeInfoDynamicAction from "../actions/routeDynamicInfoAction.js";
 import routeInfoStaticAction from "../actions/routeStaticInfoAction.js";
+import routeFinalStopScheduleAction from "../actions/routeFinalStopScheduleAction.js";
 
 const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
@@ -192,6 +193,25 @@ function registerTools(server) {
       return formatToolResult("get_route_dynamic", actionResult);
     },
   );
+
+  server.registerTool(
+    "get_route_final_stop_schedule",
+    {
+      title: "Get Route Final Stop Schedule",
+      description:
+        "Returns departure-time schedules from each direction's terminus (final stop) for a route.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        route_name: z.string().min(1),
+      },
+    },
+    async ({ route_name }) => {
+      const actionResult = await runAction(routeFinalStopScheduleAction, {
+        params: { name: route_name },
+      });
+      return formatToolResult("get_route_final_stop_schedule", actionResult);
+    },
+  );
 }
 
 function registerPrompts(server) {
@@ -244,6 +264,45 @@ function registerPrompts(server) {
         ],
       };
     },
+  );
+
+  server.registerPrompt(
+    "route-final-stop-schedule",
+    {
+      title: "Route Final Stop Schedule",
+      description:
+        "Fetch terminus departure times for both directions and present them clearly (good for 'schedule from final stops' questions).",
+      argsSchema: {
+        route_name: z
+          .string()
+          .min(1)
+          .describe("Route short name, for example: 3A, 9, 2"),
+      },
+    },
+    ({ route_name }) => ({
+      description: "Route terminus timetable prompt (final stop departures).",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: [
+              `Show the departure schedule from final stops (terminus) for route "${route_name}" in Lviv.`,
+              "",
+              "Tool workflow:",
+              `1) Call \`get_route_final_stop_schedule\` with \`route_name=${route_name}\`.`,
+              `2) Optionally call \`get_route_static\` with the same \`route_name\` if you need extra context (stop ordering, transfers).`,
+              "",
+              "Output format:",
+              "- Start with a one-line route summary (type + route number/name if present).",
+              "- Then two sections: `Direction 0` and `Direction 1` (use the terminus stop name + code).",
+              "- Under each, show departures as a compact list; if departures are empty, say so explicitly.",
+              "- If the tool errors, explain what failed and what the user should try next (alternate spelling, numeric id, etc.).",
+            ].join("\n"),
+          },
+        },
+      ],
+    }),
   );
 
   server.registerPrompt(
@@ -384,6 +443,45 @@ function registerPrompts(server) {
         ],
       };
     },
+  );
+
+  server.registerPrompt(
+    "route-final-stop-schedule-ua",
+    {
+      title: "Розклад з кінцевих зупинок",
+      description:
+        "Отримай час відправлень з кінцевих зупинок для обох напрямків і покажи зрозуміло.",
+      argsSchema: {
+        route_name: z
+          .string()
+          .min(1)
+          .describe("Коротка назва маршруту, наприклад: 3A, 9, 2"),
+      },
+    },
+    ({ route_name }) => ({
+      description: "UA: розклад відправлень з кінцевих зупинок (терміналів) для маршруту.",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: [
+              `Покажи розклад відправлень з кінцевих зупинок (терміналів) для маршруту "${route_name}" у Львові.`,
+              "",
+              "Алгоритм інструментів:",
+              `1) Виклич \`get_route_final_stop_schedule\` з \`route_name=${route_name}\`.`,
+              `2) За потреби виклич \`get_route_static\` з тим самим \`route_name\`, якщо треба додатковий контекст (порядок зупинок, пересадки).`,
+              "",
+              "Формат відповіді:",
+              "- Почни з одного рядка-резюме про маршрут (тип + номер/назва, якщо є).",
+              "- Далі два розділи: `Напрямок 0` і `Напрямок 1` (вкажи назву кінцевої зупинки + код).",
+              "- У кожному розділі покажи відправлення компактним списком; якщо список порожній — прямо так і скажи.",
+              "- Якщо інструмент повернув помилку, поясни що саме не вдалося і що спробувати далі (альтернативне написання, числовий id тощо).",
+            ].join("\n"),
+          },
+        },
+      ],
+    }),
   );
 
   server.registerPrompt(
@@ -537,15 +635,16 @@ function registerPrompts(server) {
           content: {
             type: "text",
             text: [
-              `Користувач питає про «маршрутку» / маршрутне таксі маршруту "${route_name}" у Львові (на кшталт: «розклад руху маршрутки ${route_name}»).`,
+              `Користувач питає про автобус / «маршрутку» "${route_name}" у Львові (на кшталт: «розклад руху маршрутки ${route_name}»).`,
               "",
               "Що зробити:",
               `1) Виклич \`get_route_static\` з \`route_name=${route_name}\`. Якщо не знайшло — спробуй альтернативні написання і явно скажи, що саме спрацювало.`,
               `2) Виклич \`get_route_dynamic\` з \`route_name=${route_name}\` і додай «живий» контекст, якщо він є.`,
+              `3) Виклич \`get_route_final_stop_schedule\` з \`route_name=${route_name}\` і зроби «розклад з кінцевих» основою відповіді (часи відправлень з терміналів для обох напрямків).`,
               "",
               "Нюанси формулювання:",
               "- У Львові «маршрутка» часто співпадає з номером маршруту в даних, але не завжди. Не припускай зайвого: орієнтуйся на те, що повертає API.",
-              "- Якщо в статичних даних є інтервали/відправлення — коротко їх підсумуй; якщо ні — чесно скажи, що розклад у відповіді API не структурований як «табличний розклад».",
+              "- Якщо `get_route_final_stop_schedule` повертає порожні списки відправлень — чесно скажи, що для цього маршруту/напрямку немає доступних часів у джерелі даних.",
               "",
               "Формат відповіді (українською):",
               "- `Що відомо про маршрут ${route_name}`",
@@ -588,7 +687,7 @@ function registerPrompts(server) {
               "Формат відповіді (українською, практично):",
               "- `Коротко по маршруту`",
               "- `Де зараз трамваї` (якщо порожньо — скажи прямо)",
-              "- `Як уточнити до зупинки` (якщо користувач має код зупинки — запропонуй `get_stop_timetable`)",
+              "- `Як уточнити код зупинки` (якщо користувач має код зупинки — запропонуй `get_stop_timetable`)",
             ].join("\n"),
           },
         },
@@ -626,7 +725,7 @@ function registerPrompts(server) {
               "Формат відповіді (українською, практично):",
               "- `Коротко по маршруту`",
               "- `Де зараз тролейбуси` (якщо порожньо — скажи прямо)",
-              "- `Як уточнити до зупинки` (якщо користувач має код зупинки — запропонуй `get_stop_timetable`)",
+              "- `Як уточнити код зупинки` (якщо користувач має код зупинки — запропонуй `get_stop_timetable`)",
             ].join("\n"),
           },
         },

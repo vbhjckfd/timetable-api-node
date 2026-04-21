@@ -56,6 +56,27 @@ vi.mock("../../actions/routeDynamicInfoAction.js", () => ({
   },
 }));
 
+vi.mock("../../actions/routeFinalStopScheduleAction.js", () => ({
+  default: async (req, res) => {
+    res.json({
+      id: "EXT-FINAL",
+      route_short_name: req.params.name,
+      directions: [
+        {
+          direction: 0,
+          terminus: { code: 1, name: "Final A", microgiz_id: "MGA" },
+          departures: ["10:00", "10:30"],
+        },
+        {
+          direction: 1,
+          terminus: { code: 2, name: "Final B", microgiz_id: "MGB" },
+          departures: ["11:00"],
+        },
+      ],
+    });
+  },
+}));
+
 import {
   buildMcpServerCard,
   handleMcpPostRequest,
@@ -118,6 +139,7 @@ describe("timetable MCP server", () => {
 
     expect(toolNames).toContain("get_stop_by_code");
     expect(toolNames).toContain("get_route_dynamic");
+    expect(toolNames).toContain("get_route_final_stop_schedule");
     expect(toolNames).not.toContain("get_vehicle_by_id");
 
     const prompts = await client.listPrompts();
@@ -128,6 +150,8 @@ describe("timetable MCP server", () => {
     expect(promptNames).toContain("route-overview-ua");
     expect(promptNames).toContain("commute-planner-ua");
     expect(promptNames).toContain("nearby-stops-ua");
+    expect(promptNames).toContain("route-final-stop-schedule");
+    expect(promptNames).toContain("route-final-stop-schedule-ua");
     expect(promptNames).toContain("ua-slang-koly-bude-avtobus");
     expect(promptNames).toContain("ua-slang-rozklad-marshrutky");
     expect(promptNames).toContain("ua-slang-de-tram");
@@ -170,6 +194,16 @@ describe("timetable MCP server", () => {
     const slangBusText = slangBusPrompt.messages[0].content.text;
     expect(slangBusText).toContain("get_route_static");
     expect(slangBusText).toContain("get_route_dynamic");
+
+    const finalStopSchedule = await client.callTool({
+      name: "get_route_final_stop_schedule",
+      arguments: {
+        route_name: "61",
+      },
+    });
+    const finalStopScheduleText = finalStopSchedule.content.find((item) => item.type === "text")?.text;
+    expect(finalStopScheduleText).toContain('"route_short_name": "61"');
+    expect(finalStopScheduleText).toContain('"departures":');
 
     const result = await client.callTool({
       name: "get_stop_by_code",
