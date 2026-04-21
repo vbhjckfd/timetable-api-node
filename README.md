@@ -38,19 +38,19 @@ Production deployment (see `cloudbuild.yaml` for Cloud Run) serves **REST and MC
 An MCP client (Claude, Cursor, or the MCP SDK) talks JSON-RPC over **Streamable HTTP** to `POST /mcp`. Tool handlers reuse the same Express actions as the REST API, backed by **LokiJS** timetable data, **GTFS** SQLite (via `gtfs`), and **live GTFS-RT** feeds (for example `track.ua-gis.com`).
 
 ```mermaid
-flowchart LR
-  LLM[LLM / MCP client] -->|JSON-RPC over Streamable HTTP| MCP[/POST /mcp/]
-  MCP --> H[MCP tool handlers]
-  H --> A[Express actions]
-  A <--> Loki[(LokiJS timetable)]
-  A <--> Sql[(GTFS SQLite)]
-  A <--> RT[GTFS-RT / upstream APIs]
-  RT --> A
-  Sql --> A
-  Loki --> A
-  A --> H
-  H -->|tool result JSON in MCP content| MCP
-  MCP --> LLM
+graph LR;
+  Client[LLM or MCP client] -->|JSON-RPC Streamable HTTP| Mcp["POST /mcp"];
+  Mcp --> Tools[Tool handlers];
+  Tools --> Actions[Express actions];
+  Actions --> Loki[(LokiJS)];
+  Actions --> Gtfs[(GTFS SQLite)];
+  Actions --> Rt[GTFS-RT upstream];
+  Loki --> Actions;
+  Gtfs --> Actions;
+  Rt --> Actions;
+  Actions --> Tools;
+  Tools --> Mcp;
+  Mcp -->|MCP tool result| Client;
 ```
 
 ### Try the live API
