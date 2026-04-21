@@ -26,6 +26,7 @@ import { routesThroughStop } from "./services/microgizService.js";
 import {
   getMostPopularShapes,
   normalizeRouteName,
+  normalizeRouteNameBase,
   getDirectionByTrip,
   getSmapleTrips,
 } from "./utils/appHelpers.js";
@@ -71,6 +72,12 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     };
 
     if (["Е", "А07"].includes(r.route_short_name)) {
+      return null;
+    }
+
+    const baseShortName = normalizeRouteNameBase(r.route_short_name);
+    // Emergency bus A08 when tram T08 is out — not a regular line; real service is GTFS A08a → stored as А08.
+    if (baseShortName === "А08") {
       return null;
     }
 

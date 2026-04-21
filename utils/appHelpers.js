@@ -89,7 +89,7 @@ export function isLowFloor(trip, vehiclesLocation, routeLocal) {
       "А03",
       "А05",
       "А06",
-      "А08a",
+      "А08",
       "А09",
       "А10",
       "А16",
@@ -139,7 +139,11 @@ export function isLowFloor(trip, vehiclesLocation, routeLocal) {
   return false;
 }
 
-export function normalizeRouteName(routeName) {
+/**
+ * GTFS-style normalization, including the "A08a" variant suffix when present.
+ * Import uses this to tell plain A08 (emergency replacement for T08) from A08a (real route).
+ */
+export function normalizeRouteNameBase(routeName) {
   const rawNumber = parseInt(routeName.replace(/\D/g, ""));
   let prefix = "А";
   const isTramOrTrol = ["Т", "T"].some((n) => routeName.startsWith(n));
@@ -154,11 +158,21 @@ export function normalizeRouteName(routeName) {
   }
 
   let postfix = "";
-  if (routeName.endsWith("а") || routeName.endsWith("А")) {
+  if (
+    routeName.endsWith("а") ||
+    routeName.endsWith("А") ||
+    routeName.endsWith("a")
+  ) {
     postfix = "a";
   }
 
   return prefix + (rawNumber >= 10 ? rawNumber : "0" + rawNumber) + postfix;
+}
+
+/** Canonical short_name for DB and API (real A08a bus is stored and shown as A08 / А08). */
+export function normalizeRouteName(routeName) {
+  const base = normalizeRouteNameBase(routeName);
+  return base === "А08a" ? "А08" : base;
 }
 
 export function routeNameToUrlFriendly(routeName) {
@@ -169,7 +183,7 @@ export function routeNameToUrlFriendly(routeName) {
     ["А", "A"],
   ];
 
-  https: for (const [cyrillic, latin] of prefixMap) {
+  for (const [cyrillic, latin] of prefixMap) {
     if (normalized.startsWith(cyrillic)) {
       return latin + normalized.slice(cyrillic.length);
     }
@@ -215,6 +229,7 @@ export function formatRouteName(name) {
 
   name = name.replace("-А", "");
   name = name.replace("а", "");
+  name = name.replace(/a$/, "");
 
   return name;
 }

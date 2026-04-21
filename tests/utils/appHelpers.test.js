@@ -10,6 +10,7 @@ import {
   escapeHtml,
   distanceMeters,
   normalizeRouteName,
+  normalizeRouteNameBase,
   routeNameToUrlFriendly,
   getRouteType,
   getRouteColor,
@@ -71,8 +72,17 @@ describe("normalizeRouteName", () => {
   it("normalizes night bus route", () => {
     expect(normalizeRouteName("Н5")).toBe("Н-А05");
   });
-  it("appends lowercase 'a' postfix when route ends in а/А", () => {
-    expect(normalizeRouteName("А8а")).toBe("А08a");
+  it("maps real-world A08a bus line to canonical A08 (А08)", () => {
+    expect(normalizeRouteName("А8а")).toBe("А08");
+    expect(normalizeRouteName("A08a")).toBe("А08");
+  });
+});
+
+describe("normalizeRouteNameBase", () => {
+  it("preserves A08a variant suffix for GTFS import vs plain A08", () => {
+    expect(normalizeRouteNameBase("A08")).toBe("А08");
+    expect(normalizeRouteNameBase("A08a")).toBe("А08a");
+    expect(normalizeRouteNameBase("А8а")).toBe("А08a");
   });
 });
 
@@ -85,6 +95,10 @@ describe("routeNameToUrlFriendly", () => {
   });
   it("converts А bus prefix to A", () => {
     expect(routeNameToUrlFriendly("А01")).toBe("A01");
+  });
+  it("maps A08a-style input to A08 URL segment", () => {
+    expect(routeNameToUrlFriendly("А08a")).toBe("A08");
+    expect(routeNameToUrlFriendly("A08a")).toBe("A08");
   });
 });
 
@@ -125,6 +139,9 @@ describe("formatRouteName", () => {
   });
   it("strips trailing lowercase а", () => {
     expect(formatRouteName("А08а")).toBe("А08");
+  });
+  it("strips trailing latin a used in stored short_name", () => {
+    expect(formatRouteName("А08a")).toBe("А08");
   });
 });
 
