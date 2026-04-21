@@ -120,6 +120,57 @@ describe("timetable MCP server", () => {
     expect(toolNames).toContain("get_route_dynamic");
     expect(toolNames).not.toContain("get_vehicle_by_id");
 
+    const prompts = await client.listPrompts();
+    const promptNames = prompts.prompts.map((prompt) => prompt.name);
+    expect(promptNames).toContain("route-overview");
+    expect(promptNames).toContain("commute-planner");
+    expect(promptNames).toContain("nearby-stops");
+    expect(promptNames).toContain("route-overview-ua");
+    expect(promptNames).toContain("commute-planner-ua");
+    expect(promptNames).toContain("nearby-stops-ua");
+    expect(promptNames).toContain("ua-slang-koly-bude-avtobus");
+    expect(promptNames).toContain("ua-slang-rozklad-marshrutky");
+    expect(promptNames).toContain("ua-slang-de-tram");
+    expect(promptNames).toContain("ua-slang-de-trolejbus");
+
+    const nearbyStopsPrompt = await client.getPrompt({
+      name: "nearby-stops",
+      arguments: {
+        latitude: "49.84",
+        longitude: "24.02",
+        limit: "3",
+      },
+    });
+    expect(nearbyStopsPrompt.messages).toHaveLength(1);
+    const promptText = nearbyStopsPrompt.messages[0].content.text;
+    expect(promptText).toContain("get_closest_stops");
+    expect(promptText).toContain("markdown table");
+
+    const nearbyStopsUaPrompt = await client.getPrompt({
+      name: "nearby-stops-ua",
+      arguments: {
+        latitude: "49.84",
+        longitude: "24.02",
+        limit: "3",
+      },
+    });
+    expect(nearbyStopsUaPrompt.messages).toHaveLength(1);
+    const promptUaText = nearbyStopsUaPrompt.messages[0].content.text;
+    expect(promptUaText).toContain("get_closest_stops");
+    expect(promptUaText).toContain("markdown-таблиця");
+    expect(promptUaText).toContain("Львові");
+
+    const slangBusPrompt = await client.getPrompt({
+      name: "ua-slang-koly-bude-avtobus",
+      arguments: {
+        route_name: "61",
+      },
+    });
+    expect(slangBusPrompt.messages).toHaveLength(1);
+    const slangBusText = slangBusPrompt.messages[0].content.text;
+    expect(slangBusText).toContain("get_route_static");
+    expect(slangBusText).toContain("get_route_dynamic");
+
     const result = await client.callTool({
       name: "get_stop_by_code",
       arguments: {
