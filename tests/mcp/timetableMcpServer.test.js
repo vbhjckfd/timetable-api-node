@@ -241,6 +241,11 @@ describe("timetable MCP server", () => {
     expect(serverCard.remotes[0].type).toBe("streamable-http");
     expect(serverCard.remotes[0].url).toBe(`${baseUrl}/mcp`);
     expect(serverCard.authentication.type).toBe("none");
+    expect(serverCard.title).toBe("Lviv Timetable MCP");
+    expect(serverCard.websiteUrl).toBe("https://lad.lviv.ua");
+    expect(serverCard.description).toContain("Lviv");
+    expect(serverCard.icons?.[0]?.src).toBe(`${baseUrl}/favicon.ico`);
+    expect(serverCard.configSchema?.type).toBe("object");
 
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     const robotsText = await robotsResponse.text();

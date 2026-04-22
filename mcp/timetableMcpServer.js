@@ -15,6 +15,53 @@ const TOOL_ANNOTATIONS = {
   openWorldHint: false,
 };
 
+/** Exposed in MCP `initialize` and in `/.well-known/mcp/server-card.json` (Smithery, client UIs). */
+const MCP_SERVER_INFO = {
+  name: "com.lad.lviv/timetable-api",
+  title: "Lviv Timetable MCP",
+  version: "1.0.0",
+  description:
+    "Read-only access to Lviv, Ukraine public transport: stops, routes, static shapes, live vehicle positions, and terminus timetables. Sourced from municipal GTFS and GTFS-RT. No API key, OAuth, or user configuration is required.",
+  websiteUrl: "https://lad.lviv.ua",
+};
+
+const SMITHERY_CONFIG_JSON_SCHEMA = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  title: "Connection options",
+  description:
+    "This server is fully public. Pass an empty object. Optional fields are reserved for future use and are currently ignored by the server.",
+  properties: {},
+  additionalProperties: false,
+};
+
+function zStopCode() {
+  return z
+    .number()
+    .int()
+    .positive()
+    .describe("Municipal stop code: the number printed on stop signs and in lad.lviv.ua stop URLs.");
+}
+
+function zRouteName() {
+  return z
+    .string()
+    .min(1)
+    .describe("Route number or name as used locally (e.g. 3, 5, 2A). The API normalizes spacing and case.");
+}
+
+function mcpServerImplementation() {
+  return {
+    ...MCP_SERVER_INFO,
+    icons: [
+      {
+        src: new URL("favicon.ico", `${MCP_SERVER_INFO.websiteUrl}/`).href,
+        mimeType: "image/x-icon",
+      },
+    ],
+  };
+}
+
 function createMockResponse() {
   const headers = {};
   return {
@@ -203,8 +250,13 @@ function registerTools(server) {
         "Returns stop information by numeric stop code. Optionally includes live timetable data.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        stop_code: z.number().int().positive(),
-        include_timetable: z.boolean().default(false),
+        stop_code: zStopCode(),
+        include_timetable: z
+          .boolean()
+          .default(false)
+          .describe(
+            "If true, include live timetable data for this stop. If false, return stop details without embedded arrivals (faster, less data).",
+          ),
       },
     },
     async ({ stop_code, include_timetable }) => {
@@ -223,7 +275,7 @@ function registerTools(server) {
       description: "Returns current timetable arrivals for a specific stop code.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        stop_code: z.number().int().positive(),
+        stop_code: zStopCode(),
       },
     },
     async ({ stop_code }) => {
@@ -241,8 +293,16 @@ function registerTools(server) {
       description: "Returns stops within 1km of latitude/longitude, sorted by distance.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
+        latitude: z
+          .number()
+          .min(-90)
+          .max(90)
+          .describe("WGS-84 latitude in decimal degrees, for example 49.84 in central Lviv."),
+        longitude: z
+          .number()
+          .min(-180)
+          .max(180)
+          .describe("WGS-84 longitude in decimal degrees, for example 24.03 in central Lviv."),
       },
     },
     async ({ latitude, longitude }) => {
@@ -264,7 +324,7 @@ function registerTools(server) {
         "Returns static route data including stops, shapes, departures, and transfer options.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        route_name: z.string().min(1),
+        route_name: zRouteName(),
       },
     },
     async ({ route_name }) => {
@@ -283,7 +343,7 @@ function registerTools(server) {
         "Returns live vehicle positions and direction details for a route.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        route_name: z.string().min(1),
+        route_name: zRouteName(),
       },
     },
     async ({ route_name }) => {
@@ -302,7 +362,7 @@ function registerTools(server) {
         "Returns departure-time schedules from each direction's terminus (final stop) for a route.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        route_name: z.string().min(1),
+        route_name: zRouteName(),
       },
     },
     async ({ route_name }) => {
@@ -836,11 +896,7 @@ function registerPrompts(server) {
 
 export function createTimetableMcpServer() {
   const server = new McpServer(
-    {
-      name: "com.lad.lviv/timetable-api",
-      title: "Lviv Timetable API",
-      version: "1.0.0",
-    },
+    mcpServerImplementation(),
     {
       capabilities: {
         logging: {},
@@ -871,12 +927,16 @@ export async function handleMcpPostRequest(req, res) {
 
 export function buildMcpServerCard(baseUrl) {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  const iconUrl = new URL("favicon.ico", `${normalizedBaseUrl}/`).href;
 
   return {
-    name: "com.lad.lviv/timetable-api",
-    title: "Lviv Timetable API",
-    description: "Read-only MCP server for Lviv public transport timetable data.",
-    version: "1.0.0",
+    ...MCP_SERVER_INFO,
+    icons: [
+      {
+        src: iconUrl,
+        mimeType: "image/x-icon",
+      },
+    ],
     remotes: [
       {
         type: "streamable-http",
@@ -886,5 +946,6 @@ export function buildMcpServerCard(baseUrl) {
     authentication: {
       type: "none",
     },
+    configSchema: SMITHERY_CONFIG_JSON_SCHEMA,
   };
 }
