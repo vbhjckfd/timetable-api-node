@@ -55,6 +55,8 @@ const SMITHERY_CONFIG_JSON_SCHEMA = {
   },
   required: [],
   additionalProperties: false,
+  // Smithery convention (see microsoft/mcp smithery.yaml): sample empty / default connection.
+  exampleConfig: { default_language: "any" },
 };
 
 const MCP_SERVER_INSTRUCTIONS = [
@@ -975,7 +977,8 @@ export function buildMcpServerCard(baseUrl) {
     ],
   };
 
-  // Smithery static card examples use `serverInfo`; some scanners also read top-level fields, `iconUrl` (singular), or `homepage`.
+  // Smithery static card: serverInfo; registry-style keys (description, homepage, iconUrl) at top level
+  // for tools that do not read MCP's websiteUrl/Implementation only.
   return {
     serverInfo,
     name: serverInfo.name,
@@ -985,6 +988,7 @@ export function buildMcpServerCard(baseUrl) {
     websiteUrl: serverInfo.websiteUrl,
     homepage: serverInfo.websiteUrl,
     iconUrl: svgIconUrl,
+    icon: svgIconUrl,
     icons: serverInfo.icons,
     remotes: [
       {

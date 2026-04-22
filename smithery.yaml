@@ -1,0 +1,23 @@
+# Smithery project config. See: https://smithery.ai/docs/build/publish
+# The MCP server is deployed separately (e.g. Cloud Run). This file is used when the GitHub
+# repo is linked to a Smithery listing: it supplies configSchema for the install UI and
+# for quality checks. Live endpoint: https://api.lad.lviv.ua/mcp (Streamable HTTP).
+
+startCommand:
+  type: http
+  configSchema:
+    type: object
+    title: "Lviv Timetable — connection (all optional)"
+    description: >
+      Public read-only API. No API key or secrets. You may pass an empty object; optional
+      fields are client hints and may be ignored by the upstream server.
+    required: []
+    exampleConfig: {}
+    properties:
+      default_language:
+        type: string
+        title: "Preferred prompt language"
+        description: "Optional: prefer English, Ukrainian, or any prompt templates (informational only)."
+        enum: [en, uk, any]
+        default: any
+    additionalProperties: false

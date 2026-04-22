@@ -269,6 +269,8 @@ describe("timetable MCP server", () => {
     expect(serverCard.icons?.[0]).toEqual({ src: `${baseUrl}/mcp-icon.svg`, mimeType: "image/svg+xml" });
     expect(serverCard.configSchema?.type).toBe("object");
     expect(serverCard.configSchema?.properties?.default_language).toBeDefined();
+    expect(serverCard.configSchema?.exampleConfig).toEqual({ default_language: "any" });
+    expect(serverCard.icon).toBe(serverCard.iconUrl);
 
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     const robotsText = await robotsResponse.text();
