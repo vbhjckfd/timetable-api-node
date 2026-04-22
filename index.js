@@ -82,7 +82,7 @@ app.all("/mcp", (req, res) => {
 });
 
 app.get("/.well-known/mcp/server-card.json", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const baseUrl = `https://${req.get("host")}`;
   res.json(buildMcpServerCard(baseUrl));
 });
 
@@ -93,7 +93,7 @@ app.get("/mcp-icon.svg", (req, res) => {
 });
 
 app.get("/robots.txt", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const baseUrl = `https://${req.get("host")}`;
   const lines = [
     "User-agent: *",
     "Disallow: /private/",
