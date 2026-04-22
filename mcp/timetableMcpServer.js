@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 import getSingleStopAction from "../actions/getSingleStopAction.js";
+import getClosestStopsAction from "../actions/getClosestStopsAction.js";
 import routeInfoStaticAction from "../actions/routeStaticInfoAction.js";
 
 const TOOL_ANNOTATIONS = {
@@ -226,6 +227,32 @@ function buildUiPayload(toolName, body) {
     };
   }
 
+  if (toolName === "get_stops_around_location") {
+    const stops = Array.isArray(payload.stops) ? payload.stops : [];
+    const centerLat = payload.center_lat ?? null;
+    const centerLng = payload.center_lng ?? null;
+    const radius =
+      typeof payload.radius_meters === "number" && Number.isFinite(payload.radius_meters)
+        ? payload.radius_meters
+        : 1000;
+    const zoom = radius > 1500 ? 14 : 15;
+    return {
+      view: "transit_realtime",
+      data: payload,
+      ui_blocks: [
+        {
+          type: "map",
+          data: {
+            center: [centerLat, centerLng],
+            zoom,
+            stops,
+            vehicles: [],
+          },
+        },
+      ],
+    };
+  }
+
   return {
     view: "transit_realtime",
     data: payload,
@@ -343,6 +370,7 @@ Read-only access to **public** timetable and live vehicle data for municipal tra
 
 - Times and positions come from upstream feeds; gaps or delays are possible.
 - For precise "when does my bus arrive at *this* stop", use \`get_stop_realtime\` for one stop or \`get_vehicles_by_stop\` for stop groups.
+- To show **nearby stops on a map** (names + codes around coordinates), use \`get_stops_around_location\`.
 `,
 
   tools: `## Tools reference
@@ -352,6 +380,7 @@ Read-only access to **public** timetable and live vehicle data for municipal tra
 | \`get_stop_realtime\` | Realtime arrivals and live vehicles for one stop; includes map + arrival-list UI blocks. |
 | \`get_vehicles_by_stop\` | Map-oriented vehicle feed across one or multiple stop IDs. |
 | \`get_stop_geometry\` | Static map context for a stop (stop marker + route polylines). |
+| \`get_stops_around_location\` | Stops near lat/lon (code, name, coordinates, distance); **map** UI block with multiple markers (ChatGPT-friendly). |
 
 All tools are **read-only** and safe to retry.
 `,
@@ -587,6 +616,65 @@ function registerTools(server) {
           routes,
           updated_at: new Date().toISOString(),
         },
+      });
+    },
+  );
+
+  server.registerTool(
+    "get_stops_around_location",
+    {
+      title: "Get Stops Around Location",
+      description:
+        "Lists transit stops within a radius of a point: numeric stop code, name, coordinates, and walking distance. Returns a map UI block with multiple stop markers for map-capable clients (e.g. ChatGPT).",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        latitude: z.number().min(-90).max(90).describe("Center latitude (WGS84)."),
+        longitude: z.number().min(-180).max(180).describe("Center longitude (WGS84)."),
+        radius_meters: z
+          .number()
+          .int()
+          .min(50)
+          .max(3000)
+          .optional()
+          .describe("Search radius in meters (default 1000; same cap as the public /closest API)."),
+      },
+    },
+    async ({ latitude, longitude, radius_meters }) => {
+      const query = {
+        latitude: String(latitude),
+        longitude: String(longitude),
+      };
+      if (radius_meters != null) {
+        query.radius = String(radius_meters);
+      }
+
+      const actionResult = await runAction(getClosestStopsAction, { query });
+      if (actionResult.statusCode >= 400) {
+        return formatToolResult("get_stops_around_location", actionResult);
+      }
+
+      const rows = Array.isArray(actionResult.body) ? actionResult.body : [];
+      const effectiveRadius = radius_meters ?? 1000;
+
+      const stops = rows.map((s) => ({
+        id: String(s.code),
+        name: s.name ?? null,
+        lat: normalizeCoordinate(s.latitude),
+        lng: normalizeCoordinate(s.longitude),
+        distance_meters: Number.isFinite(s.distance_meters) ? s.distance_meters : null,
+      }));
+
+      const payload = {
+        center_lat: normalizeCoordinate(latitude),
+        center_lng: normalizeCoordinate(longitude),
+        radius_meters: effectiveRadius,
+        stops,
+        updated_at: new Date().toISOString(),
+      };
+
+      return formatToolResult("get_stops_around_location", {
+        statusCode: 200,
+        body: payload,
       });
     },
   );

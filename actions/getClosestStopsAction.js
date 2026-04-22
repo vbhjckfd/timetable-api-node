@@ -7,6 +7,9 @@ export default async (req, res, next) => {
 
   const latitude = parseFloat(req.query.latitude);
   const longitude = parseFloat(req.query.longitude);
+  const rawRadius = parseFloat(req.query.radius);
+  let radiusMeters = Number.isFinite(rawRadius) ? Math.round(rawRadius) : 1000;
+  radiusMeters = Math.min(3000, Math.max(50, radiusMeters));
 
   if (
     !isFinite(latitude) ||
@@ -36,7 +39,7 @@ export default async (req, res, next) => {
       );
       return { ...s, _dist: dist };
     })
-    .filter((s) => s._dist < 1000)
+    .filter((s) => s._dist < radiusMeters)
     .sort((a, b) => a._dist - b._dist);
 
   let cacheLine = `public, max-age=0, s-maxage=${longCacheAgeSeconds}, stale-while-revalidate=15`;
@@ -56,6 +59,7 @@ export default async (req, res, next) => {
         name: s.name,
         longitude: s.location.coordinates[1],
         latitude: s.location.coordinates[0],
+        distance_meters: Math.round(s._dist),
       };
     }),
   );

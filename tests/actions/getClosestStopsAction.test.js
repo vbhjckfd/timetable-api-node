@@ -87,8 +87,49 @@ describe("getClosestStopsAction", () => {
         name: "Near Stop",
         latitude: TARGET_LAT,
         longitude: TARGET_LON,
+        distance_meters: 0,
       },
     ]);
+  });
+
+  it("respects custom radius query (up to 3km cap)", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([nearStop, farStop, midStop]),
+    });
+
+    const req = {
+      query: {
+        latitude: String(TARGET_LAT),
+        longitude: String(TARGET_LON),
+        radius: "2000",
+      },
+    };
+    const res = makeRes();
+    await getClosestStopsAction(req, res);
+
+    const result = res.json.mock.calls[0][0];
+    const codes = result.map((s) => s.code);
+    expect(codes).toContain(2);
+    expect(result.find((s) => s.code === 2).distance_meters).toBeGreaterThan(1000);
+  });
+
+  it("clamps radius above max to 3000m", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([farStop]),
+    });
+
+    const req = {
+      query: {
+        latitude: String(TARGET_LAT),
+        longitude: String(TARGET_LON),
+        radius: "99999",
+      },
+    };
+    const res = makeRes();
+    await getClosestStopsAction(req, res);
+
+    const result = res.json.mock.calls[0][0];
+    expect(result.map((s) => s.code)).toContain(2);
   });
 
   it("sets no-cache when no stops are found", async () => {

@@ -46,6 +46,27 @@ vi.mock("../../actions/routeStaticInfoAction.js", () => ({
   },
 }));
 
+vi.mock("../../actions/getClosestStopsAction.js", () => ({
+  default: async (req, res) => {
+    res.json([
+      {
+        code: 101,
+        name: "Closest",
+        latitude: 49.841,
+        longitude: 24.021,
+        distance_meters: 42,
+      },
+      {
+        code: 202,
+        name: "Second",
+        latitude: 49.842,
+        longitude: 24.022,
+        distance_meters: 120,
+      },
+    ]);
+  },
+}));
+
 import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
 import {
   buildMcpServerCard,
@@ -99,6 +120,7 @@ const TOOL_NAMES = [
   "get_stop_realtime",
   "get_vehicles_by_stop",
   "get_stop_geometry",
+  "get_stops_around_location",
 ];
 
 describe("timetable MCP server", () => {
@@ -131,6 +153,7 @@ describe("timetable MCP server", () => {
     const aboutText = aboutResource.contents[0].text;
     expect(aboutText).toContain("Lviv");
     expect(aboutText).toContain("get_stop_realtime");
+    expect(aboutText).toContain("get_stops_around_location");
 
     const tools = await client.listTools();
     const toolNames = tools.tools.map((tool) => tool.name);
@@ -138,6 +161,7 @@ describe("timetable MCP server", () => {
     expect(toolNames).toContain("get_stop_realtime");
     expect(toolNames).toContain("get_vehicles_by_stop");
     expect(toolNames).toContain("get_stop_geometry");
+    expect(toolNames).toContain("get_stops_around_location");
     expect(toolNames).not.toContain("get_route_dynamic");
 
     const prompts = await client.listPrompts();
@@ -194,6 +218,25 @@ describe("timetable MCP server", () => {
     expect(stopGeometryJson.ui_blocks[0].type).toBe("map");
     expect(stopGeometryJson.data.routes[0].route).toBe("1A");
     expect(stopGeometryJson.data.routes[0].polyline).toHaveLength(2);
+
+    const stopsAround = await client.callTool({
+      name: "get_stops_around_location",
+      arguments: {
+        latitude: 49.84,
+        longitude: 24.02,
+        radius_meters: 800,
+      },
+    });
+    const stopsAroundText = stopsAround.content.find((item) => item.type === "text")?.text;
+    const stopsAroundJson = JSON.parse(stopsAroundText);
+    expect(stopsAroundJson.ui_blocks[0].type).toBe("map");
+    expect(stopsAroundJson.data.stops).toHaveLength(2);
+    expect(stopsAroundJson.data.stops[0].id).toBe("101");
+    expect(stopsAroundJson.data.stops[0].name).toBe("Closest");
+    expect(stopsAroundJson.data.stops[0].distance_meters).toBe(42);
+    expect(stopsAroundJson.ui_blocks[0].data.stops).toHaveLength(2);
+    expect(stopsAroundJson.ui_blocks[0].data.center[0]).toBe(49.84);
+    expect(stopsAroundJson.ui_blocks[0].data.center[1]).toBe(24.02);
 
     await client.close();
   });
