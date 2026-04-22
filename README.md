@@ -102,6 +102,7 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 - `get_stop_realtime`
 - `get_vehicles_by_stop`
 - `get_stop_geometry`
+- `get_stops_around_location`
 
 <details>
 <summary><code>get_stop_realtime</code> — input &amp; example</summary>
@@ -212,6 +213,73 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 ```
 
 </details>
+
+<details>
+<summary><code>get_stops_around_location</code> — input &amp; example</summary>
+
+Returns stops near a map point (numeric **code**, name, coordinates, distance). Intended for hosts that render **`map`** UI blocks (for example ChatGPT): one block with **multiple stop markers** and the search center. Uses the same backend as **`GET /closest`** (see below).
+
+**Arguments (JSON):**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `latitude` | number, −90…90 | yes |
+| `longitude` | number, −180…180 | yes |
+| `radius_meters` | integer, 50…3000 | no (default **1000**) |
+
+**Example result** (shape only):
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "center_lat": 49.84,
+    "center_lng": 24.03,
+    "radius_meters": 1000,
+    "stops": [
+      {
+        "id": "707",
+        "name": "Стадіон Сільмаш",
+        "lat": 49.841,
+        "lng": 24.031,
+        "distance_meters": 120
+      }
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": [
+    {
+      "type": "map",
+      "data": {
+        "center": [49.84, 24.03],
+        "zoom": 15,
+        "stops": [
+          {
+            "id": "707",
+            "name": "Стадіон Сільмаш",
+            "lat": 49.841,
+            "lng": 24.031,
+            "distance_meters": 120
+          }
+        ],
+        "vehicles": []
+      }
+    }
+  ]
+}
+```
+
+Map zoom is **15** for radius ≤ 1500 m and **14** for larger radii (up to 3000 m).
+
+</details>
+
+### Nearby stops over REST (`GET /closest`)
+
+Same stop search as `get_stops_around_location`, for non-MCP clients:
+
+- **URL:** `GET /closest?latitude={lat}&longitude={lng}`
+- **Optional:** `radius` — meters, clamped between **50** and **3000** (default **1000**).
+- **Response:** JSON array of `{ code, name, latitude, longitude, distance_meters }` (sorted by distance).
 
 ### Security model
 
