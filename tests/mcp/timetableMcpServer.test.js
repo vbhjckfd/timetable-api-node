@@ -77,6 +77,7 @@ vi.mock("../../actions/routeFinalStopScheduleAction.js", () => ({
   },
 }));
 
+import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
 import {
   buildMcpServerCard,
   handleMcpPostRequest,
@@ -125,7 +126,23 @@ afterAll(async () => {
   );
 });
 
+const TOOL_NAMES = [
+  "get_stop_by_code",
+  "get_stop_timetable",
+  "get_closest_stops",
+  "get_route_static",
+  "get_route_dynamic",
+  "get_route_final_stop_schedule",
+];
+
 describe("timetable MCP server", () => {
+  it("registers SEP-conforming tool names", () => {
+    for (const name of TOOL_NAMES) {
+      const { isValid, warnings } = validateToolName(name);
+      expect(isValid, `invalid tool name ${name}: ${warnings.join(", ")}`).toBe(true);
+    }
+  });
+
   it("exposes MCP tools and executes get_stop_by_code", async () => {
     const client = new Client(
       { name: "test-client", version: "1.0.0" },
@@ -244,8 +261,14 @@ describe("timetable MCP server", () => {
     expect(serverCard.title).toBe("Lviv Timetable MCP");
     expect(serverCard.websiteUrl).toBe("https://lad.lviv.ua");
     expect(serverCard.description).toContain("Lviv");
-    expect(serverCard.icons?.[0]?.src).toBe(`${baseUrl}/favicon.ico`);
+    expect(serverCard.serverInfo?.name).toBe("com.lad.lviv/timetable-api");
+    expect(serverCard.serverInfo?.websiteUrl).toBe("https://lad.lviv.ua");
+    expect(serverCard.serverInfo?.description).toContain("Lviv");
+    expect(serverCard.iconUrl).toBe(`${baseUrl}/mcp-icon.svg`);
+    expect(serverCard.homepage).toBe("https://lad.lviv.ua");
+    expect(serverCard.icons?.[0]).toEqual({ src: `${baseUrl}/mcp-icon.svg`, mimeType: "image/svg+xml" });
     expect(serverCard.configSchema?.type).toBe("object");
+    expect(serverCard.configSchema?.properties?.default_language).toBeDefined();
 
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     const robotsText = await robotsResponse.text();

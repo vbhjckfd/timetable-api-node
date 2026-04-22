@@ -86,6 +86,12 @@ app.get("/.well-known/mcp/server-card.json", (req, res) => {
   res.json(buildMcpServerCard(baseUrl));
 });
 
+app.get("/mcp-icon.svg", (req, res) => {
+  res.type("image/svg+xml");
+  res.set("Cache-Control", "public, max-age=86400");
+  res.sendFile(path.join(__dirname, "mcp", "mcp-icon.svg"));
+});
+
 app.get("/robots.txt", (req, res) => {
   const baseUrl = `${req.protocol}://${req.get("host")}`;
   const lines = [

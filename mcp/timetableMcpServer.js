@@ -25,15 +25,43 @@ const MCP_SERVER_INFO = {
   websiteUrl: "https://lad.lviv.ua",
 };
 
+/**
+ * Public base URL for MCP icon and (optional) config hints. Override with MCP_PUBLIC_BASE_URL
+ * when the API is not hosted at the default host (e.g. local staging).
+ */
+function publicMcpBaseUrl() {
+  return (process.env.MCP_PUBLIC_BASE_URL || "https://api.lad.lviv.ua").replace(/\/+$/, "");
+}
+
+function mcpIconAbsoluteUrl() {
+  return new URL("mcp-icon.svg", `${publicMcpBaseUrl()}/`).href;
+}
+
 const SMITHERY_CONFIG_JSON_SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   type: "object",
-  title: "Connection options",
+  title: "Client preferences (optional)",
   description:
-    "This server is fully public. Pass an empty object. Optional fields are reserved for future use and are currently ignored by the server.",
-  properties: {},
+    "This API requires no API keys. All fields are optional. The upstream server may ignore them; they exist for client UX and Smithery session config.",
+  properties: {
+    default_language: {
+      type: "string",
+      title: "Preferred prompt language",
+      description:
+        "Optional hint: prefer English, Ukrainian, or any tools/prompts (informational; may be ignored by the host).",
+      enum: ["en", "uk", "any"],
+      default: "any",
+    },
+  },
+  required: [],
   additionalProperties: false,
 };
+
+const MCP_SERVER_INSTRUCTIONS = [
+  "Lviv, Ukraine public transport: stops, timetables, static routes, live vehicle positions, and final-stop terminus schedules.",
+  "Call tools for structured JSON. No authentication. Stop codes are numeric (signage). Route names are local numbers/names (e.g. 3, 2A).",
+  "Ukrainian- and English-language prompt templates are available; pick prompts when the user writes in that language.",
+].join(" ");
 
 function zStopCode() {
   return z
@@ -54,6 +82,10 @@ function mcpServerImplementation() {
   return {
     ...MCP_SERVER_INFO,
     icons: [
+      {
+        src: mcpIconAbsoluteUrl(),
+        mimeType: "image/svg+xml",
+      },
       {
         src: new URL("favicon.ico", `${MCP_SERVER_INFO.websiteUrl}/`).href,
         mimeType: "image/x-icon",
@@ -901,6 +933,7 @@ export function createTimetableMcpServer() {
       capabilities: {
         logging: {},
       },
+      instructions: MCP_SERVER_INSTRUCTIONS,
     },
   );
 
@@ -927,16 +960,32 @@ export async function handleMcpPostRequest(req, res) {
 
 export function buildMcpServerCard(baseUrl) {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
-  const iconUrl = new URL("favicon.ico", `${normalizedBaseUrl}/`).href;
+  const svgIconUrl = new URL("mcp-icon.svg", `${normalizedBaseUrl}/`).href;
+  const faviconUrl = new URL("favicon.ico", `${normalizedBaseUrl}/`).href;
 
-  return {
-    ...MCP_SERVER_INFO,
+  const serverInfo = {
+    name: MCP_SERVER_INFO.name,
+    version: MCP_SERVER_INFO.version,
+    title: MCP_SERVER_INFO.title,
+    description: MCP_SERVER_INFO.description,
+    websiteUrl: MCP_SERVER_INFO.websiteUrl,
     icons: [
-      {
-        src: iconUrl,
-        mimeType: "image/x-icon",
-      },
+      { src: svgIconUrl, mimeType: "image/svg+xml" },
+      { src: faviconUrl, mimeType: "image/x-icon" },
     ],
+  };
+
+  // Smithery static card examples use `serverInfo`; some scanners also read top-level fields, `iconUrl` (singular), or `homepage`.
+  return {
+    serverInfo,
+    name: serverInfo.name,
+    version: serverInfo.version,
+    title: serverInfo.title,
+    description: serverInfo.description,
+    websiteUrl: serverInfo.websiteUrl,
+    homepage: serverInfo.websiteUrl,
+    iconUrl: svgIconUrl,
+    icons: serverInfo.icons,
     remotes: [
       {
         type: "streamable-http",

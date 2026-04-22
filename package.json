@@ -1,9 +1,25 @@
 {
   "name": "timetable-api-cloud-func",
   "version": "1.0.0",
-  "description": "API for lad.lviv.ua service",
+  "description": "Lviv (Ukraine) public transport REST API and read-only Model Context Protocol (MCP) server: stops, timetables, routes, live vehicle positions, GTFS/GTFS-RT. No API key required.",
   "main": "index.js",
   "type": "module",
+  "homepage": "https://lad.lviv.ua",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vbhjckfd/timetable-api-node.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "lviv",
+    "transit",
+    "gtfs",
+    "timetable",
+    "public-transport",
+    "ukraine",
+    "api"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "cors": "^2.8.5",
