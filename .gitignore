@@ -107,3 +107,5 @@ dist
 
 database/*
 static.zip
+
+.cursor
