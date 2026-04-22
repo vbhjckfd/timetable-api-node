@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "lad-lviv": {
+      "url": "https://api.lad.lviv.ua/mcp"
+    }
+  }
+}
