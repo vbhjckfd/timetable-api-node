@@ -10,27 +10,23 @@ vi.mock("../../actions/getSingleStopAction.js", () => ({
     res.json({
       code: req.stopCode,
       name: "Mock Stop",
-      timetable: includeTimetable ? [{ route: "1A", time: "12:00" }] : [],
+      latitude: 49.84,
+      longitude: 24.02,
+      transfers: [{ route: "1A" }],
+      timetable: includeTimetable
+        ? [
+            {
+              route: "1A",
+              direction: "Center",
+              vehicle_type: "bus",
+              time_left: "5 хв",
+              vehicle_id: "vehicle-1",
+              location: [49.841, 24.021],
+              bearing: 120,
+            },
+          ]
+        : [],
     });
-  },
-}));
-
-vi.mock("../../actions/getStopTimetableAction.js", () => ({
-  default: async (req, res) => {
-    res.json([{ stopCode: req.stopCode, route: "3", time: "12:05" }]);
-  },
-}));
-
-vi.mock("../../actions/getClosestStopsAction.js", () => ({
-  default: async (req, res) => {
-    res.json([
-      {
-        code: 101,
-        name: "Closest",
-        latitude: Number(req.query.latitude),
-        longitude: Number(req.query.longitude),
-      },
-    ]);
   },
 }));
 
@@ -39,39 +35,12 @@ vi.mock("../../actions/routeStaticInfoAction.js", () => ({
     res.json({
       route_short_name: req.params.name,
       stops: [[], []],
-      shapes: [[], []],
-    });
-  },
-}));
-
-vi.mock("../../actions/routeDynamicInfoAction.js", () => ({
-  default: async (req, res) => {
-    res.json([
-      {
-        id: "vehicle-1",
-        direction: 0,
-        location: [49.84, 24.02],
-      },
-    ]);
-  },
-}));
-
-vi.mock("../../actions/routeFinalStopScheduleAction.js", () => ({
-  default: async (req, res) => {
-    res.json({
-      id: "EXT-FINAL",
-      route_short_name: req.params.name,
-      directions: [
-        {
-          direction: 0,
-          terminus: { code: 1, name: "Final A", microgiz_id: "MGA" },
-          departures: ["10:00", "10:30"],
-        },
-        {
-          direction: 1,
-          terminus: { code: 2, name: "Final B", microgiz_id: "MGB" },
-          departures: ["11:00"],
-        },
+      shapes: [
+        [
+          [49.84, 24.02],
+          [49.83, 24.03],
+        ],
+        [],
       ],
     });
   },
@@ -127,12 +96,9 @@ afterAll(async () => {
 });
 
 const TOOL_NAMES = [
-  "get_stop_by_code",
-  "get_stop_timetable",
-  "get_closest_stops",
-  "get_route_static",
-  "get_route_dynamic",
-  "get_route_final_stop_schedule",
+  "get_stop_realtime",
+  "get_vehicles_by_stop",
+  "get_stop_geometry",
 ];
 
 describe("timetable MCP server", () => {
@@ -143,7 +109,7 @@ describe("timetable MCP server", () => {
     }
   });
 
-  it("exposes MCP tools and executes get_stop_by_code", async () => {
+  it("exposes MCP tools and executes transit map/list tools", async () => {
     const client = new Client(
       { name: "test-client", version: "1.0.0" },
       { capabilities: {} },
@@ -164,90 +130,70 @@ describe("timetable MCP server", () => {
     const aboutResource = await client.readResource({ uri: "timetable://about" });
     const aboutText = aboutResource.contents[0].text;
     expect(aboutText).toContain("Lviv");
-    expect(aboutText).toContain("get_stop_timetable");
+    expect(aboutText).toContain("get_stop_realtime");
 
     const tools = await client.listTools();
     const toolNames = tools.tools.map((tool) => tool.name);
 
-    expect(toolNames).toContain("get_stop_by_code");
-    expect(toolNames).toContain("get_route_dynamic");
-    expect(toolNames).toContain("get_route_final_stop_schedule");
-    expect(toolNames).not.toContain("get_vehicle_by_id");
+    expect(toolNames).toContain("get_stop_realtime");
+    expect(toolNames).toContain("get_vehicles_by_stop");
+    expect(toolNames).toContain("get_stop_geometry");
+    expect(toolNames).not.toContain("get_route_dynamic");
 
     const prompts = await client.listPrompts();
     const promptNames = prompts.prompts.map((prompt) => prompt.name);
-    expect(promptNames).toContain("route-overview");
-    expect(promptNames).toContain("commute-planner");
-    expect(promptNames).toContain("nearby-stops");
-    expect(promptNames).toContain("route-overview-ua");
-    expect(promptNames).toContain("commute-planner-ua");
-    expect(promptNames).toContain("nearby-stops-ua");
-    expect(promptNames).toContain("route-final-stop-schedule");
-    expect(promptNames).toContain("route-final-stop-schedule-ua");
-    expect(promptNames).toContain("ua-slang-koly-bude-avtobus");
-    expect(promptNames).toContain("ua-slang-rozklad-marshrutky");
-    expect(promptNames).toContain("ua-slang-de-tram");
-    expect(promptNames).toContain("ua-slang-de-trolejbus");
+    expect(promptNames).toContain("transit-map-view");
+    expect(promptNames).toContain("transit-arrival-list");
+    expect(promptNames).toContain("transit-hybrid-view");
 
-    const nearbyStopsPrompt = await client.getPrompt({
-      name: "nearby-stops",
+    const hybridPrompt = await client.getPrompt({
+      name: "transit-hybrid-view",
       arguments: {
-        latitude: "49.84",
-        longitude: "24.02",
-        limit: "3",
+        stop_id: "707",
       },
     });
-    expect(nearbyStopsPrompt.messages).toHaveLength(1);
-    const promptText = nearbyStopsPrompt.messages[0].content.text;
-    expect(promptText).toContain("get_closest_stops");
-    expect(promptText).toContain("markdown table");
+    expect(hybridPrompt.messages).toHaveLength(1);
+    const promptText = hybridPrompt.messages[0].content.text;
+    expect(promptText).toContain("get_stop_realtime");
+    expect(promptText).toContain("first block `map`, second block `arrival_list`");
 
-    const nearbyStopsUaPrompt = await client.getPrompt({
-      name: "nearby-stops-ua",
+    const stopRealtime = await client.callTool({
+      name: "get_stop_realtime",
       arguments: {
-        latitude: "49.84",
-        longitude: "24.02",
-        limit: "3",
+        stop_id: 1234,
       },
     });
-    expect(nearbyStopsUaPrompt.messages).toHaveLength(1);
-    const promptUaText = nearbyStopsUaPrompt.messages[0].content.text;
-    expect(promptUaText).toContain("get_closest_stops");
-    expect(promptUaText).toContain("markdown-таблиця");
-    expect(promptUaText).toContain("Львові");
+    const stopRealtimeText = stopRealtime.content.find((item) => item.type === "text")?.text;
+    const stopRealtimeJson = JSON.parse(stopRealtimeText);
+    expect(stopRealtimeJson.view).toBe("transit_realtime");
+    expect(stopRealtimeJson.ui_blocks[0].type).toBe("map");
+    expect(stopRealtimeJson.ui_blocks[1].type).toBe("arrival_list");
+    expect(stopRealtimeJson.data.stop.id).toBe("1234");
+    expect(stopRealtimeJson.data.arrivals[0].arrival_minutes).toBe(5);
 
-    const slangBusPrompt = await client.getPrompt({
-      name: "ua-slang-koly-bude-avtobus",
+    const vehiclesByStop = await client.callTool({
+      name: "get_vehicles_by_stop",
       arguments: {
-        route_name: "61",
+        stop_ids: [1234, "707"],
       },
     });
-    expect(slangBusPrompt.messages).toHaveLength(1);
-    const slangBusText = slangBusPrompt.messages[0].content.text;
-    expect(slangBusText).toContain("get_route_static");
-    expect(slangBusText).toContain("get_route_dynamic");
+    const vehiclesByStopText = vehiclesByStop.content.find((item) => item.type === "text")?.text;
+    const vehiclesByStopJson = JSON.parse(vehiclesByStopText);
+    expect(vehiclesByStopJson.ui_blocks[0].type).toBe("map");
+    expect(vehiclesByStopJson.data.stops).toHaveLength(2);
+    expect(vehiclesByStopJson.data.vehicles[0].id).toBe("vehicle-1");
 
-    const finalStopSchedule = await client.callTool({
-      name: "get_route_final_stop_schedule",
+    const stopGeometry = await client.callTool({
+      name: "get_stop_geometry",
       arguments: {
-        route_name: "61",
+        stop_id: "1234",
       },
     });
-    const finalStopScheduleText = finalStopSchedule.content.find((item) => item.type === "text")?.text;
-    expect(finalStopScheduleText).toContain('"route_short_name": "61"');
-    expect(finalStopScheduleText).toContain('"departures":');
-
-    const result = await client.callTool({
-      name: "get_stop_by_code",
-      arguments: {
-        stop_code: 1234,
-        include_timetable: true,
-      },
-    });
-
-    const textContent = result.content.find((item) => item.type === "text")?.text;
-    expect(textContent).toContain('"code": 1234');
-    expect(textContent).toContain('"route": "1A"');
+    const stopGeometryText = stopGeometry.content.find((item) => item.type === "text")?.text;
+    const stopGeometryJson = JSON.parse(stopGeometryText);
+    expect(stopGeometryJson.ui_blocks[0].type).toBe("map");
+    expect(stopGeometryJson.data.routes[0].route).toBe("1A");
+    expect(stopGeometryJson.data.routes[0].polyline).toHaveLength(2);
 
     await client.close();
   });

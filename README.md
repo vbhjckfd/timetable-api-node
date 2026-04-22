@@ -74,177 +74,140 @@ graph LR;
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "get_stop_timetable",
-    "arguments": { "stop_code": 101 }
+    "name": "get_stop_realtime",
+    "arguments": { "stop_id": 101 }
   }
 }
 ```
 
-Successful tool responses return **stringified JSON** inside MCP `content` items (`type: "text"`), as produced by the server implementation.
+Successful tool responses return **stringified JSON** inside MCP `content` items (`type: "text"`), and each payload follows a strict UI contract:
+
+```json
+{
+  "view": "transit_realtime",
+  "data": { "...": "tool-specific source data" },
+  "ui_blocks": [
+    { "type": "map", "data": { "...": "map renderer input" } },
+    { "type": "arrival_list", "data": { "...": "arrival list renderer input" } }
+  ]
+}
+```
+
+Consistency rule: each vehicle rendered on map must either have a matching ETA in list data or `eta_status: "unassigned"`.
 
 </details>
 
 ### Exposed tools
 
-- `get_stop_by_code`
-- `get_stop_timetable`
-- `get_closest_stops`
-- `get_route_static`
-- `get_route_dynamic`
-- `get_route_final_stop_schedule`
+- `get_stop_realtime`
+- `get_vehicles_by_stop`
+- `get_stop_geometry`
 
 <details>
-<summary><code>get_stop_by_code</code> — input &amp; example</summary>
+<summary><code>get_stop_realtime</code> — input &amp; example</summary>
 
 **Arguments (JSON):**
 
 | Field | Type | Required |
 |-------|------|----------|
-| `stop_code` | positive integer | yes |
-| `include_timetable` | boolean | no (default `false`) |
+| `stop_id` | positive integer or digits-only string | yes |
 
 **Example result** (shape only; values from upstream):
 
 ```json
 {
-  "code": 1234,
-  "name": "Mock Stop",
-  "timetable": [{ "route": "1A", "time": "12:00" }]
-}
-```
-
-</details>
-
-<details>
-<summary><code>get_stop_timetable</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `stop_code` | positive integer | yes |
-
-**Example result:**
-
-```json
-[
-  { "stopCode": 101, "route": "3", "time": "12:05" }
-]
-```
-
-</details>
-
-<details>
-<summary><code>get_closest_stops</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `latitude` | number, -90…90 | yes |
-| `longitude` | number, -180…180 | yes |
-
-**Example result:**
-
-```json
-[
-  {
-    "code": 101,
-    "name": "Closest",
-    "latitude": 49.84,
-    "longitude": 24.02
-  }
-]
-```
-
-</details>
-
-<details>
-<summary><code>get_route_static</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `route_name` | non-empty string | yes |
-
-**Example result:**
-
-```json
-{
-  "route_short_name": "1A",
-  "stops": [[], []],
-  "shapes": [[], []]
-}
-```
-
-</details>
-
-<details>
-<summary><code>get_route_dynamic</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `route_name` | non-empty string | yes |
-
-**Example result:**
-
-```json
-[
-  {
-    "id": "vehicle-1",
-    "direction": 0,
-    "location": [49.84, 24.02]
-  }
-]
-```
-
-</details>
-
-<details>
-<summary><code>get_route_final_stop_schedule</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `route_name` | non-empty string | yes |
-
-**Example result** (fields such as `color`, `type`, and stop details come from the live DB):
-
-```json
-{
-  "id": "EXT-123",
-  "color": "#e30613",
-  "type": "bus",
-  "route_short_name": "61",
-  "route_long_name": "Example route name",
-  "directions": [
+  "view": "transit_realtime",
+  "data": {
+    "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
+    "arrivals": [
+      {
+        "route": "T30",
+        "direction": "Рясівська",
+        "vehicle_type": "tram",
+        "arrival_minutes": 4,
+        "vehicle_id": "tram_123",
+        "lat": 49.83,
+        "lng": 24.02,
+        "bearing": 120
+      }
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": [
     {
-      "direction": 0,
-      "terminus": {
-        "code": 101,
-        "name": "Terminus A",
-        "eng_name": "Terminus A",
-        "microgiz_id": "MGA",
-        "loc": [24.03, 49.84]
-      },
-      "departures": ["10:00", "10:30"]
+      "type": "map",
+      "data": { "center": [49.84, 24.03], "vehicles": [] }
     },
     {
-      "direction": 1,
-      "terminus": {
-        "code": 202,
-        "name": "Terminus B",
-        "eng_name": "Terminus B",
-        "microgiz_id": "MGB",
-        "loc": [24.04, 49.85]
-      },
-      "departures": ["11:00"]
+      "type": "arrival_list",
+      "data": { "arrivals": [] }
     }
   ]
+}
+```
+
+</details>
+
+<details>
+<summary><code>get_vehicles_by_stop</code> — input &amp; example</summary>
+
+**Arguments:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `stop_ids` | array of positive integers and/or digits-only strings | yes |
+
+**Example result:**
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "stop_ids": ["707"],
+    "stops": [{ "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 }],
+    "vehicles": [
+      {
+        "id": "tram_123",
+        "route": "T30",
+        "lat": 49.83,
+        "lng": 24.02,
+        "bearing": 120,
+        "next_stop_id": "707",
+        "eta_minutes": 4,
+        "eta_status": "assigned"
+      }
+    ]
+  },
+  "ui_blocks": [{ "type": "map", "data": { "vehicles": [] } }]
+}
+```
+
+</details>
+
+<details>
+<summary><code>get_stop_geometry</code> — input &amp; example</summary>
+
+**Arguments:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `stop_id` | positive integer or digits-only string | yes |
+
+**Example result:**
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
+    "routes": [
+      {
+        "route": "T30",
+        "polyline": [[49.84, 24.03], [49.83, 24.02]]
+      }
+    ]
+  },
+  "ui_blocks": [{ "type": "map", "data": { "routes": [] } }]
 }
 ```
 
