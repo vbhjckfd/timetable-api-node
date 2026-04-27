@@ -276,14 +276,6 @@ Map zoom is **15** for radius ≤ 1500 m and **14** for larger radii (up to 3000
 
 </details>
 
-### Nearby stops over REST (`GET /closest`)
-
-Same stop search as `get_stops_around_location`, for non-MCP clients:
-
-- **URL:** `GET /closest?latitude={lat}&longitude={lng}`
-- **Optional:** `radius` — meters, clamped between **50** and **3000** (default **1000**).
-- **Response:** JSON array of `{ code, name, latitude, longitude, distance_meters }` (sorted by distance).
-
 ### Security model
 
 - Public read-only (no authentication).
@@ -322,6 +314,13 @@ Live timetable only for a stop. Short-cached (5–10 s).
 Static stop info without live data. Long-cached (30 days).
 
 - **Response:** `{ code, name, eng_name, latitude, longitude, transfers }`.
+
+#### `GET /closest?latitude={lat}&longitude={lng}`
+
+Nearby stops — same search as `get_stops_around_location`, for non-MCP clients.
+
+- **Optional:** `radius` — meters, clamped between **50** and **3000** (default **1000**).
+- **Response:** JSON array of `{ code, name, latitude, longitude, distance_meters }` (sorted by distance).
 
 ### Routes
 
