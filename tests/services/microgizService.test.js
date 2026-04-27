@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("node-fetch", () => ({
-  default: vi.fn(),
-}));
+const fetchMock = vi.fn();
+vi.stubGlobal("fetch", fetchMock);
 
 vi.mock("gtfs-realtime-bindings", () => ({
   default: {
@@ -14,7 +13,6 @@ vi.mock("gtfs-realtime-bindings", () => ({
   },
 }));
 
-import fetch from "node-fetch";
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 import {
   getTimeOfLastStaticUpdate,
@@ -30,7 +28,7 @@ beforeEach(() => {
 describe("getTimeOfLastStaticUpdate", () => {
   it("returns a Date parsed from the last-modified header", async () => {
     const lastModified = "Mon, 06 Apr 2026 10:00:00 GMT";
-    fetch.mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       headers: { get: vi.fn().mockReturnValue(lastModified) },
     });
@@ -45,7 +43,7 @@ describe("getTimeOfLastStaticUpdate", () => {
 describe("getVehiclesLocations", () => {
   it("returns decoded GTFS-RT entities", async () => {
     const mockEntities = [{ id: "v1" }, { id: "v2" }];
-    fetch.mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
     });
@@ -62,7 +60,7 @@ describe("getVehiclesLocations", () => {
   });
 
   it("rejects when all retries fail", async () => {
-    fetch.mockResolvedValue({ ok: false, status: 503 });
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     // fetchPlus exhausts retries and its .catch() returns undefined;
@@ -74,7 +72,7 @@ describe("getVehiclesLocations", () => {
 describe("getArrivalTimes", () => {
   it("returns decoded GTFS-RT entities", async () => {
     const mockEntities = [{ id: "e1" }];
-    fetch.mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
     });

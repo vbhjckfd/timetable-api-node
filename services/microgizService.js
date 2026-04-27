@@ -1,5 +1,4 @@
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
-import fetch from "node-fetch";
 import _ from "lodash";
 import {
   getRouteColor,
