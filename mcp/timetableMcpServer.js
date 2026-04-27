@@ -859,6 +859,8 @@ export function buildMcpServerCard(baseUrl) {
     authentication: {
       type: "none",
     },
+    registryUrl:
+      "https://registry.modelcontextprotocol.io/v0/servers/io.github.vbhjckfd%2Ftimetable-api-node/versions",
     configSchema: SMITHERY_CONFIG_JSON_SCHEMA,
   };
 }

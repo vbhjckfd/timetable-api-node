@@ -3,6 +3,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/vbhjckfd/timetable-api-node/ci.yml?branch=master&logo=github&label=CI)](https://github.com/vbhjckfd/timetable-api-node/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/node.js-22-43853d?logo=node.js&logoColor=white)](https://github.com/vbhjckfd/timetable-api-node/blob/master/.nvmrc)
 [![License: WTFPL](https://img.shields.io/github/license/vbhjckfd/timetable-api-node?label=license)](https://github.com/vbhjckfd/timetable-api-node/blob/master/LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-6366f1?style=flat-square)](https://registry.modelcontextprotocol.io/v0/servers/io.github.vbhjckfd%2Ftimetable-api-node/versions)
 
 Express-based API for Lviv transport timetable data with a read-only MCP endpoint.
 
