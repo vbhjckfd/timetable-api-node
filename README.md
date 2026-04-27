@@ -289,3 +289,72 @@ Same stop search as `get_stops_around_location`, for non-MCP clients:
 - Public read-only (no authentication).
 - No mutating tools are exposed.
 - `robots.txt` is only a best-effort discovery hint and not a protocol contract.
+
+## REST API
+
+All endpoints return JSON. `:code` is a numeric stop code; `:name` is a route short name (e.g. `T1`, `32A`) or numeric external ID.
+
+### Stops
+
+#### `GET /stops.json`
+
+All stops as a JSON array, sorted by code.
+
+- **Response:** array of `{ code, name, eng_name, location: [lat, lng], routes, sign, sign_pdf }`.
+
+(`GET /stops` returns an HTML table instead.)
+
+#### `GET /stops/:code`
+
+Single stop with live realtime timetable. Short-cached (5–10 s).
+
+- **Optional:** `skipTimetableData=1` — omit live arrivals (long-cached response).
+- **Response:** `{ code, name, eng_name, latitude, longitude, transfers, timetable }`.
+
+#### `GET /stops/:code/timetable`
+
+Live timetable only for a stop. Short-cached (5–10 s).
+
+- **Response:** array of timetable items.
+
+#### `GET /stops/:code/static`
+
+Static stop info without live data. Long-cached (30 days).
+
+- **Response:** `{ code, name, eng_name, latitude, longitude, transfers }`.
+
+### Routes
+
+#### `GET /routes.json`
+
+All routes as a JSON array, sorted by short name.
+
+- **Response:** raw route objects from the timetable store.
+
+(`GET /routes` returns an HTML table.)
+
+#### `GET /routes/static/:name`
+
+Route shape, stop list, and metadata. Long-cached (30 days).
+
+- **Response:** `{ id, color, type, route_short_name, route_long_name, stops: [[dir0…], [dir1…]], shapes }`.
+
+#### `GET /routes/dynamic/:name`
+
+Live vehicle positions for a route. Short-cached (10 s).
+
+- **Response:** array of `{ id, direction, location: [lat, lng], bearing, lowfloor }`.
+
+### Vehicles
+
+#### `GET /vehicle/:vehicleId`
+
+Live position and upcoming stop arrivals for one vehicle. Short-cached (5 s).
+
+- **Response:** `{ location: [lat, lng], routeId, bearing, direction, licensePlate, arrivals }`.
+
+#### `GET /transport?latitude={lat}&longitude={lng}`
+
+Vehicles within 1 km of a point. Short-cached (10 s).
+
+- **Response:** array of `{ id, route, vehicle_type, color, location: [lat, lng], bearing, lowfloor }`.
