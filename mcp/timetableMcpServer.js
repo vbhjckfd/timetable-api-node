@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import getSingleStopAction from "../actions/getSingleStopAction.js";
 import getClosestStopsAction from "../actions/getClosestStopsAction.js";
@@ -798,6 +799,8 @@ export function createTimetableMcpServer() {
       instructions: MCP_SERVER_INSTRUCTIONS,
     },
   );
+
+  server.server.setRequestHandler(PingRequestSchema, () => ({}));
 
   registerTools(server);
   registerResources(server);

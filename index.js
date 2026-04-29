@@ -52,6 +52,10 @@ app.get("/transport", closestTransportAction);
 
 app.get("/sitemap.xml", sitemapAction);
 
+app.get("/ping", (req, res) => {
+  res.json({});
+});
+
 app.post("/mcp", async (req, res) => {
   try {
     await handleMcpPostRequest(req, res);
