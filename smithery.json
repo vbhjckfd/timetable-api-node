@@ -1,0 +1,80 @@
+{
+  "id": "vbhjckfd/timetable-api-node",
+  "name": "Lviv Timetable MCP",
+  "description": "Lviv (Ukraine) public transport MCP server — live arrivals, vehicle positions, stop discovery, route shapes, and static timetables. No API key required.",
+  "tags": ["transit", "public-transport", "ukraine", "lviv", "gtfs", "timetable", "realtime", "vehicles", "stops", "mcp"],
+  "homepage": "https://lad.lviv.ua",
+  "icon": "https://raw.githubusercontent.com/vbhjckfd/timetable-api-node/master/mcp/mcp-icon.svg",
+  "deployment": {
+    "localOnly": false,
+    "requirements": []
+  },
+  "examples": [
+    {
+      "name": "Get Stop Realtime",
+      "description": "Live arrivals and vehicle positions at a stop by numeric stop ID",
+      "tool": "get_stop_realtime",
+      "input": {
+        "stop_id": 707
+      }
+    },
+    {
+      "name": "Get Route Realtime",
+      "description": "Live vehicle positions for all vehicles currently running on a route",
+      "tool": "get_route_realtime",
+      "input": {
+        "route": "T30"
+      }
+    },
+    {
+      "name": "Get Route Static",
+      "description": "Route metadata, stop lists, departure times, and polylines for map rendering",
+      "tool": "get_route_static",
+      "input": {
+        "route": "32A"
+      }
+    },
+    {
+      "name": "Find Stops Around Location",
+      "description": "Discover stops near a given latitude/longitude",
+      "tool": "get_stops_around_location",
+      "input": {
+        "lat": 49.8397,
+        "lng": 24.0297,
+        "radius": 300
+      }
+    },
+    {
+      "name": "Get Stop Geometry",
+      "description": "Static map context for a stop: stop marker and route polylines",
+      "tool": "get_stop_geometry",
+      "input": {
+        "stop_id": 707
+      }
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vbhjckfd/timetable-api-node"
+  },
+  "startCommand": {
+    "type": "http",
+    "configSchema": {
+      "type": "object",
+      "title": "Lviv Timetable — connection (all optional)",
+      "description": "Public read-only API. No API key or secrets. You may pass an empty object; optional fields are client hints and may be ignored by the upstream server.",
+      "required": [],
+      "exampleConfig": {},
+      "properties": {
+        "default_language": {
+          "type": "string",
+          "title": "Preferred prompt language",
+          "description": "Preferred response language: 'en' for English, 'uk' for Ukrainian, 'any' for no preference. Treated as a client hint; the server may ignore it.",
+          "enum": ["en", "uk", "any"],
+          "default": "any"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

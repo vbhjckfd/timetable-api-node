@@ -16,7 +16,13 @@
       "Bash(curl -s 'https://raw.githubusercontent.com/glama-ai/mcp-servers/main/servers.json')",
       "Bash(curl -s 'https://glama.ai/api/mcp/connectors?limit=5')",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(curl -s 'https://raw.githubusercontent.com/hithereiamaliff/mcp-malaysiatransit/main/glama.json')"
+      "Bash(curl -s 'https://raw.githubusercontent.com/hithereiamaliff/mcp-malaysiatransit/main/glama.json')",
+      "WebFetch(domain:smithery.ai)",
+      "WebFetch(domain:thinkthroo.com)",
+      "Bash(curl -s \"https://smithery.ai/server/io.github.vbhjckfd/timetable-api-node\" -L -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl -s \"https://api.smithery.ai/v1/servers/io.github.vbhjckfd%2Ftimetable-api-node\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s \"https://api.lad.lviv.ua/.well-known/mcp/server-card.json\")"
     ]
   }
 }
