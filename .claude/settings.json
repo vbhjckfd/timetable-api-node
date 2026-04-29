@@ -6,7 +6,11 @@
       "Bash(gh pr *)",
       "Bash(git -C /tmp commit --allow-empty -m \"Retrigger CI\")",
       "Read(//private/tmp/**)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(gh release *)",
+      "Bash(gh issue *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

@@ -109,3 +109,4 @@ database/*
 static.zip
 
 .cursor
+.claude/settings.json
