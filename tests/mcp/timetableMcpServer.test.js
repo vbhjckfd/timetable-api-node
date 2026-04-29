@@ -118,7 +118,6 @@ afterAll(async () => {
 
 const TOOL_NAMES = [
   "get_stop_realtime",
-  "get_vehicles_by_stop",
   "get_stop_geometry",
   "get_stops_around_location",
 ];
@@ -159,9 +158,9 @@ describe("timetable MCP server", () => {
     const toolNames = tools.tools.map((tool) => tool.name);
 
     expect(toolNames).toContain("get_stop_realtime");
-    expect(toolNames).toContain("get_vehicles_by_stop");
     expect(toolNames).toContain("get_stop_geometry");
     expect(toolNames).toContain("get_stops_around_location");
+    expect(toolNames).not.toContain("get_vehicles_by_stop");
     expect(toolNames).not.toContain("get_route_dynamic");
 
     const prompts = await client.listPrompts();
@@ -194,18 +193,6 @@ describe("timetable MCP server", () => {
     expect(stopRealtimeJson.ui_blocks[1].type).toBe("arrival_list");
     expect(stopRealtimeJson.data.stop.id).toBe("1234");
     expect(stopRealtimeJson.data.arrivals[0].arrival_minutes).toBe(5);
-
-    const vehiclesByStop = await client.callTool({
-      name: "get_vehicles_by_stop",
-      arguments: {
-        stop_ids: [1234, "707"],
-      },
-    });
-    const vehiclesByStopText = vehiclesByStop.content.find((item) => item.type === "text")?.text;
-    const vehiclesByStopJson = JSON.parse(vehiclesByStopText);
-    expect(vehiclesByStopJson.ui_blocks[0].type).toBe("map");
-    expect(vehiclesByStopJson.data.stops).toHaveLength(2);
-    expect(vehiclesByStopJson.data.vehicles[0].id).toBe("vehicle-1");
 
     const stopGeometry = await client.callTool({
       name: "get_stop_geometry",

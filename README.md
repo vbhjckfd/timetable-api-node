@@ -103,7 +103,6 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 ### Exposed tools
 
 - `get_stop_realtime`
-- `get_vehicles_by_stop`
 - `get_stop_geometry`
 - `get_stops_around_location`
 
@@ -147,42 +146,6 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
       "data": { "arrivals": [] }
     }
   ]
-}
-```
-
-</details>
-
-<details>
-<summary><code>get_vehicles_by_stop</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `stop_ids` | array of positive integers and/or digits-only strings | yes |
-
-**Example result:**
-
-```json
-{
-  "view": "transit_realtime",
-  "data": {
-    "stop_ids": ["707"],
-    "stops": [{ "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 }],
-    "vehicles": [
-      {
-        "id": "tram_123",
-        "route": "T30",
-        "lat": 49.83,
-        "lng": 24.02,
-        "bearing": 120,
-        "next_stop_id": "707",
-        "eta_minutes": 4,
-        "eta_status": "assigned"
-      }
-    ]
-  },
-  "ui_blocks": [{ "type": "map", "data": { "vehicles": [] } }]
 }
 ```
 

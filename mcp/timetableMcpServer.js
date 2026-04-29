@@ -187,28 +187,6 @@ function buildUiPayload(toolName, body) {
     };
   }
 
-  if (toolName === "get_vehicles_by_stop") {
-    const vehicles = Array.isArray(payload.vehicles)
-      ? payload.vehicles.map((item, index) => toMapVehicle(item, `vehicle-${index + 1}`))
-      : [];
-    const centerStop = Array.isArray(payload.stops) && payload.stops.length > 0 ? payload.stops[0] : null;
-    return {
-      view: "transit_realtime",
-      data: payload,
-      ui_blocks: [
-        {
-          type: "map",
-          data: {
-            center: [centerStop?.lat ?? null, centerStop?.lng ?? null],
-            zoom: 14,
-            stops: payload.stops ?? [],
-            vehicles,
-          },
-        },
-      ],
-    };
-  }
-
   if (toolName === "get_stop_geometry") {
     return {
       view: "transit_realtime",
@@ -370,7 +348,7 @@ Read-only access to **public** timetable and live vehicle data for municipal tra
 ### Data notes
 
 - Times and positions come from upstream feeds; gaps or delays are possible.
-- For precise "when does my bus arrive at *this* stop", use \`get_stop_realtime\` for one stop or \`get_vehicles_by_stop\` for stop groups.
+- For precise "when does my bus arrive at *this* stop", use \`get_stop_realtime\`.
 - To show **nearby stops on a map** (names + codes around coordinates), use \`get_stops_around_location\`.
 `,
 
@@ -378,8 +356,7 @@ Read-only access to **public** timetable and live vehicle data for municipal tra
 
 | Tool | Purpose |
 |------|---------|
-| \`get_stop_realtime\` | Realtime arrivals and live vehicles for one stop; includes map + arrival-list UI blocks. |
-| \`get_vehicles_by_stop\` | Map-oriented vehicle feed across one or multiple stop IDs. |
+| \`get_stop_realtime\` | Realtime arrivals and live vehicles for a stop; includes map + arrival-list UI blocks. |
 | \`get_stop_geometry\` | Static map context for a stop (stop marker + route polylines). |
 | \`get_stops_around_location\` | Stops near lat/lon (code, name, coordinates, distance); **map** UI block with multiple markers (ChatGPT-friendly). |
 
@@ -447,9 +424,8 @@ function registerTools(server) {
     {
       title: "Get Stop Realtime",
       description:
-        "Returns live arrivals and vehicle positions for a single stop, producing both a map UI block and a structured arrival list. " +
+        "Returns live arrivals and vehicle positions for a stop, producing both a map UI block and a structured arrival list. " +
         "Use this as the **default tool** when the user asks about arrivals, departures, or vehicles at a specific stop. " +
-        "Prefer `get_vehicles_by_stop` when you need to aggregate data across **multiple stops** and only need a map (no arrival list). " +
         "Prefer `get_stop_geometry` when only static route polylines are needed and live data is irrelevant. " +
         "Requires a numeric stop ID (shown on stop signage); use `get_stops_around_location` first if you only have an address or coordinates.",
       annotations: TOOL_ANNOTATIONS,
@@ -482,88 +458,6 @@ function registerTools(server) {
       };
 
       return formatToolResult("get_stop_realtime", { statusCode: 200, body: payload });
-    },
-  );
-
-  server.registerTool(
-    "get_vehicles_by_stop",
-    {
-      title: "Get Vehicles By Stop",
-      description:
-        "Returns live vehicle positions for one or more stop IDs, optimised for map rendering. " +
-        "Use this tool when you need to show vehicles across **multiple stops** on a single map (e.g. a stop group or interchange), or when vehicle positions and ETAs are the primary output and an arrival-list is not required. " +
-        "Prefer `get_stop_realtime` for a **single stop** where you need both a map block and a structured arrival list. " +
-        "Prefer `get_stop_geometry` when you only need static route polylines without live data. " +
-        "Requires at least one numeric stop ID (visible on stop signage); call `get_stops_around_location` first if you only have coordinates.",
-      annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
-        stop_ids: z.array(zStopId()).min(1).describe("One or more stop ids to aggregate."),
-      },
-    },
-    async ({ stop_ids }) => {
-      const stopCodes = [...new Set(stop_ids.map((stopId) => normalizeStopCode(stopId)))];
-      const stops = [];
-      const vehiclesById = new Map();
-
-      for (const stopCode of stopCodes) {
-        const actionResult = await runAction(getSingleStopAction, {
-          stopCode,
-          query: { skipTimetableData: "false" },
-        });
-        if (actionResult.statusCode >= 400) {
-          return formatToolResult("get_vehicles_by_stop", actionResult);
-        }
-
-        const body = actionResult.body ?? {};
-        const stop = {
-          id: String(body.code),
-          name: body.name ?? null,
-          lat: normalizeCoordinate(body.latitude),
-          lng: normalizeCoordinate(body.longitude),
-        };
-        stops.push(stop);
-
-        const realtimeArrivals = Array.isArray(body.timetable)
-          ? body.timetable.map((item) => normalizeRealtimeArrival(item))
-          : [];
-        realtimeArrivals.forEach((arrival, index) => {
-          const vehicle = {
-            id: arrival.vehicle_id ?? `vehicle-${stop.id}-${index + 1}`,
-            route: arrival.route,
-            lat: arrival.lat,
-            lng: arrival.lng,
-            bearing: arrival.bearing,
-            next_stop_id: stop.id,
-            eta_minutes: arrival.arrival_minutes,
-          };
-          const existing = vehiclesById.get(vehicle.id);
-          if (!existing) {
-            vehiclesById.set(vehicle.id, vehicle);
-            return;
-          }
-          if (existing.eta_minutes === null && vehicle.eta_minutes !== null) {
-            vehiclesById.set(vehicle.id, vehicle);
-            return;
-          }
-          if (
-            existing.eta_minutes !== null &&
-            vehicle.eta_minutes !== null &&
-            vehicle.eta_minutes < existing.eta_minutes
-          ) {
-            vehiclesById.set(vehicle.id, vehicle);
-          }
-        });
-      }
-
-      return formatToolResult("get_vehicles_by_stop", {
-        statusCode: 200,
-        body: {
-          stop_ids: stopCodes.map(String),
-          stops,
-          vehicles: [...vehiclesById.values()],
-          updated_at: new Date().toISOString(),
-        },
-      });
     },
   );
 
@@ -640,7 +534,7 @@ function registerTools(server) {
       title: "Get Stops Around Location",
       description:
         "Discovers transit stops near a geographic point, returning each stop's numeric code, name, coordinates, and walking distance. Also emits a map UI block with multiple markers for map-capable clients (e.g. ChatGPT). " +
-        "Use this as the **first step** whenever the user provides an address, place name, or coordinates and you need stop IDs before calling `get_stop_realtime`, `get_vehicles_by_stop`, or `get_stop_geometry`. " +
+        "Use this as the **first step** whenever the user provides an address, place name, or coordinates and you need stop IDs before calling `get_stop_realtime` or `get_stop_geometry`. " +
         "Do NOT use this to fetch arrivals or live vehicle data — it returns stop metadata only. " +
         "Default radius is 1 000 m; narrow it (e.g. 300 m) for dense urban areas or widen it (up to 3 000 m) for rural locations.",
       annotations: TOOL_ANNOTATIONS,
