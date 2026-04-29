@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c ' *)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(gh pr *)",
+      "Bash(git -C /tmp commit --allow-empty -m \"Retrigger CI\")",
+      "Read(//private/tmp/**)",
+      "Bash(gh repo *)"
     ]
   }
 }

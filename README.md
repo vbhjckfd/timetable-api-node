@@ -9,6 +9,8 @@ Express-based API for Lviv transport timetable data with a read-only MCP endpoin
 
 [![vbhjckfd/timetable-api-node MCP server](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node/badges/score.svg)](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node)
 
+[![timetable-api-node MCP server](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node/badges/card.svg)](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node)
+
 ## Requirements
 
 - Node.js 22 (see `.nvmrc`)
