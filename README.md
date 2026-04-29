@@ -103,6 +103,8 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 ### Exposed tools
 
 - `get_stop_realtime`
+- `get_route_static`
+- `get_route_realtime`
 - `get_stop_geometry`
 - `get_stops_around_location`
 
@@ -148,6 +150,119 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
   ]
 }
 ```
+
+</details>
+
+<details>
+<summary><code>get_route_static</code> — input &amp; example</summary>
+
+**Arguments (JSON):**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `route_name` | route short name (e.g. `"T30"`, `"32A"`) or numeric external ID | yes |
+
+**Example result** (shape only; stops truncated for brevity):
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "route": {
+      "name": "T30",
+      "long_name": "Рясне-2 — Сихів",
+      "color": "#e81717",
+      "type": "tram"
+    },
+    "stops": [
+      [
+        { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003, "departures": ["05:30", "05:52"] },
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [] }
+      ],
+      [
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [] },
+        { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003, "departures": [] }
+      ]
+    ],
+    "shapes": [
+      [[49.841, 24.003], [49.839, 24.012], [49.838, 24.021]],
+      [[49.838, 24.021], [49.839, 24.012], [49.841, 24.003]]
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": [
+    {
+      "type": "map",
+      "data": {
+        "center": [49.841, 24.003],
+        "zoom": 13,
+        "polylines": [[[49.841, 24.003], [49.839, 24.012], [49.838, 24.021]]],
+        "stops": [
+          { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003 },
+          { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021 }
+        ],
+        "vehicles": []
+      }
+    }
+  ]
+}
+```
+
+`stops[0]` is direction 0 (outbound), `stops[1]` is direction 1 (return). `departures` is populated only for direction 0. `shapes` follows the same two-element order. The map block uses direction-0 polyline and all unique stops as markers.
+
+</details>
+
+<details>
+<summary><code>get_route_realtime</code> — input &amp; example</summary>
+
+**Arguments (JSON):**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `route_name` | route short name (e.g. `"T30"`, `"32A"`) or numeric external ID | yes |
+
+**Example result:**
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "route_name": "T30",
+    "vehicles": [
+      {
+        "id": "tram_123",
+        "direction": 0,
+        "lat": 49.838,
+        "lng": 24.021,
+        "bearing": 120,
+        "lowfloor": true
+      }
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": [
+    {
+      "type": "map",
+      "data": {
+        "center": [49.838, 24.021],
+        "zoom": 13,
+        "vehicles": [
+          {
+            "id": "tram_123",
+            "direction": 0,
+            "lat": 49.838,
+            "lng": 24.021,
+            "bearing": 120,
+            "lowfloor": true
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+`direction` matches the index into `get_route_static`'s `stops` array (0 = outbound, 1 = return). `lowfloor: true` indicates a low-floor vehicle. Returns an empty `vehicles` array when no vehicles are currently active on the route.
 
 </details>
 

@@ -6,6 +6,7 @@ import { PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import getSingleStopAction from "../actions/getSingleStopAction.js";
 import getClosestStopsAction from "../actions/getClosestStopsAction.js";
 import routeInfoStaticAction from "../actions/routeStaticInfoAction.js";
+import routeDynamicInfoAction from "../actions/routeDynamicInfoAction.js";
 
 const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
@@ -57,11 +58,49 @@ const SMITHERY_CONFIG_JSON_SCHEMA = {
   exampleConfig: { default_language: "any" },
 };
 
-const MCP_SERVER_INSTRUCTIONS = [
-  "Lviv, Ukraine public transport realtime assistant with strict UI contracts.",
-  "Always return structured JSON using ui_blocks for map and arrival list rendering.",
-  "No authentication. Stop IDs are numeric codes shown on stop signage.",
-].join(" ");
+const MCP_SERVER_INSTRUCTIONS = `\
+Lviv, Ukraine public transport assistant. Read-only. No authentication required.
+
+## Tool selection
+
+- User asks about arrivals or "when is the next bus/tram at stop X" → \`get_stop_realtime\`
+- User asks "where is route X right now" or wants live vehicle positions on a route → \`get_route_realtime\`
+- User asks which stops a route serves, wants a route map, or asks about departure times → \`get_route_static\`
+- User needs route polylines overlaid on an existing map (no live data needed) → \`get_stop_geometry\`
+- User provides an address or coordinates instead of a stop ID → \`get_stops_around_location\` first, then use the returned stop IDs
+
+## Input conventions
+
+- Stop IDs are **numeric codes** printed on physical stop signage (e.g. 707). Accept both integer and digits-only string.
+- Route names are **short names** as shown on vehicles and stops (e.g. "T30", "32A"). Numeric external IDs are also accepted.
+- Never guess a stop ID from a place name — always call \`get_stops_around_location\` first when only an address or coordinates are given.
+
+## UI contract
+
+Every tool response is a JSON object with three top-level keys:
+- \`view\` — always \`"transit_realtime"\`
+- \`data\` — the raw structured payload (use for text summaries and extraction)
+- \`ui_blocks\` — ordered rendering hints for map-capable clients; process in array order
+
+Block types:
+- \`map\` — render a map centred on \`data.center [lat, lng]\` at \`data.zoom\`. Plot \`stops\` as markers, \`vehicles\` as moving icons with \`bearing\`, \`polylines\` as route shapes.
+- \`arrival_list\` — render arrivals sorted by \`arrival_minutes\` ascending. Show \`route\`, \`direction\`, \`vehicle_type\`, and ETA. Vehicles with no ETA have \`eta_status: "unassigned"\`.
+
+Consistency rule: every vehicle shown on a map must either match an arrival in the list (by \`vehicle_id\`) or carry \`eta_status: "unassigned"\`.
+
+## Data caveats
+
+- Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
+- \`get_route_static\` departure times (\`departures\`) are only populated for direction 0 (outbound).
+- \`direction\` in \`get_route_realtime\` vehicles corresponds to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
+`;
+
+function zRouteName() {
+  return z
+    .string()
+    .min(1)
+    .describe("Route short name (e.g. \"T30\", \"32A\") or numeric external ID.");
+}
 
 function zStopId() {
   return z.union([
@@ -181,6 +220,55 @@ function buildUiPayload(toolName, body) {
           data: {
             stop: payload.stop ?? null,
             arrivals,
+          },
+        },
+      ],
+    };
+  }
+
+  if (toolName === "get_route_static") {
+    const dirStops = Array.isArray(payload.stops) ? payload.stops : [];
+    const allStops = dirStops.flat().map((s) => ({
+      id: s.id,
+      name: s.name,
+      lat: s.lat,
+      lng: s.lng,
+    }));
+    const firstStop = (dirStops[0] ?? [])[0] ?? null;
+    const shapes = Array.isArray(payload.shapes)
+      ? payload.shapes.filter((s) => Array.isArray(s) && s.length > 0)
+      : [];
+    return {
+      view: "transit_realtime",
+      data: payload,
+      ui_blocks: [
+        {
+          type: "map",
+          data: {
+            center: [firstStop?.lat ?? null, firstStop?.lng ?? null],
+            zoom: 13,
+            polylines: shapes,
+            stops: allStops,
+            vehicles: [],
+          },
+        },
+      ],
+    };
+  }
+
+  if (toolName === "get_route_realtime") {
+    const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+    const firstVehicle = vehicles[0] ?? null;
+    return {
+      view: "transit_realtime",
+      data: payload,
+      ui_blocks: [
+        {
+          type: "map",
+          data: {
+            center: [firstVehicle?.lat ?? null, firstVehicle?.lng ?? null],
+            zoom: 13,
+            vehicles,
           },
         },
       ],
@@ -337,19 +425,45 @@ function formatToolResult(toolName, actionResult) {
 const MCP_RESOURCES = {
   about: `## Lviv Timetable MCP
 
-Read-only access to **public** timetable and live vehicle data for municipal transit in **Lviv, Ukraine** (lad.lviv.ua ecosystem).
+Read-only access to **public** timetable and live vehicle data for municipal transit in **Lviv, Ukraine** (lad.lviv.ua ecosystem). No authentication required.
+
+### Tool selection
+
+| Situation | Tool |
+|-----------|------|
+| "When is the next bus/tram at stop X?" | \`get_stop_realtime\` |
+| "Where is route X right now?" / live vehicle positions on a route | \`get_route_realtime\` |
+| Which stops does a route serve? / route shape on map / departure times | \`get_route_static\` |
+| Overlay route polylines on a map (no live data needed) | \`get_stop_geometry\` |
+| Only have an address or coordinates, need a stop ID | \`get_stops_around_location\` → then use returned stop IDs |
+
+### Input conventions
+
+- **Stop IDs** are numeric codes printed on physical stop signage (e.g. \`707\`). Accept integer or digits-only string.
+- **Route names** are short names as shown on vehicles (e.g. \`"T30"\`, \`"32A"\`). Numeric external IDs also work.
+- Never guess a stop ID — call \`get_stops_around_location\` whenever only an address or coordinates are provided.
+
+### UI contract
+
+Every tool result is JSON with three keys: \`view\`, \`data\`, and \`ui_blocks\`.
+
+- \`data\` — raw structured payload; use for text summaries and value extraction.
+- \`ui_blocks\` — ordered rendering hints. Process in array order.
+  - \`map\` block: render centred on \`center [lat, lng]\` at \`zoom\`. Plot \`stops\` as markers, \`vehicles\` as directional icons, \`polylines\` as route shapes.
+  - \`arrival_list\` block: render arrivals sorted by \`arrival_minutes\` ascending. Show \`route\`, \`direction\`, \`vehicle_type\`, ETA. Missing ETA → \`eta_status: "unassigned"\`.
+- Consistency rule: every vehicle on the map must either match an arrival in the list (by \`vehicle_id\`) or have \`eta_status: "unassigned"\`.
 
 ### How to work with this server
 
-- Prefer **tools** for structured JSON from the API.
-- Use **prompts** for ready-made Ukrainian/English workflows (route status, nearby stops, slang phrasing).
-- Use **resources** (this page and siblings under \`timetable://\`) for human-readable reference without calling tools.
+- Prefer **tools** for live structured data.
+- Use **prompts** (\`transit-map-view\`, \`transit-arrival-list\`, \`transit-hybrid-view\`) for ready-made rendering workflows.
+- Use **resources** (\`timetable://about\`, \`timetable://reference/tools\`, \`timetable://reference/prompts\`) for reference without calling tools.
 
-### Data notes
+### Data caveats
 
-- Times and positions come from upstream feeds; gaps or delays are possible.
-- For precise "when does my bus arrive at *this* stop", use \`get_stop_realtime\`.
-- To show **nearby stops on a map** (names + codes around coordinates), use \`get_stops_around_location\`.
+- Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale values are expected.
+- \`get_route_static\` departure times are only populated for direction 0 (outbound).
+- \`direction\` in \`get_route_realtime\` vehicles maps to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
 `,
 
   tools: `## Tools reference
@@ -357,6 +471,8 @@ Read-only access to **public** timetable and live vehicle data for municipal tra
 | Tool | Purpose |
 |------|---------|
 | \`get_stop_realtime\` | Realtime arrivals and live vehicles for a stop; includes map + arrival-list UI blocks. |
+| \`get_route_static\` | Route metadata, stop lists for both directions, departure times, and polylines for map rendering. |
+| \`get_route_realtime\` | Live vehicle positions for all vehicles currently running on a route; map UI block. |
 | \`get_stop_geometry\` | Static map context for a stop (stop marker + route polylines). |
 | \`get_stops_around_location\` | Stops near lat/lon (code, name, coordinates, distance); **map** UI block with multiple markers (ChatGPT-friendly). |
 
@@ -458,6 +574,94 @@ function registerTools(server) {
       };
 
       return formatToolResult("get_stop_realtime", { statusCode: 200, body: payload });
+    },
+  );
+
+  server.registerTool(
+    "get_route_static",
+    {
+      title: "Get Route Static",
+      description:
+        "Returns static route metadata: short and long name, vehicle type, brand colour, ordered stop lists for both directions, and route polylines (shapes) for map rendering. " +
+        "Use when the user asks which stops a route serves, what a route looks like on a map, or what the scheduled departure times are. " +
+        "Do NOT use this when live vehicle positions are needed — use `get_route_realtime` instead. " +
+        "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID; call `get_stops_around_location` first if you only know a location and need to discover which routes serve it.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        route_name: zRouteName(),
+      },
+    },
+    async ({ route_name }) => {
+      const actionResult = await runAction(routeInfoStaticAction, {
+        params: { name: route_name },
+      });
+      if (actionResult.statusCode >= 400) {
+        return formatToolResult("get_route_static", actionResult);
+      }
+
+      const body = actionResult.body ?? {};
+      const payload = {
+        route: {
+          name: body.route_short_name ?? null,
+          long_name: body.route_long_name ?? null,
+          color: body.color ?? null,
+          type: body.type ?? null,
+        },
+        stops: (Array.isArray(body.stops) ? body.stops : []).map((dirStops) =>
+          (Array.isArray(dirStops) ? dirStops : []).map((s) => ({
+            id: String(s.code),
+            name: s.name ?? null,
+            lat: normalizeCoordinate(s.loc?.[0]),
+            lng: normalizeCoordinate(s.loc?.[1]),
+            departures: Array.isArray(s.departures) ? s.departures : [],
+          })),
+        ),
+        shapes: Array.isArray(body.shapes) ? body.shapes : [],
+        updated_at: new Date().toISOString(),
+      };
+
+      return formatToolResult("get_route_static", { statusCode: 200, body: payload });
+    },
+  );
+
+  server.registerTool(
+    "get_route_realtime",
+    {
+      title: "Get Route Realtime",
+      description:
+        "Returns live positions for all vehicles currently running on a route, optimised for map rendering. " +
+        "Use when the user asks \"where is my tram/bus right now?\" or wants to see all active vehicles on a specific route on a map. " +
+        "Prefer `get_stop_realtime` when the user is at a stop and wants to know arrival times rather than vehicle positions. " +
+        "Prefer `get_route_static` when only the route shape or stop list is needed without live data. " +
+        "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        route_name: zRouteName(),
+      },
+    },
+    async ({ route_name }) => {
+      const actionResult = await runAction(routeDynamicInfoAction, {
+        params: { name: route_name },
+      });
+      if (actionResult.statusCode >= 400) {
+        return formatToolResult("get_route_realtime", actionResult);
+      }
+
+      const rawVehicles = Array.isArray(actionResult.body) ? actionResult.body : [];
+      const payload = {
+        route_name,
+        vehicles: rawVehicles.map((v, index) => ({
+          id: v.id ?? `vehicle-${index + 1}`,
+          direction: v.direction ?? null,
+          lat: normalizeCoordinate(v.location?.[0]),
+          lng: normalizeCoordinate(v.location?.[1]),
+          bearing: normalizeBearing(v.bearing),
+          lowfloor: v.lowfloor ?? null,
+        })),
+        updated_at: new Date().toISOString(),
+      };
+
+      return formatToolResult("get_route_realtime", { statusCode: 200, body: payload });
     },
   );
 

@@ -34,6 +34,9 @@ vi.mock("../../actions/routeStaticInfoAction.js", () => ({
   default: async (req, res) => {
     res.json({
       route_short_name: req.params.name,
+      route_long_name: "Mock Long Name",
+      color: "#FF0000",
+      type: "tram",
       stops: [[], []],
       shapes: [
         [
@@ -43,6 +46,20 @@ vi.mock("../../actions/routeStaticInfoAction.js", () => ({
         [],
       ],
     });
+  },
+}));
+
+vi.mock("../../actions/routeDynamicInfoAction.js", () => ({
+  default: async (req, res) => {
+    res.json([
+      {
+        id: "vehicle-1",
+        direction: 0,
+        location: [49.841, 24.021],
+        bearing: 90,
+        lowfloor: false,
+      },
+    ]);
   },
 }));
 
@@ -118,6 +135,8 @@ afterAll(async () => {
 
 const TOOL_NAMES = [
   "get_stop_realtime",
+  "get_route_static",
+  "get_route_realtime",
   "get_stop_geometry",
   "get_stops_around_location",
 ];
@@ -158,6 +177,8 @@ describe("timetable MCP server", () => {
     const toolNames = tools.tools.map((tool) => tool.name);
 
     expect(toolNames).toContain("get_stop_realtime");
+    expect(toolNames).toContain("get_route_static");
+    expect(toolNames).toContain("get_route_realtime");
     expect(toolNames).toContain("get_stop_geometry");
     expect(toolNames).toContain("get_stops_around_location");
     expect(toolNames).not.toContain("get_vehicles_by_stop");
@@ -193,6 +214,26 @@ describe("timetable MCP server", () => {
     expect(stopRealtimeJson.ui_blocks[1].type).toBe("arrival_list");
     expect(stopRealtimeJson.data.stop.id).toBe("1234");
     expect(stopRealtimeJson.data.arrivals[0].arrival_minutes).toBe(5);
+
+    const routeStatic = await client.callTool({
+      name: "get_route_static",
+      arguments: { route_name: "T30" },
+    });
+    const routeStaticJson = JSON.parse(routeStatic.content.find((i) => i.type === "text")?.text);
+    expect(routeStaticJson.view).toBe("transit_realtime");
+    expect(routeStaticJson.ui_blocks[0].type).toBe("map");
+    expect(routeStaticJson.ui_blocks[0].data.polylines).toHaveLength(1);
+    expect(routeStaticJson.data.route.name).toBe("T30");
+
+    const routeRealtime = await client.callTool({
+      name: "get_route_realtime",
+      arguments: { route_name: "T30" },
+    });
+    const routeRealtimeJson = JSON.parse(routeRealtime.content.find((i) => i.type === "text")?.text);
+    expect(routeRealtimeJson.view).toBe("transit_realtime");
+    expect(routeRealtimeJson.ui_blocks[0].type).toBe("map");
+    expect(routeRealtimeJson.data.vehicles).toHaveLength(1);
+    expect(routeRealtimeJson.data.vehicles[0].id).toBe("vehicle-1");
 
     const stopGeometry = await client.callTool({
       name: "get_stop_geometry",
