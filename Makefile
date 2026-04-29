@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-NVM_USE := source ~/.nvm/nvm.sh && nvm use 22 --silent
+NVM_USE := source ~/.nvm/nvm.sh && nvm use --silent
 
 .PHONY: start import import-slim test build deploy clear-short-cache clear-long-cache clear-all-cache cleanup-revisions
 

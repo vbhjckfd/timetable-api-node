@@ -1,5 +1,5 @@
 # https://hub.docker.com/_/node
-FROM node:22-alpine AS BUILD_IMAGE
+FROM node:24-alpine AS build_image
 ARG CACHEBUST=1
 
 # Create and change to the app directory.
@@ -25,14 +25,14 @@ RUN apk --no-cache add curl && curl --silent --head "https://track.ua-gis.com/gt
 
 RUN node ./gtfs-import.js
 
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /usr/src/app
 
 COPY . ./
-COPY --from=BUILD_IMAGE /usr/src/app/node_modules ./node_modules
-COPY --from=BUILD_IMAGE /usr/src/app/database/Timetable ./database/Timetable
-COPY --from=BUILD_IMAGE /usr/src/app/last-modified.txt ./last-modified.txt
+COPY --from=build_image /usr/src/app/node_modules ./node_modules
+COPY --from=build_image /usr/src/app/database/Timetable ./database/Timetable
+COPY --from=build_image /usr/src/app/last-modified.txt ./last-modified.txt
 
 RUN node ./gtfs-import-slim.js
 
