@@ -447,7 +447,11 @@ function registerTools(server) {
     {
       title: "Get Stop Realtime",
       description:
-        "Returns live arrivals and vehicle positions for a stop.",
+        "Returns live arrivals and vehicle positions for a single stop, producing both a map UI block and a structured arrival list. " +
+        "Use this as the **default tool** when the user asks about arrivals, departures, or vehicles at a specific stop. " +
+        "Prefer `get_vehicles_by_stop` when you need to aggregate data across **multiple stops** and only need a map (no arrival list). " +
+        "Prefer `get_stop_geometry` when only static route polylines are needed and live data is irrelevant. " +
+        "Requires a numeric stop ID (shown on stop signage); use `get_stops_around_location` first if you only have an address or coordinates.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
         stop_id: zStopId(),
@@ -485,7 +489,12 @@ function registerTools(server) {
     "get_vehicles_by_stop",
     {
       title: "Get Vehicles By Stop",
-      description: "Returns map-oriented live vehicles for one or more stops.",
+      description:
+        "Returns live vehicle positions for one or more stop IDs, optimised for map rendering. " +
+        "Use this tool when you need to show vehicles across **multiple stops** on a single map (e.g. a stop group or interchange), or when vehicle positions and ETAs are the primary output and an arrival-list is not required. " +
+        "Prefer `get_stop_realtime` for a **single stop** where you need both a map block and a structured arrival list. " +
+        "Prefer `get_stop_geometry` when you only need static route polylines without live data. " +
+        "Requires at least one numeric stop ID (visible on stop signage); call `get_stops_around_location` first if you only have coordinates.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
         stop_ids: z.array(zStopId()).min(1).describe("One or more stop ids to aggregate."),
@@ -562,7 +571,11 @@ function registerTools(server) {
     "get_stop_geometry",
     {
       title: "Get Stop Geometry",
-      description: "Returns static map geometry for a stop and linked routes.",
+      description:
+        "Returns static map context for a stop: its marker and polylines for every route that serves it. No live data is fetched. " +
+        "Use this when you need to enrich an existing map with route shapes (e.g. overlay polylines alongside a `get_stop_realtime` map block) or when the user asks to visualise which routes pass a stop without needing live arrivals. " +
+        "Do NOT use this when live arrival times or vehicle positions are needed — use `get_stop_realtime` instead. " +
+        "Requires a numeric stop ID; call `get_stops_around_location` first if you only have coordinates.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
         stop_id: zStopId(),
@@ -626,7 +639,10 @@ function registerTools(server) {
     {
       title: "Get Stops Around Location",
       description:
-        "Lists transit stops within a radius of a point: numeric stop code, name, coordinates, and walking distance. Returns a map UI block with multiple stop markers for map-capable clients (e.g. ChatGPT).",
+        "Discovers transit stops near a geographic point, returning each stop's numeric code, name, coordinates, and walking distance. Also emits a map UI block with multiple markers for map-capable clients (e.g. ChatGPT). " +
+        "Use this as the **first step** whenever the user provides an address, place name, or coordinates and you need stop IDs before calling `get_stop_realtime`, `get_vehicles_by_stop`, or `get_stop_geometry`. " +
+        "Do NOT use this to fetch arrivals or live vehicle data — it returns stop metadata only. " +
+        "Default radius is 1 000 m; narrow it (e.g. 300 m) for dense urban areas or widen it (up to 3 000 m) for rural locations.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
         latitude: z.number().min(-90).max(90).describe("Center latitude (WGS84)."),
