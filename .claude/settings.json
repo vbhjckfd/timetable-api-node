@@ -10,7 +10,13 @@
       "Bash(gh release *)",
       "Bash(gh issue *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s 'https://glama.ai/mcp/connectors')",
+      "Bash(curl -s 'https://glama.ai/mcp/servers')",
+      "Bash(curl -s 'https://raw.githubusercontent.com/glama-ai/mcp-servers/main/servers.json')",
+      "Bash(curl -s 'https://glama.ai/api/mcp/connectors?limit=5')",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s 'https://raw.githubusercontent.com/hithereiamaliff/mcp-malaysiatransit/main/glama.json')"
     ]
   }
 }

@@ -9,6 +9,13 @@
     "url": "https://github.com/vbhjckfd/timetable-api-node",
     "source": "github"
   },
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/vbhjckfd/timetable-api-node/master/favicon.png",
+      "mimeType": "image/png",
+      "sizes": ["48x48"]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",
