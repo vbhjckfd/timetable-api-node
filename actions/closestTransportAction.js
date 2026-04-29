@@ -1,4 +1,3 @@
-import _ from "lodash";
 import { getVehiclesLocations } from "../services/microgizService.js";
 import {
   getRouteColor,
@@ -32,31 +31,22 @@ export default async (req, res, next) => {
   }
   const vehiclesRaw = await getVehiclesLocations();
 
-  const routes = _(db.getCollection("routes").find({}))
-    .keyBy("external_id")
-    .value();
+  const routes = Object.fromEntries(
+    db.getCollection("routes").find({}).map((r) => [r.external_id, r]),
+  );
 
-  const vehicles = _(vehiclesRaw)
+  const vehicles = vehiclesRaw
     .filter((i) => !!routes[i.vehicle.trip.routeId])
     .filter((i) => {
       const position = i.vehicle.position;
-
-      const dist = distanceMeters(
-        position.latitude,
-        position.longitude,
-        latitude,
-        longitude,
-      );
-
-      return dist < 1000;
-    })
-    .value();
+      return distanceMeters(position.latitude, position.longitude, latitude, longitude) < 1000;
+    });
 
   const tripsRaw = await getTrips({
     trip_id: vehicles.map((v) => v.vehicle.trip.tripId).filter((n) => n),
     service_id: await getTodayServiceIds(),
   });
-  const trips = _(tripsRaw).keyBy("trip_id").value();
+  const trips = Object.fromEntries(tripsRaw.map((t) => [t.trip_id, t]));
 
   const result = vehicles.map((i) => {
     const position = i.vehicle.position;

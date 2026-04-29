@@ -30,8 +30,6 @@ import {
   getDirectionByTrip,
   getSmapleTrips,
 } from "./utils/appHelpers.js";
-import _ from "lodash";
-
 const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
 (async () => {
@@ -257,7 +255,9 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
   console.log(`${stopPromises.length} stops processed`);
 
-  const allStops = _(stopsModels).keyBy("microgiz_id").value();
+  const allStops = Object.fromEntries(
+    stopsModels.filter(Boolean).map((s) => [s.microgiz_id, s]),
+  );
 
   const routeStopsRelatedPromises = routesCollection
     .find()
@@ -272,24 +272,21 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
       let stopsByShape = {};
       for (const key of [0, 1]) {
-        stopsByShape[String(key)] = _(stopTimes)
+        stopsByShape[String(key)] = stopTimes
           .filter((data) => routeModel.trip_direction_map[data.trip_id] == key)
           .filter((st) => !globalIgnoreStopList.includes(st.stop_id))
-          .map((st) =>
-            allStops[st.stop_id] ? allStops[st.stop_id].code : null,
-          )
-          .filter((st) => !!st)
-          .value();
+          .map((st) => (allStops[st.stop_id] ? allStops[st.stop_id].code : null))
+          .filter((st) => !!st);
       }
 
       for (const key of ["0", "1"]) {
         const otherShapeStops = stopsByShape[String(Math.abs(key - 1))];
 
         if (!stopsByShape[key][0]) {
-          stopsByShape[key][0] = _(otherShapeStops).last();
+          stopsByShape[key][0] = otherShapeStops.at(-1);
         }
 
-        if (!_(stopsByShape[key]).last()) {
+        if (!stopsByShape[key].at(-1)) {
           stopsByShape[key].pop();
           stopsByShape[key].push(otherShapeStops[0]);
         }
@@ -298,8 +295,8 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       for (const key of ["0", "1"]) {
         const otherShapeStops = stopsByShape[String(Math.abs(key - 1))];
 
-        const lastStopOfThisShape = _(stopsByShape[key]).last();
-        const firstStopOfOtherShape = _(otherShapeStops).first();
+        const lastStopOfThisShape = stopsByShape[key].at(-1);
+        const firstStopOfOtherShape = otherShapeStops[0];
         if (lastStopOfThisShape !== firstStopOfOtherShape) {
           stopsByShape[key].push(firstStopOfOtherShape);
         }
@@ -316,16 +313,13 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
         [["departure_time", "ASC"]],
       );
 
-      routeModel.stop_departure_time_map = _(allStopTimes)
-        .groupBy("stop_id")
-        .mapValues((t) =>
-          _(t)
-            .map("departure_time")
-            .map((t) => t.slice(0, 5))
-            .uniq()
-            .value(),
-        )
-        .value();
+      const grouped = Object.groupBy(allStopTimes, (t) => t.stop_id);
+      routeModel.stop_departure_time_map = Object.fromEntries(
+        Object.entries(grouped).map(([stopId, times]) => [
+          stopId,
+          [...new Set(times.map((t) => t.departure_time.slice(0, 5)))],
+        ]),
+      );
 
       routesCollection.update(routeModel);
 

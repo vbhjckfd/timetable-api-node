@@ -1,4 +1,3 @@
-import _ from "lodash";
 import {
   normalizeRouteName,
   getRouteColor,
@@ -18,22 +17,17 @@ export default async (req, res, next) => {
 
   if (routeLocal.shapes.size < 2) return res.sendStatus(500);
 
-  const allStops = _(
-    db.getCollection("stops").find({
-      code: {
-        $in: Object.values(routeLocal.stops_by_shape).flat(),
-      },
-    }),
-  )
-    .keyBy("code")
-    .value();
+  const stopsArr = db.getCollection("stops").find({
+    code: { $in: Object.values(routeLocal.stops_by_shape).flat() },
+  });
+  const allStops = Object.fromEntries(stopsArr.map((s) => [s.code, s]));
 
   const stopsByShape = [];
 
   for (const key of [0, 1]) {
-    const orderedStopCodes = _(routeLocal.stops_by_shape[String(key)])
-      .filter((st) => !!allStops[st])
-      .value();
+    const orderedStopCodes = routeLocal.stops_by_shape[String(key)].filter(
+      (st) => !!allStops[st],
+    );
 
     const mappedStops = orderedStopCodes.map((stopCode) => {
       const stop = allStops[stopCode];
@@ -46,7 +40,7 @@ export default async (req, res, next) => {
       };
     });
 
-    const terminusStop = _(mappedStops).last();
+    const terminusStop = mappedStops.at(-1);
     const departures = terminusStop
       ? routeLocal.stop_departure_time_map[terminusStop.microgiz_id] ?? []
       : [];

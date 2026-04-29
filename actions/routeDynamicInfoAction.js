@@ -1,4 +1,3 @@
-import _ from "lodash";
 import { getVehiclesLocations } from "../services/microgizService.js";
 import {
   normalizeRouteName,
@@ -19,7 +18,7 @@ export default async (req, res, next) => {
 
   const tripDirectionMap = routeLocal.trip_direction_map;
 
-  const vehicles = _(await getVehiclesLocations()).filter((entity) => {
+  const vehicles = (await getVehiclesLocations()).filter((entity) => {
     return (
       entity.vehicle.trip.routeId == routeLocal.external_id &&
       !!entity.vehicle.trip.tripId
@@ -28,13 +27,10 @@ export default async (req, res, next) => {
   // .filter(e => tripDirectionMap.hasOwnProperty(e.vehicle.trip.tripId.toString()))
 
   const tripsRaw = await getTrips({
-    trip_id: vehicles
-      .map((v) => v.vehicle.trip.tripId)
-      .filter((n) => n)
-      .value(),
+    trip_id: vehicles.map((v) => v.vehicle.trip.tripId).filter((n) => n),
     service_id: await getTodayServiceIds(),
   });
-  const trips = _(tripsRaw).keyBy("trip_id").value();
+  const trips = Object.fromEntries(tripsRaw.map((t) => [t.trip_id, t]));
 
   const result = vehicles.map((i) => {
     const position = i.vehicle.position;

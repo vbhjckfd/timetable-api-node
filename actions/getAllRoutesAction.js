@@ -1,5 +1,4 @@
 import db from "../connections/timetableSqliteDb.js";
-import _ from "lodash";
 import { escapeHtml } from "../utils/appHelpers.js";
 
 export default async (req, res, next) => {
@@ -31,19 +30,14 @@ export default async (req, res, next) => {
         <table>
     `;
   for (let r of routesRaw) {
-    const allStops = _(
-      db.getCollection("stops").find({
-        code: {
-          $in: Object.values(r.stops_by_shape).flat(),
-        },
-      }),
-    )
-      .keyBy("code")
-      .value();
+    const stopsArr = db.getCollection("stops").find({
+      code: { $in: Object.values(r.stops_by_shape).flat() },
+    });
+    const allStops = Object.fromEntries(stopsArr.map((s) => [s.code, s]));
 
     let stopsByShape = [];
     for (const key of [0, 1]) {
-      stopsByShape[key] = _(r.stops_by_shape[String(key)])
+      stopsByShape[key] = r.stops_by_shape[String(key)]
         .filter((st) => !!allStops[st])
         .map((st) => allStops[st])
         .map((s) => ({ code: s.code, name: s.name }))
@@ -51,7 +45,6 @@ export default async (req, res, next) => {
           (s) =>
             `<li>${escapeHtml(s.name)} (<a target="_blank" href="https://lad.lviv.ua/${s.code}">${s.code}</a>)</li>`,
         )
-        .value()
         .join("");
     }
 

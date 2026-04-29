@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import path from "path";
+const __dirname = import.meta.dirname;
 const PORT = process.env.PORT || 8080;
 
 import { openDb } from "gtfs";
@@ -29,7 +30,6 @@ import {
   handleMcpPostRequest,
 } from "./mcp/timetableMcpServer.js";
 
-const __dirname = path.resolve();
 const app = express();
 
 app.use(cors());

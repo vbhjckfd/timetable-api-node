@@ -1,4 +1,3 @@
-import _ from "lodash";
 import {
   normalizeRouteName,
   shapes_by_direction,
@@ -19,22 +18,17 @@ export default async (req, res, next) => {
 
   if (routeLocal.shapes.size < 2) return res.sendStatus(500);
 
-  const allStops = _(
-    db.getCollection("stops").find({
-      code: {
-        $in: Object.values(routeLocal.stops_by_shape).flat(),
-      },
-    }),
-  )
-    .keyBy("code")
-    .value();
+  const stopsArr = db.getCollection("stops").find({
+    code: { $in: Object.values(routeLocal.stops_by_shape).flat() },
+  });
+  const allStops = Object.fromEntries(stopsArr.map((s) => [s.code, s]));
 
   let stopsByShape = [];
 
   let shapes = shapes_by_direction(routeLocal);
 
   for (const key of [0, 1]) {
-    stopsByShape[key] = _(routeLocal.stops_by_shape[String(key)])
+    stopsByShape[key] = routeLocal.stops_by_shape[String(key)]
       .filter((st) => !!allStops[st])
       .map((st) => allStops[st])
       .map((s, index) => {
@@ -63,8 +57,7 @@ export default async (req, res, next) => {
           transfers: transfers,
           departures: departures,
         };
-      })
-      .value();
+      });
   }
 
   //if (shapes.some((i) => {return !i.length})) return res.sendStatus(500);

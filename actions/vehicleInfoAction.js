@@ -1,4 +1,3 @@
-import _ from "lodash";
 import db from "../connections/timetableSqliteDb.js";
 import {
   getVehiclesLocations,
@@ -11,30 +10,25 @@ export default async (req, res, next) => {
     getArrivalTimes(),
   ]);
 
-  let vehiclePosition = _(vehiclePositionRaw).find(
+  let vehiclePosition = vehiclePositionRaw.find(
     (entity) => entity.vehicle.vehicle.id == req.params.vehicleId,
   );
   if (!vehiclePosition) return res.sendStatus(404);
   vehiclePosition = vehiclePosition.vehicle;
 
-  let arrivalTimes = _(arrivalTimeItemsRaw)
+  let arrivalTimes = arrivalTimeItemsRaw
     .filter((e) => e.tripUpdate.vehicle.id == req.params.vehicleId)
-    .map((e) => e.tripUpdate.stopTimeUpdate)
-    .flatten()
-    .sortBy((i) => i.stopSequence)
-    .value();
+    .flatMap((e) => e.tripUpdate.stopTimeUpdate)
+    .sort((a, b) => a.stopSequence - b.stopSequence);
 
   const stopIds = arrivalTimes.map((i) => i.stopId);
 
-  const stopIdsMap = _(
-    db.getCollection("stops").find({
-      microgiz_id: {
-        $in: stopIds,
-      },
-    }),
-  )
-    .keyBy("microgiz_id")
-    .value();
+  const stopIdsMap = Object.fromEntries(
+    db
+      .getCollection("stops")
+      .find({ microgiz_id: { $in: stopIds } })
+      .map((s) => [s.microgiz_id, s]),
+  );
 
   arrivalTimes = arrivalTimes.filter((item) => !!stopIdsMap[item.stopId]);
 

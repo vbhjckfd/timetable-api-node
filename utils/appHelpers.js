@@ -1,5 +1,4 @@
 import { getShapes, getTrips, getCalendars } from "gtfs";
-import _ from "lodash";
 
 export function escapeHtml(str) {
   return String(str)
@@ -270,14 +269,13 @@ export async function getMostPopularShapes(routeId) {
 
   const shapeIdsStat = trips.map((t) => t.shape_id);
 
-  return _(shapeIdsStat)
-    .countBy()
-    .entries()
-    .orderBy(_.last)
-    .takeRight(2)
-    .map(_.head)
-    .sort()
-    .value();
+  const counts = new Map();
+  for (const id of shapeIdsStat) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .slice(-2)
+    .map(([id]) => id)
+    .sort();
 }
 
 export function getRouteColor(routeName) {

@@ -1,5 +1,4 @@
 import { getTrips } from "gtfs";
-import _ from "lodash";
 import {
   formatRouteName,
   getRouteColor,
@@ -25,7 +24,7 @@ const stopArrivalService = {
       getVehiclesLocations(),
     ]);
 
-    const routesByRouteId = _(allRoutesRaw).keyBy("external_id").value();
+    const routesByRouteId = Object.fromEntries(allRoutesRaw.map((r) => [r.external_id, r]));
 
     const closestVehicles = closestVehiclesRaw
       .filter((entity) => {
@@ -57,17 +56,18 @@ const stopArrivalService = {
       service_id: await getTodayServiceIds(),
     });
 
-    const trips = _(tripsRaw).keyBy("trip_id").value();
+    const trips = Object.fromEntries((tripsRaw ?? []).map((t) => [t.trip_id, t]));
 
     const vehiclesIds = closestVehicles.map((v) => v.vehicle);
-    const vehiclesLocations = _(vehiclesLocationsRaw)
-      .filter((entity) => vehiclesIds.includes(entity.vehicle.vehicle.id))
-      .value();
+    const vehiclesLocations = vehiclesLocationsRaw.filter((entity) =>
+      vehiclesIds.includes(entity.vehicle.vehicle.id),
+    );
     const result = closestVehicles.map((vh) => {
       let routeInfoRaw = stop.transfers.find((i) => i.id == vh.route_id);
       let routeInfo = {};
       if (routeInfoRaw) {
-        routeInfo = _.omit(routeInfoRaw, ["_id", "id"]);
+        const { _id, id, ...rest } = routeInfoRaw;
+        routeInfo = rest;
       } else {
         const routeObj = routesByRouteId[vh.route_id];
         if (!routeObj) {
@@ -83,8 +83,7 @@ const stopArrivalService = {
         };
       }
 
-      const vehicleLocation = _.find(
-        vehiclesLocations,
+      const vehicleLocation = vehiclesLocations.find(
         (entity) => entity.vehicle.vehicle.id == vh.vehicle,
       );
       const position = vehicleLocation.vehicle.position;
