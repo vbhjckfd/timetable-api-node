@@ -103,17 +103,21 @@ function zRouteName() {
 }
 
 function zStopId() {
-  return z.union([
-    z
-      .number()
-      .int()
-      .positive()
-      .describe("Numeric municipal stop code (e.g. 707)."),
-    z
-      .string()
-      .regex(/^\d+$/)
-      .describe("Municipal stop code as digits-only string (e.g. \"707\")."),
-  ]);
+  return z
+    .union([
+      z
+        .number()
+        .int()
+        .positive()
+        .describe("Positive integer stop code (e.g. 707)."),
+      z
+        .string()
+        .regex(/^\d+$/)
+        .describe("Stop code as a digits-only string (e.g. \"707\")."),
+    ])
+    .describe(
+      "Municipal stop code shown on stop signage (e.g. 707). Accepts a positive integer or an equivalent digit-only string.",
+    );
 }
 
 function normalizeStopCode(stopId) {
@@ -743,15 +747,25 @@ function registerTools(server) {
         "Default radius is 1 000 m; narrow it (e.g. 300 m) for dense urban areas or widen it (up to 3 000 m) for rural locations.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        latitude: z.number().min(-90).max(90).describe("Center latitude (WGS84)."),
-        longitude: z.number().min(-180).max(180).describe("Center longitude (WGS84)."),
+        latitude: z
+          .number()
+          .min(-90)
+          .max(90)
+          .describe("Decimal latitude of the search centre, WGS84 (e.g. 49.842 for central Lviv)."),
+        longitude: z
+          .number()
+          .min(-180)
+          .max(180)
+          .describe("Decimal longitude of the search centre, WGS84 (e.g. 24.031 for central Lviv)."),
         radius_meters: z
           .number()
           .int()
           .min(50)
           .max(3000)
           .optional()
-          .describe("Search radius in meters (default 1000; same cap as the public /closest API)."),
+          .describe(
+            "Search radius in metres (50–3000, default 1000). Use ~300 for dense urban intersections, up to 3000 for suburban or rural areas.",
+          ),
       },
     },
     async ({ latitude, longitude, radius_meters }) => {

@@ -3,6 +3,13 @@
 # repo is linked to a Smithery listing: it supplies configSchema for the install UI and
 # for quality checks. Live endpoint: https://api.lad.lviv.ua/mcp (Streamable HTTP).
 
+description: >
+  Lviv (Ukraine) public transport MCP server — live arrivals, vehicle positions, stop discovery,
+  route shapes, and static timetables. No API key required. Tools: get_stop_realtime,
+  get_stop_geometry, get_stops_around_location, get_route_static, get_route_realtime.
+homepage: https://lad.lviv.ua
+icon: https://raw.githubusercontent.com/vbhjckfd/timetable-api-node/master/mcp/mcp-icon.svg
+
 startCommand:
   type: http
   configSchema:
@@ -17,7 +24,7 @@ startCommand:
       default_language:
         type: string
         title: "Preferred prompt language"
-        description: "Optional: prefer English, Ukrainian, or any prompt templates (informational only)."
+        description: "Preferred response language: 'en' for English, 'uk' for Ukrainian, 'any' for no preference. Treated as a client hint; the server may ignore it."
         enum: [en, uk, any]
         default: any
     additionalProperties: false
