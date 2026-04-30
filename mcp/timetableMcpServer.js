@@ -120,6 +120,80 @@ function zStopId() {
     );
 }
 
+const zCoord = z.number().nullable();
+const zStopObj = z.object({ id: z.string(), name: z.string().nullable(), lat: zCoord, lng: zCoord });
+const zArrivalObj = z.object({
+  route: z.string().nullable(),
+  direction: z.string().nullable(),
+  vehicle_type: z.string().nullable(),
+  arrival_minutes: z.number().int().nullable(),
+  vehicle_id: z.string().nullable(),
+  lat: zCoord,
+  lng: zCoord,
+  bearing: z.number().nullable(),
+});
+const zMapVehicleObj = z.object({
+  id: z.string(),
+  route: z.string().nullable(),
+  lat: zCoord,
+  lng: zCoord,
+  bearing: z.number().nullable(),
+  next_stop_id: z.string().nullable(),
+  eta_minutes: z.number().int().nullable(),
+  eta_status: z.enum(["assigned", "unassigned"]),
+});
+const zCenter = z.tuple([zCoord, zCoord]);
+
+const OUTPUT_SCHEMAS = {
+  get_stop_realtime: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({ stop: zStopObj, arrivals: z.array(zArrivalObj), updated_at: z.string() }),
+    ui_blocks: z.array(z.discriminatedUnion("type", [
+      z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), stop: zStopObj.nullable(), vehicles: z.array(zMapVehicleObj) }) }),
+      z.object({ type: z.literal("arrival_list"), data: z.object({ stop: zStopObj.nullable(), arrivals: z.array(zArrivalObj) }) }),
+    ])),
+  }),
+  get_route_static: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      route: z.object({ name: z.string().nullable(), long_name: z.string().nullable(), color: z.string().nullable(), type: z.string().nullable() }),
+      stops: z.array(z.array(zStopObj.extend({ departures: z.array(z.string()) }))),
+      shapes: z.array(z.array(z.array(z.number()))),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), polylines: z.array(z.array(z.array(z.number()))), stops: z.array(zStopObj), vehicles: z.array(zMapVehicleObj) }) })),
+  }),
+  get_route_realtime: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      route_name: z.string(),
+      vehicles: z.array(z.object({ id: z.string(), direction: z.unknown(), lat: zCoord, lng: zCoord, bearing: z.number().nullable(), lowfloor: z.unknown() })),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), vehicles: z.array(z.object({ id: z.string(), direction: z.unknown(), lat: zCoord, lng: zCoord, bearing: z.number().nullable(), lowfloor: z.unknown() })) }) })),
+  }),
+  get_stop_geometry: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      stop: zStopObj,
+      routes: z.array(z.object({ route: z.string(), polyline: z.array(z.array(z.number())) })),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), stop: zStopObj.nullable(), routes: z.array(z.object({ route: z.string(), polyline: z.array(z.array(z.number())) })), vehicles: z.array(zMapVehicleObj) }) })),
+  }),
+  get_stops_around_location: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      center_lat: zCoord,
+      center_lng: zCoord,
+      radius_meters: z.number(),
+      stops: z.array(zStopObj.extend({ distance_meters: z.number().nullable() })),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), stops: z.array(zStopObj.extend({ distance_meters: z.number().nullable() })), vehicles: z.array(zMapVehicleObj) }) })),
+  }),
+};
+
 function normalizeStopCode(stopId) {
   const parsed = Number.parseInt(String(stopId), 10);
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -416,11 +490,13 @@ function formatToolResult(toolName, actionResult) {
     };
   }
 
+  const structured = buildUiPayload(toolName, body);
   return {
+    structuredContent: structured,
     content: [
       {
         type: "text",
-        text: JSON.stringify(buildUiPayload(toolName, body), null, 2),
+        text: JSON.stringify(structured, null, 2),
       },
     ],
   };
@@ -549,9 +625,8 @@ function registerTools(server) {
         "Prefer `get_stop_geometry` when only static route polylines are needed and live data is irrelevant. " +
         "Requires a numeric stop ID (shown on stop signage); use `get_stops_around_location` first if you only have an address or coordinates.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
-        stop_id: zStopId(),
-      },
+      inputSchema: { stop_id: zStopId() },
+      outputSchema: OUTPUT_SCHEMAS.get_stop_realtime,
     },
     async ({ stop_id }) => {
       const stopCode = normalizeStopCode(stop_id);
@@ -591,9 +666,8 @@ function registerTools(server) {
         "Do NOT use this when live vehicle positions are needed — use `get_route_realtime` instead. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID; call `get_stops_around_location` first if you only know a location and need to discover which routes serve it.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
-        route_name: zRouteName(),
-      },
+      inputSchema: { route_name: zRouteName() },
+      outputSchema: OUTPUT_SCHEMAS.get_route_static,
     },
     async ({ route_name }) => {
       const actionResult = await runAction(routeInfoStaticAction, {
@@ -639,9 +713,8 @@ function registerTools(server) {
         "Prefer `get_route_static` when only the route shape or stop list is needed without live data. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
-        route_name: zRouteName(),
-      },
+      inputSchema: { route_name: zRouteName() },
+      outputSchema: OUTPUT_SCHEMAS.get_route_realtime,
     },
     async ({ route_name }) => {
       const actionResult = await runAction(routeDynamicInfoAction, {
@@ -679,9 +752,8 @@ function registerTools(server) {
         "Do NOT use this when live arrival times or vehicle positions are needed — use `get_stop_realtime` instead. " +
         "Requires a numeric stop ID; call `get_stops_around_location` first if you only have coordinates.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
-        stop_id: zStopId(),
-      },
+      inputSchema: { stop_id: zStopId() },
+      outputSchema: OUTPUT_SCHEMAS.get_stop_geometry,
     },
     async ({ stop_id }) => {
       const stopCode = normalizeStopCode(stop_id);
@@ -767,6 +839,7 @@ function registerTools(server) {
             "Search radius in metres (50–3000, default 1000). Use ~300 for dense urban intersections, up to 3000 for suburban or rural areas.",
           ),
       },
+      outputSchema: OUTPUT_SCHEMAS.get_stops_around_location,
     },
     async ({ latitude, longitude, radius_meters }) => {
       const query = {
