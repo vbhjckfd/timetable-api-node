@@ -7,6 +7,7 @@
 
 Express-based API for Lviv transport timetable data with a read-only MCP endpoint.
 
+[![smithery badge](https://smithery.ai/badge/@vbhjckfd/lad-lviv-ua)](https://smithery.ai/servers/vbhjckfd/lad-lviv-ua)
 [![vbhjckfd/timetable-api-node MCP server](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node/badges/score.svg)](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node)
 
 [![timetable-api-node MCP server](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node/badges/card.svg)](https://glama.ai/mcp/servers/vbhjckfd/timetable-api-node)
