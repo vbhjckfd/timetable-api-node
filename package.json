@@ -1,6 +1,6 @@
 {
   "name": "timetable-api-cloud-func",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lviv (Ukraine) public transport REST API and read-only Model Context Protocol (MCP) server: stops, timetables, routes, live vehicle positions, GTFS/GTFS-RT. No API key required.",
   "main": "index.js",
   "type": "module",
