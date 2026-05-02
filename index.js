@@ -52,6 +52,12 @@ app.get("/transport", closestTransportAction);
 
 app.get("/sitemap.xml", sitemapAction);
 
+app.get("/openapi.yaml", (req, res) => {
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  res.type("application/yaml");
+  res.sendFile(path.join(__dirname, "openapi.yaml"));
+});
+
 app.get("/ping", (req, res) => {
   res.json({});
 });

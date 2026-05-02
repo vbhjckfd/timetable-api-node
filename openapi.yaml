@@ -1,0 +1,593 @@
+openapi: 3.0.0
+info:
+  title: Lviv Public Transport API
+  description: >
+    Real-time and static data for public transport in Lviv, Ukraine.
+    Provides stop arrivals, vehicle positions, route schedules, and nearby
+    transit lookups backed by GTFS-RT feeds from Microgiz.
+  version: 1.1.0
+  contact:
+    url: https://lad.lviv.ua
+
+servers:
+  - url: https://api.lad.lviv.ua
+    description: Production server
+
+paths:
+  /stops/{code}/timetable:
+    get:
+      operationId: getArrivalsByStopCode
+      summary: Real-time arrivals at a stop
+      description: >
+        Returns upcoming vehicle arrivals at the stop identified by its
+        numeric code. Data is sourced from live GTFS-RT feeds and refreshes
+        every 5–10 seconds.
+      parameters:
+        - $ref: '#/components/parameters/stopCode'
+      responses:
+        '200':
+          description: Array of upcoming arrivals, sorted by arrival time.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Arrival'
+        '404':
+          description: Stop not found.
+
+  /stops/{code}/static:
+    get:
+      operationId: getStopStaticData
+      summary: Static stop info (no real-time data)
+      description: >
+        Returns name, coordinates, and connecting routes for a stop.
+        Cached for up to 30 days — use this when real-time arrivals are
+        not needed.
+      parameters:
+        - $ref: '#/components/parameters/stopCode'
+      responses:
+        '200':
+          description: Static stop metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopStatic'
+        '404':
+          description: Stop not found.
+
+  /stops/{code}:
+    get:
+      operationId: getStop
+      summary: Stop info with optional real-time timetable
+      description: >
+        Returns stop metadata and, by default, live arrivals. Pass
+        `skipTimetableData=true` to get only static data (faster, heavily
+        cached).
+      parameters:
+        - $ref: '#/components/parameters/stopCode'
+        - name: skipTimetableData
+          in: query
+          description: Set to `true` to skip real-time arrivals and return only static stop data.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Stop data with optional timetable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopWithTimetable'
+        '404':
+          description: Stop not found.
+
+  /closest:
+    get:
+      operationId: getClosestStops
+      summary: Stops near a coordinate
+      description: >
+        Returns all stops within `radius` metres of the given coordinates,
+        sorted by distance. Use this to find stop codes when you only know
+        an address or GPS position.
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          description: WGS-84 latitude (−90 to 90).
+          schema:
+            type: number
+            format: double
+        - name: longitude
+          in: query
+          required: true
+          description: WGS-84 longitude (−180 to 180).
+          schema:
+            type: number
+            format: double
+        - name: radius
+          in: query
+          description: Search radius in metres. Clamped to 50–3000. Default 1000.
+          schema:
+            type: integer
+            default: 1000
+            minimum: 50
+            maximum: 3000
+      responses:
+        '200':
+          description: Stops sorted by distance from the given point.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StopNearby'
+        '400':
+          description: Invalid coordinates.
+
+  /routes/static/{name}:
+    get:
+      operationId: getRouteStaticInfo
+      summary: Static route schedule and shape
+      description: >
+        Returns the route's stop lists for both directions, their coordinates,
+        connecting transfers, first-stop departure times, and the polyline
+        shapes. Cached for up to 30 days.
+      parameters:
+        - $ref: '#/components/parameters/routeName'
+      responses:
+        '200':
+          description: Full static route data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteStatic'
+        '404':
+          description: Route not found.
+
+  /routes/dynamic/{name}:
+    get:
+      operationId: getRouteVehiclePositions
+      summary: Live vehicle positions on a route
+      description: >
+        Returns the current GPS positions of all active vehicles on the
+        specified route, with direction and low-floor flag.
+      parameters:
+        - $ref: '#/components/parameters/routeName'
+      responses:
+        '200':
+          description: Array of vehicle positions on this route.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RouteVehicle'
+        '404':
+          description: Route not found.
+
+  /vehicle/{vehicleId}:
+    get:
+      operationId: getVehicleInfo
+      summary: Single vehicle position and upcoming stop arrivals
+      description: >
+        Returns the current GPS position, route, direction, and the full
+        remaining stop sequence with predicted arrival/departure times for
+        a specific vehicle.
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          description: Vehicle identifier (from timetable or route dynamic data).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vehicle position and upcoming arrivals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleInfo'
+        '404':
+          description: Vehicle not currently active.
+
+  /transport:
+    get:
+      operationId: getNearbyTransport
+      summary: Vehicles currently within 1 km of a coordinate
+      description: >
+        Returns all active vehicles within 1 kilometre of the given
+        coordinate, regardless of route. Useful for a "what's passing near
+        me right now" query.
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          description: WGS-84 latitude (−90 to 90).
+          schema:
+            type: number
+            format: double
+        - name: longitude
+          in: query
+          required: true
+          description: WGS-84 longitude (−180 to 180).
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: Nearby active vehicles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NearbyVehicle'
+        '400':
+          description: Invalid coordinates.
+
+  /stops.json:
+    get:
+      operationId: getAllStops
+      summary: Full stop list
+      description: Returns every stop in the network with its code, name, location, and served routes.
+      responses:
+        '200':
+          description: Array of all stops.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StopSummary'
+
+  /routes.json:
+    get:
+      operationId: getAllRoutes
+      summary: Full route list
+      description: Returns every route in the network with all internal fields.
+      responses:
+        '200':
+          description: Array of all routes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  description: Raw route record from the internal database.
+
+components:
+  parameters:
+    stopCode:
+      name: code
+      in: path
+      required: true
+      description: Numeric stop code printed on physical stop signage (e.g. 707).
+      schema:
+        type: integer
+
+    routeName:
+      name: name
+      in: path
+      required: true
+      description: >
+        Route short name as shown on vehicles (e.g. `5`, `32А`, `T30`), or
+        the numeric external route ID.
+      schema:
+        type: string
+
+  schemas:
+    Transfer:
+      type: object
+      description: A connecting route available at a stop.
+      properties:
+        route:
+          type: string
+          description: Route short name (e.g. "32А").
+          example: "32А"
+        vehicle_type:
+          type: string
+          enum: [bus, tram, trolleybus]
+        color:
+          type: string
+          description: Hex colour for map rendering (e.g. "#E31E30").
+          example: "#E31E30"
+        shape_id:
+          type: string
+
+    Arrival:
+      type: object
+      description: A single upcoming vehicle arrival at a stop.
+      properties:
+        route_id:
+          type: string
+          description: Internal route identifier.
+        route:
+          type: string
+          description: Route short name shown to passengers.
+          example: "5"
+        vehicle_type:
+          type: string
+          enum: [bus, tram, trolleybus]
+        color:
+          type: string
+          description: Hex colour for map rendering.
+          example: "#E31E30"
+        lowfloor:
+          type: boolean
+          description: True if the vehicle is low-floor (accessible).
+        end_stop:
+          type: string
+          description: Headsign / final stop name.
+        arrival_time:
+          type: string
+          description: Predicted arrival in UTC string format.
+          example: "Fri, 02 May 2025 14:35:00 GMT"
+        time_left:
+          type: string
+          description: Human-readable wait time in Ukrainian (e.g. "3 хв").
+          example: "3 хв"
+        vehicle_id:
+          type: string
+          description: Vehicle identifier (usable with /vehicle/{vehicleId}).
+        location:
+          type: array
+          description: "[latitude, longitude] of the vehicle."
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        bearing:
+          type: number
+          description: Vehicle heading in degrees (0 = north).
+        direction:
+          type: integer
+          description: Route direction index (0 or 1).
+          enum: [0, 1]
+
+    StopStatic:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Numeric stop code.
+          example: 707
+        name:
+          type: string
+          description: Ukrainian stop name.
+          example: "Площа Ринок"
+        eng_name:
+          type: string
+          description: English transliteration of the stop name.
+          example: "Rynok Square"
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
+        wikipedia:
+          type: string
+          description: Wikipedia URL for notable stops (optional).
+
+    StopWithTimetable:
+      allOf:
+        - $ref: '#/components/schemas/StopStatic'
+        - type: object
+          properties:
+            timetable:
+              type: array
+              items:
+                $ref: '#/components/schemas/Arrival'
+
+    StopNearby:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 707
+        name:
+          type: string
+          example: "Площа Ринок"
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        distance_meters:
+          type: integer
+          description: Distance from the queried point in metres.
+          example: 150
+
+    StopSummary:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 707
+        name:
+          type: string
+        eng_name:
+          type: string
+        location:
+          type: array
+          description: "[latitude, longitude]"
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        routes:
+          type: array
+          description: Short names of routes serving this stop.
+          items:
+            type: string
+        sign:
+          type: string
+          description: URL to the SVG timetable sign for this stop.
+        sign_pdf:
+          type: string
+          description: URL to the PDF timetable sign for this stop.
+
+    RouteStop:
+      type: object
+      properties:
+        code:
+          type: integer
+        name:
+          type: string
+        loc:
+          type: array
+          description: "[latitude, longitude]"
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
+        departures:
+          type: array
+          description: Scheduled departure times from the first stop (HH:MM strings, only populated for direction 0 first stop).
+          items:
+            type: string
+
+    RouteStatic:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Internal route ID.
+        route_short_name:
+          type: string
+          example: "32А"
+        route_long_name:
+          type: string
+          example: "вул. Зелена — вул. Городоцька"
+        type:
+          type: string
+          enum: [bus, tram, trolleybus]
+        color:
+          type: string
+          example: "#E31E30"
+        stops:
+          type: array
+          description: Two-element array — stops for direction 0 and direction 1.
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/RouteStop'
+          minItems: 2
+          maxItems: 2
+        shapes:
+          type: array
+          description: Two-element array of polylines — one per direction. Each polyline is an array of [lat, lon] pairs.
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: number
+              minItems: 2
+              maxItems: 2
+          minItems: 2
+          maxItems: 2
+
+    RouteVehicle:
+      type: object
+      description: A vehicle actively running on a route.
+      properties:
+        id:
+          type: string
+          description: Vehicle identifier.
+        direction:
+          type: integer
+          enum: [0, 1]
+        location:
+          type: array
+          description: "[latitude, longitude]"
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        bearing:
+          type: number
+        lowfloor:
+          type: boolean
+
+    VehicleArrival:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Stop code.
+        arrival:
+          type: string
+          nullable: true
+          description: Predicted arrival time in UTC string format.
+        departure:
+          type: string
+          nullable: true
+          description: Predicted departure time in UTC string format.
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
+
+    VehicleInfo:
+      type: object
+      properties:
+        location:
+          type: array
+          description: "[latitude, longitude]"
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        routeId:
+          type: string
+        bearing:
+          type: number
+        direction:
+          type: integer
+          enum: [0, 1]
+        licensePlate:
+          type: string
+          nullable: true
+        arrivals:
+          type: array
+          description: Remaining stops with predicted times.
+          items:
+            $ref: '#/components/schemas/VehicleArrival'
+
+    NearbyVehicle:
+      type: object
+      properties:
+        id:
+          type: string
+        route:
+          type: string
+          example: "5"
+        vehicle_type:
+          type: string
+          enum: [bus, tram, trolleybus]
+        color:
+          type: string
+          example: "#E31E30"
+        location:
+          type: array
+          description: "[latitude, longitude]"
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        bearing:
+          type: number
+        lowfloor:
+          type: boolean
