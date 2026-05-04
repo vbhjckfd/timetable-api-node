@@ -1,0 +1,29 @@
+# Lviv Public Transport API
+
+> Real-time and static data for public transport in Lviv, Ukraine. No API key required.
+
+Live GTFS-RT feed: vehicle positions, stop arrivals with ETAs, route shapes, and stop discovery by coordinates. All endpoints are public and read-only.
+
+## API
+
+- [OpenAPI spec](https://api.lad.lviv.ua/openapi.yaml): Full OpenAPI 3.0 description of all endpoints
+- [All stops](https://api.lad.lviv.ua/stops.json): Complete stop list with codes, names, coordinates, and served routes
+- [All routes](https://api.lad.lviv.ua/routes.json): Complete route list
+
+## Key endpoints
+
+- `GET /stops/{code}/timetable` — Live arrivals at a stop (refresh every 5–10 s). Stop codes are the numeric codes printed on physical signage (e.g. 707).
+- `GET /stops/{code}/static` — Static stop info: name, coordinates, connecting routes.
+- `GET /closest?latitude=…&longitude=…&radius=…` — Stops within radius metres of a coordinate (use this to resolve an address to stop codes).
+- `GET /routes/static/{name}` — Route stop list, departure times, and polyline shape for both directions.
+- `GET /routes/dynamic/{name}` — Live vehicle positions on a route.
+- `GET /vehicle/{vehicleId}` — Single vehicle position and upcoming stop sequence.
+- `GET /transport?latitude=…&longitude=…` — All active vehicles within 1 km of a coordinate.
+
+## MCP
+
+An MCP server is available for LLM tool use without manual HTTP calls:
+
+- [MCP server card](https://api.lad.lviv.ua/.well-known/mcp/server-card.json)
+- MCP endpoint: `https://api.lad.lviv.ua/mcp` (streamable HTTP, no auth)
+- Listed on Smithery: `vbhjckfd/timetable-api-node`

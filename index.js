@@ -34,6 +34,11 @@ const app = express();
 
 app.use(cors());
 
+app.use((req, res, next) => {
+  res.set("Link", '</openapi.yaml>; rel="describedby"');
+  next();
+});
+
 app.use(bodyParser.json({ limit: "100kb" }));
 
 app.get("/stops/:code/timetable", validateStopCode, getStopTimetableAction);
@@ -56,6 +61,16 @@ app.get("/openapi.yaml", (req, res) => {
   res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
   res.type("application/yaml");
   res.sendFile(path.join(__dirname, "openapi.yaml"));
+});
+
+app.get("/.well-known/openapi.yaml", (req, res) => {
+  res.redirect(301, "/openapi.yaml");
+});
+
+app.get("/llms.txt", (req, res) => {
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  res.type("text/plain");
+  res.sendFile(path.join(__dirname, "llms.txt"));
 });
 
 app.get("/ping", (req, res) => {
