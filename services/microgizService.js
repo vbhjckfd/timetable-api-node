@@ -7,12 +7,13 @@ import {
 
 async function fetchPlus(url, options = {}, retries) {
   try {
-    const res = await fetch(url, options);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...options });
     if (res.ok) return res;
     if (retries > 0) return fetchPlus(url, options, retries - 1);
-    throw new Error(res.status);
+    throw new Error(`HTTP ${res.status}`);
   } catch (error) {
-    console.error(error.message);
+    if (retries > 0) return fetchPlus(url, options, retries - 1);
+    throw error;
   }
 }
 
