@@ -18,7 +18,7 @@ async function fetchPlus(url, options = {}, retries) {
 }
 
 export async function getTimeOfLastStaticUpdate() {
-  const response = await fetch("https://track.ua-gis.com/gtfs/lviv/static.zip", { method: "HEAD" });
+  const response = await fetchPlus("https://track.ua-gis.com/gtfs/lviv/static.zip", { method: "HEAD" }, 3);
   return new Date(response.headers.get("last-modified"));
 }
 
