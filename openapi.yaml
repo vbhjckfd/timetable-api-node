@@ -191,6 +191,42 @@ paths:
         '404':
           description: Vehicle not currently active.
 
+  /vehicle-by-plate/{plate}:
+    get:
+      operationId: getVehicleByPlate
+      summary: Look up a vehicle ID by license plate
+      description: >
+        Returns the vehicle ID for the given license plate. Matching is
+        case-insensitive and ignores spaces and dashes, so `BC-1234-AA`,
+        `bc 1234 aa`, and `bc1234aa` are all equivalent. Use the returned
+        `vehicleId` with `GET /vehicle/{vehicleId}` to fetch full details.
+      parameters:
+        - name: plate
+          in: path
+          required: true
+          description: >
+            Vehicle license plate in any format — dashes and spaces are ignored
+            (e.g. `BC-1234-AA`, `bc 1234 aa`, `BC1234AA`).
+          schema:
+            type: string
+            example: BC-1234-AA
+      responses:
+        '200':
+          description: Vehicle found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vehicleId:
+                    type: string
+                    description: Vehicle identifier, usable with /vehicle/{vehicleId}.
+                    example: "tram_42"
+                required:
+                  - vehicleId
+        '404':
+          description: No active vehicle with this license plate.
+
   /transport:
     get:
       operationId: getNearbyTransport

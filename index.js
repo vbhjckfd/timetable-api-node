@@ -22,6 +22,7 @@ import getAllStopsAction from "./actions/getAllStopsAction.js";
 import routeInfoDynamicAction from "./actions/routeDynamicInfoAction.js";
 import routeInfoStaticAction from "./actions/routeStaticInfoAction.js";
 import vehicleInfoAction from "./actions/vehicleInfoAction.js";
+import vehicleByPlateAction from "./actions/vehicleByPlateAction.js";
 import closestTransportAction from "./actions/closestTransportAction.js";
 import getAllRoutesAction from "./actions/getAllRoutesAction.js";
 import sitemapAction from "./actions/sitemapAction.js";
@@ -53,6 +54,7 @@ app.get("/routes", getAllRoutesAction);
 app.get("/routes/dynamic/:name", routeInfoDynamicAction);
 app.get("/routes/static/:name", routeInfoStaticAction);
 app.get("/vehicle/:vehicleId", vehicleInfoAction);
+app.get("/vehicle-by-plate/:plate", vehicleByPlateAction);
 app.get("/transport", closestTransportAction);
 
 app.get("/sitemap.xml", sitemapAction);

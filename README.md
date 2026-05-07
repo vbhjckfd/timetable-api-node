@@ -433,6 +433,13 @@ Live position and upcoming stop arrivals for one vehicle. Short-cached (5 s).
 
 - **Response:** `{ location: [lat, lng], routeId, bearing, direction, licensePlate, arrivals }`.
 
+#### `GET /vehicle-by-plate/:plate`
+
+Look up a vehicle ID by its license plate. Short-cached (5 s).
+
+- The plate is matched case-insensitively with spaces and dashes ignored (`BC-1234-AA`, `bc 1234 aa`, and `bc1234aa` are all equivalent).
+- **Response:** `{ vehicleId }` — use the returned ID with `GET /vehicle/:vehicleId`.
+
 #### `GET /transport?latitude={lat}&longitude={lng}`
 
 Vehicles within 1 km of a point. Short-cached (10 s).
