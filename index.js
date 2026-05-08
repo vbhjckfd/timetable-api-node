@@ -1,5 +1,7 @@
+import "./instrument.js";
 import "dotenv/config";
 
+import * as Sentry from "@sentry/node";
 import path from "path";
 const __dirname = import.meta.dirname;
 const PORT = process.env.PORT || 8080;
@@ -158,6 +160,8 @@ app.get("/server.json", (req, res) => {
 });
 
 app.use(notFoundAction);
+
+Sentry.setupExpressErrorHandler(app);
 
 app.use(function (err, req, res, next) {
   console.error(err.stack);
