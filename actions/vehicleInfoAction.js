@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import db from "../connections/timetableSqliteDb.js";
 import {
   getVehiclesLocations,
@@ -5,6 +6,7 @@ import {
 } from "../services/microgizService.js";
 
 export default async (req, res, next) => {
+  Sentry.metrics.count('vehicle_lookup.by_id', 1);
   const [vehiclePositionRaw, arrivalTimeItemsRaw] = await Promise.all([
     getVehiclesLocations(),
     getArrivalTimes(),

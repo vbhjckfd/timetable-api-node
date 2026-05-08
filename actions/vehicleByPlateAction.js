@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import { getVehiclesLocations } from "../services/microgizService.js";
 
 function normalizePlate(plate) {
@@ -7,6 +8,7 @@ function normalizePlate(plate) {
 export { normalizePlate };
 
 export default async (req, res) => {
+  Sentry.metrics.count('vehicle_lookup.by_plate', 1);
   const plate = normalizePlate(req.params.plate);
   const entities = await getVehiclesLocations();
 

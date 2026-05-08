@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import stopArrivalService from "../services/stopArrivalService.js";
 import db from "../connections/timetableSqliteDb.js";
 
@@ -40,6 +41,12 @@ export default async (req, res, next) => {
     console.error(e);
   }
   const cacheAge = timetableData.length > 0 ? 10 : 5;
+
+  Sentry.metrics.count('stop_timetable.request', 1, { tags: { stop: String(code) } });
+  Sentry.metrics.distribution('stop_timetable.arrivals_count', timetableData.length, { tags: { stop: String(code) } });
+  if (timetableData.length === 0) {
+    Sentry.metrics.count('stop_timetable.empty', 1, { tags: { stop: String(code) } });
+  }
 
   res
     .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAge}`)

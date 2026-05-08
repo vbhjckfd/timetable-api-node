@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import { getVehiclesLocations } from "../services/microgizService.js";
 import {
   normalizeRouteName,
@@ -43,6 +44,13 @@ export default async (req, res, next) => {
       lowfloor: isLowFloor(trips[i.vehicle.trip.tripId], i, routeLocal),
     };
   });
+
+  const routeTag = routeLocal.short_name ?? String(routeLocal.external_id);
+  Sentry.metrics.count('route_dynamic.request', 1, { tags: { route: routeTag } });
+  Sentry.metrics.distribution('route_dynamic.vehicles_count', result.length, { tags: { route: routeTag } });
+  if (result.length === 0) {
+    Sentry.metrics.count('route_dynamic.no_vehicles', 1, { tags: { route: routeTag } });
+  }
 
   res.set("Cache-Control", `public, s-maxage=10`).send(result);
 };

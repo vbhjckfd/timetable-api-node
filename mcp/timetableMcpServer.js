@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import * as z from "zod/v4";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -629,6 +630,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_stop_realtime,
     },
     async ({ stop_id }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stop_realtime' } });
       const stopCode = normalizeStopCode(stop_id);
       const actionResult = await runAction(getSingleStopAction, {
         stopCode,
@@ -670,6 +672,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_route_static,
     },
     async ({ route_name }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_route_static' } });
       const actionResult = await runAction(routeInfoStaticAction, {
         params: { name: route_name },
       });
@@ -717,6 +720,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_route_realtime,
     },
     async ({ route_name }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_route_realtime' } });
       const actionResult = await runAction(routeDynamicInfoAction, {
         params: { name: route_name },
       });
@@ -756,6 +760,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_stop_geometry,
     },
     async ({ stop_id }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stop_geometry' } });
       const stopCode = normalizeStopCode(stop_id);
       const stopResult = await runAction(getSingleStopAction, {
         stopCode,
@@ -842,6 +847,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_stops_around_location,
     },
     async ({ latitude, longitude, radius_meters }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stops_around_location' } });
       const query = {
         latitude: String(latitude),
         longitude: String(longitude),
