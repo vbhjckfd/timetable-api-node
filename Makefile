@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 NVM_USE := source ~/.nvm/nvm.sh && nvm use --silent
 
-.PHONY: start import import-slim test build deploy clear-short-cache clear-long-cache clear-all-cache cleanup-revisions
+.PHONY: start import import-slim test build deploy publish clear-short-cache clear-long-cache clear-all-cache cleanup-revisions
 
 PROJECT_ID ?= timetable-252615
 IMAGE ?= gcr.io/$(PROJECT_ID)/timetable-api-node-sqlite
@@ -27,6 +27,9 @@ build:
 		--build-arg CACHEBUST=$$(date +%s) \
 		--tag $(IMAGE) \
 		--push .
+
+publish:
+	$(NVM_USE) && npm version patch && git push --tags
 
 deploy: build
 	gcloud run deploy $(SERVICE_NAME) --image $(IMAGE) --region $(REGION) --platform managed --project $(PROJECT_ID) --quiet
