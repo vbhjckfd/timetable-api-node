@@ -15,7 +15,7 @@
   "homepage": "https://lad.lviv.ua",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vbhjckfd/timetable-api-node.git"
+    "url": "git+https://github.com/vbhjckfd/timetable-api-node.git"
   },
   "keywords": [
     "mcp",
