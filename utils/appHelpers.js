@@ -67,7 +67,7 @@ export function isLowFloor(trip, vehiclesLocation, routeLocal) {
   const licensePlate = vehiclesLocation.vehicle.vehicle.licensePlate;
 
   // Electron trolleys and maybe some LAZs
-  if (type == "trol") {
+  if (type == "trolleybus") {
     const intLicensePlate = parseInt(licensePlate);
     return intLicensePlate >= 100 && intLicensePlate < 512;
   }
@@ -194,7 +194,7 @@ export function routeNameToUrlFriendly(routeName) {
 export function getRouteType(routeName) {
   let type = "bus";
   if (routeName.startsWith("Тр")) {
-    type = "trol";
+    type = "trolleybus";
   } else if (routeName.startsWith("Т")) {
     type = "tram";
   }

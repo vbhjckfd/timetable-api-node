@@ -27,3 +27,10 @@ An MCP server is available for LLM tool use without manual HTTP calls:
 - [MCP server card](https://api.lad.lviv.ua/.well-known/mcp/server-card.json)
 - MCP endpoint: `https://api.lad.lviv.ua/mcp` (streamable HTTP, no auth)
 - Listed on Smithery: `vbhjckfd/timetable-api-node`
+- npm / npx: `npx timetable-api-node` (stdio proxy, no local setup needed)
+
+## Agent discovery
+
+- [OpenAI plugin manifest](https://api.lad.lviv.ua/.well-known/ai-plugin.json) — for GPT Actions and plugin-compatible frameworks
+- [A2A agent card](https://api.lad.lviv.ua/.well-known/agent.json) — Google A2A protocol discovery
+- [Integration guide](https://api.lad.lviv.ua/INTEGRATION.md) — LangChain, LlamaIndex, Vercel AI SDK, n8n recipes

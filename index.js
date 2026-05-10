@@ -38,7 +38,9 @@ const app = express();
 app.use(cors());
 
 app.use((req, res, next) => {
+  const baseUrl = `https://${req.get("host")}`;
   res.set("Link", '</openapi.yaml>; rel="describedby"');
+  res.set("X-MCP-Server", `${baseUrl}/.well-known/mcp/server-card.json`);
   next();
 });
 
@@ -71,10 +73,117 @@ app.get("/.well-known/openapi.yaml", (req, res) => {
   res.redirect(301, "/openapi.yaml");
 });
 
+app.get("/.well-known/ai-plugin.json", (req, res) => {
+  const baseUrl = `https://${req.get("host")}`;
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  res.json({
+    schema_version: "v1",
+    name_for_human: "Lviv Public Transport",
+    name_for_model: "lviv_timetable",
+    description_for_human:
+      "Real-time and static public transport data for Lviv, Ukraine — stops, routes, timetables, live vehicle positions. No API key required.",
+    description_for_model:
+      "Provides real-time arrivals, live vehicle positions, static timetables, route shapes, and stop discovery for public transport in Lviv, Ukraine. Data sourced from municipal GTFS-RT feeds. All endpoints are read-only and require no authentication. Use stop numeric codes (e.g. 707) and route short names (e.g. T30, 32A).",
+    auth: { type: "none" },
+    api: {
+      type: "openapi",
+      url: `${baseUrl}/openapi.yaml`,
+    },
+    logo_url: `${baseUrl}/favicon.png`,
+    contact_email: "vbhjckfd@gmail.com",
+    legal_info_url: "https://lad.lviv.ua",
+  });
+});
+
+app.get("/.well-known/agent.json", (req, res) => {
+  const baseUrl = `https://${req.get("host")}`;
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  res.json({
+    name: "Lviv Public Transport",
+    description:
+      "Real-time and static public transport data for Lviv, Ukraine: stops, routes, timetables, and live vehicle positions. No API key required.",
+    url: baseUrl,
+    version: "1.1.0",
+    iconUrl: `${baseUrl}/favicon.png`,
+    documentationUrl: `${baseUrl}/llms.txt`,
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      stateTransitionHistory: false,
+    },
+    defaultInputModes: ["text/plain", "application/json"],
+    defaultOutputModes: ["application/json"],
+    skills: [
+      {
+        id: "get_stop_realtime",
+        name: "Get Stop Realtime",
+        description:
+          "Live arrivals and vehicle positions at a stop by numeric stop code (e.g. 707).",
+        tags: ["transit", "realtime", "arrivals", "lviv"],
+        inputModes: ["text/plain"],
+        outputModes: ["application/json"],
+        examples: ["What buses are arriving at stop 707?", "Live arrivals for stop 1234"],
+      },
+      {
+        id: "get_route_static",
+        name: "Get Route Static",
+        description:
+          "Route metadata, stop lists, departure times, and polylines for both directions.",
+        tags: ["transit", "route", "timetable", "lviv"],
+        inputModes: ["text/plain"],
+        outputModes: ["application/json"],
+        examples: ["Show me route T30 stops", "Route 32A schedule"],
+      },
+      {
+        id: "get_route_realtime",
+        name: "Get Route Realtime",
+        description: "Live vehicle positions for all vehicles currently running on a route.",
+        tags: ["transit", "realtime", "vehicles", "lviv"],
+        inputModes: ["text/plain"],
+        outputModes: ["application/json"],
+        examples: ["Where are all tram 6 vehicles right now?"],
+      },
+      {
+        id: "get_stops_around_location",
+        name: "Get Stops Around Location",
+        description: "Discover transit stops near a given latitude/longitude within a radius.",
+        tags: ["transit", "location", "stops", "lviv"],
+        inputModes: ["text/plain", "application/json"],
+        outputModes: ["application/json"],
+        examples: ["Find stops near 49.84, 24.03", "Stops within 300m of my location"],
+      },
+      {
+        id: "get_stop_geometry",
+        name: "Get Stop Geometry",
+        description:
+          "Static map context for a stop: stop marker and route polylines for all serving routes.",
+        tags: ["transit", "geometry", "map", "lviv"],
+        inputModes: ["text/plain"],
+        outputModes: ["application/json"],
+        examples: ["Get map data for stop 707"],
+      },
+    ],
+    authentication: { schemes: [] },
+    provider: {
+      organization: "lad.lviv.ua",
+      url: "https://lad.lviv.ua",
+    },
+    mcpEndpoint: `${baseUrl}/mcp`,
+    mcpServerCard: `${baseUrl}/.well-known/mcp/server-card.json`,
+    openApiUrl: `${baseUrl}/openapi.yaml`,
+  });
+});
+
 app.get("/llms.txt", (req, res) => {
   res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
   res.type("text/plain");
   res.sendFile(path.join(__dirname, "llms.txt"));
+});
+
+app.get("/INTEGRATION.md", (req, res) => {
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  res.type("text/markdown");
+  res.sendFile(path.join(__dirname, "INTEGRATION.md"));
 });
 
 app.get("/ping", (req, res) => {

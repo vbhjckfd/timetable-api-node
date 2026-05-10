@@ -109,8 +109,8 @@ describe("getRouteType", () => {
   it("returns tram for tram routes", () => {
     expect(getRouteType("Т01")).toBe("tram");
   });
-  it("returns trol for trolleybus routes", () => {
-    expect(getRouteType("Тр22")).toBe("trol");
+  it("returns trolleybus for trolleybus routes", () => {
+    expect(getRouteType("Тр22")).toBe("trolleybus");
   });
 });
 

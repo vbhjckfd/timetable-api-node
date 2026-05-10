@@ -89,7 +89,7 @@ const stopArrivalService = {
       const position = vehicleLocation.vehicle.position;
       const vehicleInfo = {
         vehicle_id: vehicleLocation.vehicle.vehicle.id,
-        location: [position.latitude.toFixed(5), position.longitude.toFixed(5)],
+        location: [parseFloat(position.latitude.toFixed(5)), parseFloat(position.longitude.toFixed(5))],
         bearing: position.bearing,
       };
 

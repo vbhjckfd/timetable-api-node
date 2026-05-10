@@ -125,7 +125,7 @@ describe("stopArrivalService.getTimetableForStop", () => {
     expect(entry.route_id).toBe("ROUTE1");
     expect(entry.vehicle_id).toBe("VH1");
     expect(entry.bearing).toBe(90);
-    expect(entry.location).toEqual(["49.84500", "24.02300"]);
+    expect(entry.location).toEqual([49.845, 24.023]);
     expect(entry.route).toBe("А01");
     expect(entry.end_stop).toBe("Destination"); // cleanUpStopName strips "(12)"
     expect(entry.arrival_time).toBeDefined();
