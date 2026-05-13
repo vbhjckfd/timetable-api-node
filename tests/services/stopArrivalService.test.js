@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const sentryMetrics = vi.hoisted(() => ({ count: vi.fn(), distribution: vi.fn() }));
+
 vi.mock("../../connections/timetableSqliteDb.js", () => ({
   default: { getCollection: vi.fn() },
 }));
@@ -13,6 +15,8 @@ vi.mock("gtfs", () => ({
   getTrips: vi.fn(),
   getCalendars: vi.fn().mockResolvedValue([{ service_id: "SVC1" }]),
 }));
+
+vi.mock("@sentry/node", () => ({ metrics: sentryMetrics }));
 
 import stopArrivalService from "../../services/stopArrivalService.js";
 import db from "../../connections/timetableSqliteDb.js";
@@ -74,6 +78,8 @@ const mockTrip = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("stopArrivalService.getTimetableForStop", () => {
@@ -151,5 +157,109 @@ describe("stopArrivalService.getTimetableForStop", () => {
     const result = await stopArrivalService.getTimetableForStop(testStop);
 
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
+  function freshArrivalEntity() {
+    return {
+      tripUpdate: {
+        stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+        trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+        vehicle: { id: "VH1" },
+      },
+    };
+  }
+
+  function setupMocks(withArrivals) {
+    const arrivals = withArrivals ? [freshArrivalEntity()] : [];
+    db.getCollection.mockReturnValue({ find: vi.fn().mockReturnValue([mockRoute]) });
+    getArrivalTimes.mockResolvedValue(arrivals);
+    getVehiclesLocations.mockResolvedValue(withArrivals ? [mockVehicleEntity] : []);
+    getTrips.mockResolvedValue(withArrivals ? [mockTrip] : []);
+  }
+
+  it("records request count and arrivals_count distribution", async () => {
+    setupMocks(true);
+    await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(sentryMetrics.count).toHaveBeenCalledWith(
+      'stop_timetable.request', 1, { tags: { stop: "1001" } },
+    );
+    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_count', 1, { tags: { stop: "1001" } },
+    );
+    expect(sentryMetrics.count).not.toHaveBeenCalledWith(
+      'stop_timetable.empty', expect.anything(), expect.anything(),
+    );
+  });
+
+  it("records stop_timetable.empty when result is empty", async () => {
+    setupMocks(false);
+    await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(sentryMetrics.count).toHaveBeenCalledWith(
+      'stop_timetable.empty', 1, { tags: { stop: "1001" } },
+    );
+    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_count', 0, { tags: { stop: "1001" } },
+    );
+  });
+});
+
+describe("stopArrivalService.getTimetableForStop — pulse signal", () => {
+  const stopWithLocation = {
+    ...testStop,
+    location: { coordinates: [49.845, 24.023] },
+  };
+
+  function setupEmptyMocks() {
+    db.getCollection.mockReturnValue({ find: vi.fn().mockReturnValue([]) });
+    getArrivalTimes.mockResolvedValue([]);
+    getVehiclesLocations.mockResolvedValue([]);
+    getTrips.mockResolvedValue([]);
+  }
+
+  it("fires POST to /signal when env vars are set", async () => {
+    vi.stubEnv("PULSE_WORKER_URL", "https://pulse.example.workers.dev");
+    vi.stubEnv("PULSE_SIGNAL_SECRET", "secret123");
+    const fetchMock = vi.fn().mockResolvedValue({});
+    vi.stubGlobal("fetch", fetchMock);
+    setupEmptyMocks();
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://pulse.example.workers.dev/signal",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer secret123" }),
+        body: JSON.stringify({ lat: 49.845, lng: 24.023, code: 1001 }),
+      }),
+    );
+  });
+
+  it("does not fire when PULSE_WORKER_URL is missing", async () => {
+    vi.stubEnv("PULSE_WORKER_URL", "");
+    vi.stubEnv("PULSE_SIGNAL_SECRET", "secret123");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    setupEmptyMocks();
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when stop has no coordinates", async () => {
+    vi.stubEnv("PULSE_WORKER_URL", "https://pulse.example.workers.dev");
+    vi.stubEnv("PULSE_SIGNAL_SECRET", "secret123");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    setupEmptyMocks();
+
+    await stopArrivalService.getTimetableForStop(testStop); // no location
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

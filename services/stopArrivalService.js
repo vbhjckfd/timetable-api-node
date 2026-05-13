@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import { getTrips } from "gtfs";
 import {
   formatRouteName,
@@ -12,6 +13,23 @@ import {
 import { getArrivalTimes, getVehiclesLocations } from "./microgizService.js";
 
 import timetableDb from "../connections/timetableSqliteDb.js";
+
+function emitPulseSignal(stop) {
+  const url = process.env.PULSE_WORKER_URL ?? '';
+  const secret = process.env.PULSE_SIGNAL_SECRET ?? '';
+  if (!url || !secret) return;
+  const [lat, lng] = stop.location?.coordinates ?? [];
+  if (typeof lat !== 'number' || typeof lng !== 'number') return;
+  fetch(`${url}/signal`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${secret}`,
+    },
+    body: JSON.stringify({ lat, lng, code: stop.code ?? null }),
+    signal: AbortSignal.timeout(3000),
+  }).catch(() => {});
+}
 
 const stopArrivalService = {
   getTimetableForStop: async function (stop) {
@@ -111,7 +129,17 @@ const stopArrivalService = {
       };
     });
 
-    return result.filter((i) => !!i);
+    const timetable = result.filter((i) => !!i);
+
+    Sentry.metrics.count('stop_timetable.request', 1, { tags: { stop: String(stop.code) } });
+    Sentry.metrics.distribution('stop_timetable.arrivals_count', timetable.length, { tags: { stop: String(stop.code) } });
+    if (timetable.length === 0) {
+      Sentry.metrics.count('stop_timetable.empty', 1, { tags: { stop: String(stop.code) } });
+    }
+
+    emitPulseSignal(stop);
+
+    return timetable;
   },
 };
 
