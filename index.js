@@ -219,6 +219,22 @@ app.all("/mcp", (req, res) => {
   });
 });
 
+app.get("/.well-known/oauth-protected-resource", (req, res) => {
+  const baseUrl = `https://${req.get("host")}`;
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  res.json({
+    resource: baseUrl,
+    authorization_required: false,
+    authorization_servers: [],
+    scopes_supported: [],
+    bearer_methods_supported: [],
+    resource_signing_alg_values_supported: [],
+    x_no_auth_required: true,
+    x_public_access:
+      "All API endpoints are open and do not require authentication. Agents and clients may call them directly without obtaining tokens.",
+  });
+});
+
 app.get("/.well-known/mcp/server-card.json", (req, res) => {
   const baseUrl = `https://${req.get("host")}`;
   res.json(buildMcpServerCard(baseUrl));
