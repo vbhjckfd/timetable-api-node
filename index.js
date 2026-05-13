@@ -35,11 +35,20 @@ import {
 
 const app = express();
 
+app.set("trust proxy", true);
+
 app.use(cors());
 
 app.use((req, res, next) => {
-  const baseUrl = `https://${req.get("host")}`;
-  res.set("Link", '</openapi.yaml>; rel="describedby"');
+  const baseUrl = `${req.protocol}://${req.hostname}`;
+  res.set(
+    "Link",
+    [
+      `<${baseUrl}/.well-known/oauth-protected-resource>; rel="oauth-protected-resource"`,
+      `<${baseUrl}/.well-known/mcp/server-card.json>; rel="service-desc"`,
+      `<${baseUrl}/mcp>; rel="mcp-server"`,
+    ].join(", "),
+  );
   res.set("X-MCP-Server", `${baseUrl}/.well-known/mcp/server-card.json`);
   next();
 });
@@ -74,7 +83,7 @@ app.get("/.well-known/openapi.yaml", (req, res) => {
 });
 
 app.get("/.well-known/ai-plugin.json", (req, res) => {
-  const baseUrl = `https://${req.get("host")}`;
+  const baseUrl = `${req.protocol}://${req.hostname}`;
   res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
   res.json({
     schema_version: "v1",
@@ -96,7 +105,7 @@ app.get("/.well-known/ai-plugin.json", (req, res) => {
 });
 
 app.get("/.well-known/agent.json", (req, res) => {
-  const baseUrl = `https://${req.get("host")}`;
+  const baseUrl = `${req.protocol}://${req.hostname}`;
   res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
   res.json({
     name: "Lviv Public Transport",
@@ -220,7 +229,7 @@ app.all("/mcp", (req, res) => {
 });
 
 app.get("/.well-known/oauth-protected-resource", (req, res) => {
-  const baseUrl = `https://${req.get("host")}`;
+  const baseUrl = `${req.protocol}://${req.hostname}`;
   res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
   res.json({
     resource: baseUrl,
@@ -236,7 +245,7 @@ app.get("/.well-known/oauth-protected-resource", (req, res) => {
 });
 
 app.get("/.well-known/mcp/server-card.json", (req, res) => {
-  const baseUrl = `https://${req.get("host")}`;
+  const baseUrl = `${req.protocol}://${req.hostname}`;
   res.json(buildMcpServerCard(baseUrl));
 });
 
@@ -247,7 +256,7 @@ app.get("/mcp-icon.svg", (req, res) => {
 });
 
 app.get("/robots.txt", (req, res) => {
-  const baseUrl = `https://${req.get("host")}`;
+  const baseUrl = `${req.protocol}://${req.hostname}`;
   const lines = [
     "User-agent: *",
     "Disallow: /private/",
