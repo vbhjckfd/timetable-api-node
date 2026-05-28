@@ -6,12 +6,14 @@ on:
       - 'v*'
 
 permissions:
-  id-token: write  # Required for OIDC
+  id-token: write  # Required for OIDC (npm provenance + MCP registry)
   contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
     steps:
       - uses: actions/checkout@v6
 
@@ -24,3 +26,23 @@ jobs:
       - run: npm run build --if-present
       - run: npm test
       - run: npm publish
+
+      - name: Sync server.json version from package.json
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node -e "
+            const fs = require('fs');
+            const s = JSON.parse(fs.readFileSync('server.json', 'utf8'));
+            s.version = process.argv[1];
+            fs.writeFileSync('server.json', JSON.stringify(s, null, 2) + '\n');
+          " "$VERSION"
+
+      - name: Publish to Official MCP Registry
+        run: |
+          curl -fsSL https://registry.modelcontextprotocol.io/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          mcp-publisher publish
+
+      - name: Publish to Smithery
+        if: env.SMITHERY_API_KEY != ''
+        run: npx --yes @smithery/cli mcp publish https://api.lad.lviv.ua/mcp -n vbhjckfd/timetable-api-node
