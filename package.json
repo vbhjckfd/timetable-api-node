@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "bin": {
-    "timetable-mcp": "./mcp/stdio.js"
+    "timetable-mcp": "mcp/stdio.js"
   },
   "files": [
     "mcp/stdio.js",
