@@ -32,6 +32,7 @@ import {
   buildMcpServerCard,
   handleMcpPostRequest,
 } from "./mcp/timetableMcpServer.js";
+import planTripAction from "./actions/planTripAction.js";
 
 const app = express();
 
@@ -69,6 +70,7 @@ app.get("/routes/static/:name", routeInfoStaticAction);
 app.get("/vehicle/:vehicleId", vehicleInfoAction);
 app.get("/vehicle-by-plate/:plate", vehicleByPlateAction);
 app.get("/transport", closestTransportAction);
+app.get("/trip-plan", planTripAction);
 
 app.get("/sitemap.xml", sitemapAction);
 
@@ -199,7 +201,32 @@ app.get("/ping", (req, res) => {
   res.json({});
 });
 
-app.post("/mcp", async (req, res) => {
+// Simple in-memory rate limiter: 60 requests/min per IP
+const _mcpRateLimitMap = new Map();
+const MCP_RATE_LIMIT = 60;
+const MCP_RATE_WINDOW_MS = 60_000;
+
+function mcpRateLimiter(req, res, next) {
+  const ip = req.ip ?? "unknown";
+  const now = Date.now();
+  const entry = _mcpRateLimitMap.get(ip) ?? { count: 0, windowStart: now };
+  if (now - entry.windowStart > MCP_RATE_WINDOW_MS) {
+    entry.count = 0;
+    entry.windowStart = now;
+  }
+  entry.count++;
+  _mcpRateLimitMap.set(ip, entry);
+  if (entry.count > MCP_RATE_LIMIT) {
+    return res.status(429).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Rate limit exceeded. Try again later." },
+      id: null,
+    });
+  }
+  next();
+}
+
+app.post("/mcp", mcpRateLimiter, async (req, res) => {
   try {
     await handleMcpPostRequest(req, res);
   } catch (error) {

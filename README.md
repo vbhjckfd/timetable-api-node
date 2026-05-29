@@ -86,7 +86,7 @@ graph LR;
 }
 ```
 
-Successful tool responses return **stringified JSON** inside MCP `content` items (`type: "text"`), and each payload follows a strict UI contract:
+Successful tool responses return a **natural-language text summary** inside MCP `content` items (`type: "text"`) — e.g. *"Stop «Opera»: 3 arrivals. Next: T01 → «Rynok» in 2 min."* The full structured payload is in the `structuredContent` field (for schema-aware clients). Each `structuredContent` payload follows a strict UI contract:
 
 ```json
 {
@@ -110,6 +110,9 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 - `get_route_realtime`
 - `get_stop_geometry`
 - `get_stops_around_location`
+- `get_nearby_vehicles`
+- `get_vehicle_info`
+- `plan_trip`
 
 <details>
 <summary><code>get_stop_realtime</code> — input &amp; example</summary>
@@ -357,10 +360,172 @@ Map zoom is **15** for radius ≤ 1500 m and **14** for larger radii (up to 3000
 
 </details>
 
+<details>
+<summary><code>get_nearby_vehicles</code> — input &amp; example</summary>
+
+Returns live positions for all transit vehicles within 1 km of given coordinates. Wraps the same backend as `GET /transport`.
+
+**Arguments (JSON):**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `latitude` | number, −90…90 | yes |
+| `longitude` | number, −180…180 | yes |
+
+**Example result** (shape only):
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "center_lat": 49.84,
+    "center_lng": 24.03,
+    "vehicles": [
+      {
+        "id": "tram_123",
+        "route": "T01",
+        "vehicle_type": "tram",
+        "lat": 49.841,
+        "lng": 24.031,
+        "bearing": 90,
+        "lowfloor": true
+      }
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": [
+    {
+      "type": "map",
+      "data": {
+        "center": [49.84, 24.03],
+        "zoom": 14,
+        "vehicles": [{ "id": "tram_123", "route": "T01", "lat": 49.841, "lng": 24.031, "bearing": 90, "eta_status": "unassigned" }]
+      }
+    }
+  ]
+}
+```
+
+</details>
+
+<details>
+<summary><code>get_vehicle_info</code> — input &amp; example</summary>
+
+Full details for one vehicle by its ID: position, route, license plate, direction, and upcoming stop arrival times. Vehicle IDs come from `get_route_realtime`, `get_nearby_vehicles`, or `get_stop_realtime`.
+
+**Arguments (JSON):**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `vehicle_id` | string | yes |
+
+**Example result** (shape only):
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "vehicle_id": "tram_123",
+    "route": "route-ext-1",
+    "license_plate": "BC-1234-AB",
+    "lat": 49.841,
+    "lng": 24.031,
+    "bearing": 90,
+    "direction": 0,
+    "upcoming_stops": [
+      { "code": 707, "arrival": "2026-01-23T12:05:00Z", "departure": null },
+      { "code": 708, "arrival": "2026-01-23T12:08:00Z", "departure": null }
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": [
+    {
+      "type": "map",
+      "data": { "center": [49.841, 24.031], "zoom": 15, "vehicles": [{ "id": "tram_123", "eta_status": "unassigned" }] }
+    }
+  ]
+}
+```
+
+</details>
+
+<details>
+<summary><code>plan_trip</code> — input &amp; example</summary>
+
+Plans a transit trip from an origin stop to a destination stop using the static route graph. Returns direct options (one route) and 1-transfer options sorted by fewest stops. Does **not** account for realtime disruptions — combine with `get_stop_realtime` for live ETAs after planning.
+
+**Arguments (JSON):**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `origin_stop_id` | positive integer or digits-only string | yes |
+| `destination_stop_id` | positive integer or digits-only string | yes |
+
+**Example result** (direct trip):
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "origin": { "id": "101", "name": "Головний вокзал" },
+    "destination": { "id": "707", "name": "Стадіон Сільмаш" },
+    "options": [
+      {
+        "type": "direct",
+        "route": "T30",
+        "direction": 0,
+        "board_stop_code": 101,
+        "board_stop_name": "Головний вокзал",
+        "alight_stop_code": 707,
+        "alight_stop_name": "Стадіон Сільмаш",
+        "stops_count": 4
+      }
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
+  },
+  "ui_blocks": []
+}
+```
+
+**Transfer trip** option shape:
+
+```json
+{
+  "type": "transfer",
+  "route1": "T01",
+  "route2": "А05",
+  "board_stop_code": 101,
+  "board_stop_name": "Головний вокзал",
+  "transfer_stop_code": 303,
+  "transfer_stop_name": "Площа Ринок",
+  "alight_stop_code": 707,
+  "alight_stop_name": "Стадіон Сільмаш",
+  "stops_count_1": 3,
+  "stops_count_2": 2
+}
+```
+
+Up to 5 direct and 3 transfer options are returned. Use `get_stops_around_location` to resolve addresses or coordinates to stop codes before calling this tool.
+
+</details>
+
+### Resources and resource templates
+
+In addition to tools, the server exposes MCP **resources** for reference data that doesn't require a tool call:
+
+| URI | Description |
+|-----|-------------|
+| `timetable://about` | Scope, usage, and data caveats for this server (Markdown) |
+| `timetable://reference/tools` | Tools reference table (Markdown) |
+| `timetable://reference/prompts` | Prompt templates catalog (Markdown) |
+| `timetable://stop/{code}` | Static info for a stop by numeric code — name, coordinates, serving routes (JSON) |
+| `timetable://route/{name}` | Static metadata for a route by short name — color, type, stop counts (JSON) |
+
 ### Security model
 
 - Public read-only (no authentication).
 - No mutating tools are exposed.
+- `POST /mcp` is rate-limited to **60 requests/min per IP** (in-memory, resets on restart). Excess requests receive HTTP 429 with a JSON-RPC error body.
 - `robots.txt` is only a best-effort discovery hint and not a protocol contract.
 
 ## REST API
@@ -445,3 +610,12 @@ Look up a vehicle ID by its license plate. Short-cached (5 s).
 Vehicles within 1 km of a point. Short-cached (10 s).
 
 - **Response:** array of `{ id, route, vehicle_type, color, location: [lat, lng], bearing, lowfloor }`.
+
+### Trip planning
+
+#### `GET /trip-plan?origin={code}&destination={code}`
+
+Static trip planning between two stops using the route graph.
+
+- **Response:** `{ origin, destination, options }` where each option is either a `direct` trip (single route) or a `transfer` trip (two routes with a transfer stop). Up to 5 direct and 3 transfer options, sorted by fewest stops.
+- Cached for 60 s.

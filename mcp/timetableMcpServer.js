@@ -1,13 +1,16 @@
 import * as Sentry from "@sentry/node";
 import * as z from "zod/v4";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import getSingleStopAction from "../actions/getSingleStopAction.js";
 import getClosestStopsAction from "../actions/getClosestStopsAction.js";
+import closestTransportAction from "../actions/closestTransportAction.js";
+import vehicleInfoAction from "../actions/vehicleInfoAction.js";
 import routeInfoStaticAction from "../actions/routeStaticInfoAction.js";
 import routeDynamicInfoAction from "../actions/routeDynamicInfoAction.js";
+import planTripAction from "../actions/planTripAction.js";
 
 const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
@@ -19,7 +22,7 @@ const TOOL_ANNOTATIONS = {
 const MCP_SERVER_INFO = {
   name: "com.lad.lviv/timetable-api",
   title: "Lviv Timetable MCP",
-  version: "1.0.0",
+  version: "1.1.4",
   description:
     "Read-only access to Lviv, Ukraine public transport: stops, routes, static shapes, live vehicle positions, and terminus timetables. Sourced from municipal GTFS and GTFS-RT. No API key, OAuth, or user configuration is required.",
   websiteUrl: "https://lad.lviv.ua",
@@ -55,7 +58,6 @@ const SMITHERY_CONFIG_JSON_SCHEMA = {
   },
   required: [],
   additionalProperties: false,
-  // Smithery convention (see microsoft/mcp smithery.yaml): sample empty / default connection.
   exampleConfig: { default_language: "any" },
 };
 
@@ -69,6 +71,9 @@ Lviv, Ukraine public transport assistant. Read-only. No authentication required.
 - User asks which stops a route serves, wants a route map, or asks about departure times → \`get_route_static\`
 - User needs route polylines overlaid on an existing map (no live data needed) → \`get_stop_geometry\`
 - User provides an address or coordinates instead of a stop ID → \`get_stops_around_location\` first, then use the returned stop IDs
+- User asks "what vehicles are near me" or wants live vehicles near a location → \`get_nearby_vehicles\`
+- User wants to track a specific vehicle by ID → \`get_vehicle_info\`
+- User asks "how do I get from A to B" or needs trip planning → \`plan_trip\`
 
 ## Input conventions
 
@@ -94,6 +99,7 @@ Consistency rule: every vehicle shown on a map must either match an arrival in t
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
 - \`get_route_static\` departure times (\`departures\`) are only populated for direction 0 (outbound).
 - \`direction\` in \`get_route_realtime\` vehicles corresponds to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
+- \`plan_trip\` returns static route graph options; it does not account for current service disruptions or realtime delays.
 `;
 
 function zRouteName() {
@@ -145,6 +151,30 @@ const zMapVehicleObj = z.object({
 });
 const zCenter = z.tuple([zCoord, zCoord]);
 
+const zDirectOption = z.object({
+  type: z.literal("direct"),
+  route: z.string(),
+  direction: z.number().int(),
+  board_stop_code: z.number().int(),
+  board_stop_name: z.string().nullable(),
+  alight_stop_code: z.number().int(),
+  alight_stop_name: z.string().nullable(),
+  stops_count: z.number().int(),
+});
+const zTransferOption = z.object({
+  type: z.literal("transfer"),
+  route1: z.string(),
+  route2: z.string(),
+  board_stop_code: z.number().int(),
+  board_stop_name: z.string().nullable(),
+  transfer_stop_code: z.number().int(),
+  transfer_stop_name: z.string().nullable(),
+  alight_stop_code: z.number().int(),
+  alight_stop_name: z.string().nullable(),
+  stops_count_1: z.number().int(),
+  stops_count_2: z.number().int(),
+});
+
 const OUTPUT_SCHEMAS = {
   get_stop_realtime: z.object({
     view: z.literal("transit_realtime"),
@@ -168,10 +198,17 @@ const OUTPUT_SCHEMAS = {
     view: z.literal("transit_realtime"),
     data: z.object({
       route_name: z.string(),
-      vehicles: z.array(z.object({ id: z.string(), direction: z.unknown(), lat: zCoord, lng: zCoord, bearing: z.number().nullable(), lowfloor: z.unknown() })),
+      vehicles: z.array(z.object({
+        id: z.string(),
+        direction: z.number().int().nullable(),
+        lat: zCoord,
+        lng: zCoord,
+        bearing: z.number().nullable(),
+        lowfloor: z.boolean().nullable(),
+      })),
       updated_at: z.string(),
     }),
-    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), vehicles: z.array(z.object({ id: z.string(), direction: z.unknown(), lat: zCoord, lng: zCoord, bearing: z.number().nullable(), lowfloor: z.unknown() })) }) })),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), vehicles: z.array(z.object({ id: z.string(), direction: z.number().int().nullable(), lat: zCoord, lng: zCoord, bearing: z.number().nullable(), lowfloor: z.boolean().nullable() })) }) })),
   }),
   get_stop_geometry: z.object({
     view: z.literal("transit_realtime"),
@@ -193,7 +230,85 @@ const OUTPUT_SCHEMAS = {
     }),
     ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), stops: z.array(zStopObj.extend({ distance_meters: z.number().nullable() })), vehicles: z.array(zMapVehicleObj) }) })),
   }),
+  get_nearby_vehicles: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      center_lat: zCoord,
+      center_lng: zCoord,
+      vehicles: z.array(z.object({
+        id: z.string(),
+        route: z.string().nullable(),
+        vehicle_type: z.string().nullable(),
+        lat: zCoord,
+        lng: zCoord,
+        bearing: z.number().nullable(),
+        lowfloor: z.boolean().nullable(),
+      })),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), vehicles: z.array(zMapVehicleObj) }) })),
+  }),
+  get_vehicle_info: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      vehicle_id: z.string(),
+      route: z.string().nullable(),
+      license_plate: z.string().nullable(),
+      lat: zCoord,
+      lng: zCoord,
+      bearing: z.number().nullable(),
+      direction: z.number().int().nullable(),
+      upcoming_stops: z.array(z.object({
+        code: z.number().int(),
+        arrival: z.string().nullable(),
+        departure: z.string().nullable(),
+      })),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), vehicles: z.array(zMapVehicleObj) }) })),
+  }),
+  plan_trip: z.object({
+    view: z.literal("transit_realtime"),
+    data: z.object({
+      origin: z.object({ id: z.string(), name: z.string().nullable() }),
+      destination: z.object({ id: z.string(), name: z.string().nullable() }),
+      options: z.array(z.union([zDirectOption, zTransferOption])),
+      updated_at: z.string(),
+    }),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.unknown() })),
+  }),
 };
+
+// --- In-process TTL cache ---
+
+const _toolCache = new Map();
+const CACHE_TTL_MS = {
+  get_stop_realtime: 10_000,
+  get_route_realtime: 10_000,
+  get_nearby_vehicles: 10_000,
+  get_vehicle_info: 5_000,
+  get_stops_around_location: 60_000,
+  get_route_static: 5 * 60_000,
+  get_stop_geometry: 5 * 60_000,
+  plan_trip: 60_000,
+};
+
+function getCached(toolName, args) {
+  const key = `${toolName}:${JSON.stringify(args)}`;
+  const entry = _toolCache.get(key);
+  if (!entry || Date.now() > entry.expiresAt) {
+    _toolCache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function setCached(toolName, args, value) {
+  const ttl = CACHE_TTL_MS[toolName] ?? 10_000;
+  _toolCache.set(`${toolName}:${JSON.stringify(args)}`, { value, expiresAt: Date.now() + ttl });
+}
+
+// --- Normalizers ---
 
 function normalizeStopCode(stopId) {
   const parsed = Number.parseInt(String(stopId), 10);
@@ -272,6 +387,67 @@ function toMapVehicle(item, fallbackId, nextStopId = null) {
     eta_status: Number.isFinite(etaMinutes) ? "assigned" : "unassigned",
   };
 }
+
+// --- Natural-language text summaries (replaces full JSON dump) ---
+
+function buildTextSummary(toolName, structured) {
+  const { data } = structured;
+  switch (toolName) {
+    case "get_stop_realtime": {
+      const stopName = data.stop?.name ?? `#${data.stop?.id}`;
+      const count = data.arrivals?.length ?? 0;
+      if (count === 0) return `Stop «${stopName}»: no arrivals found.`;
+      const next = data.arrivals[0];
+      const eta = next.arrival_minutes != null ? `${next.arrival_minutes} min` : "soon";
+      return `Stop «${stopName}»: ${count} arrival${count !== 1 ? "s" : ""}. Next: ${next.route ?? "?"} → «${next.direction ?? "?"}» in ${eta}.`;
+    }
+    case "get_route_static": {
+      const name = data.route?.name ?? "?";
+      const longName = data.route?.long_name;
+      const d0 = data.stops?.[0]?.length ?? 0;
+      const d1 = data.stops?.[1]?.length ?? 0;
+      return `Route ${name}${longName ? ` (${longName})` : ""}: ${d0} outbound stops, ${d1} inbound stops.`;
+    }
+    case "get_route_realtime": {
+      const count = data.vehicles?.length ?? 0;
+      return `Route ${data.route_name}: ${count} active vehicle${count !== 1 ? "s" : ""}.`;
+    }
+    case "get_stop_geometry": {
+      const stopName = data.stop?.name ?? `#${data.stop?.id}`;
+      const count = data.routes?.length ?? 0;
+      return `Stop «${stopName}»: ${count} serving route${count !== 1 ? "s" : ""} with polylines.`;
+    }
+    case "get_stops_around_location": {
+      const count = data.stops?.length ?? 0;
+      if (count === 0) return `No stops found within ${data.radius_meters}m.`;
+      const nearest = data.stops[0];
+      return `${count} stop${count !== 1 ? "s" : ""} within ${data.radius_meters}m. Nearest: «${nearest.name}» (code ${nearest.id}, ${nearest.distance_meters ?? "?"}m).`;
+    }
+    case "get_nearby_vehicles": {
+      const count = data.vehicles?.length ?? 0;
+      if (count === 0) return "No vehicles within range.";
+      const routes = [...new Set(data.vehicles.map((v) => v.route).filter(Boolean))].join(", ");
+      return `${count} vehicle${count !== 1 ? "s" : ""} nearby. Routes: ${routes || "?"}.`;
+    }
+    case "get_vehicle_info": {
+      const upcoming = data.upcoming_stops?.length ?? 0;
+      return `Vehicle ${data.vehicle_id ?? "?"} (plate: ${data.license_plate ?? "?"}) on route ${data.route ?? "?"}. ${upcoming} upcoming stop${upcoming !== 1 ? "s" : ""}.`;
+    }
+    case "plan_trip": {
+      const opts = data.options ?? [];
+      if (opts.length === 0) return `No trip found from «${data.origin?.name}» to «${data.destination?.name}».`;
+      const best = opts[0];
+      if (best.type === "direct") {
+        return `Direct trip on route ${best.route}: board at «${best.board_stop_name}», alight at «${best.alight_stop_name}» (${best.stops_count} stops).`;
+      }
+      return `Transfer trip: ${best.route1} → «${best.transfer_stop_name}», then ${best.route2} → «${best.alight_stop_name}».`;
+    }
+    default:
+      return JSON.stringify(structured, null, 2);
+  }
+}
+
+// --- UI payload builder ---
 
 function buildUiPayload(toolName, body) {
   const payload = body ?? {};
@@ -399,6 +575,108 @@ function buildUiPayload(toolName, body) {
     };
   }
 
+  if (toolName === "get_nearby_vehicles") {
+    const vehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+    const firstVehicle = vehicles[0] ?? null;
+    const mapVehicles = vehicles.map((v, idx) => ({
+      id: v.id ?? `vehicle-${idx + 1}`,
+      route: v.route ?? null,
+      lat: normalizeCoordinate(Array.isArray(v.location) ? v.location[0] : v.lat),
+      lng: normalizeCoordinate(Array.isArray(v.location) ? v.location[1] : v.lng),
+      bearing: normalizeBearing(v.bearing),
+      next_stop_id: null,
+      eta_minutes: null,
+      eta_status: "unassigned",
+    }));
+    return {
+      view: "transit_realtime",
+      data: {
+        center_lat: normalizeCoordinate(payload.center_lat ?? (Array.isArray(firstVehicle?.location) ? firstVehicle.location[0] : null)),
+        center_lng: normalizeCoordinate(payload.center_lng ?? (Array.isArray(firstVehicle?.location) ? firstVehicle.location[1] : null)),
+        vehicles: vehicles.map((v) => ({
+          id: v.id ?? null,
+          route: v.route ?? null,
+          vehicle_type: v.vehicle_type ?? null,
+          lat: normalizeCoordinate(Array.isArray(v.location) ? v.location[0] : v.lat),
+          lng: normalizeCoordinate(Array.isArray(v.location) ? v.location[1] : v.lng),
+          bearing: normalizeBearing(v.bearing),
+          lowfloor: typeof v.lowfloor === "boolean" ? v.lowfloor : null,
+        })),
+        updated_at: payload.updated_at ?? new Date().toISOString(),
+      },
+      ui_blocks: [
+        {
+          type: "map",
+          data: {
+            center: [
+              normalizeCoordinate(payload.center_lat ?? (Array.isArray(firstVehicle?.location) ? firstVehicle.location[0] : null)),
+              normalizeCoordinate(payload.center_lng ?? (Array.isArray(firstVehicle?.location) ? firstVehicle.location[1] : null)),
+            ],
+            zoom: 14,
+            vehicles: mapVehicles,
+          },
+        },
+      ],
+    };
+  }
+
+  if (toolName === "get_vehicle_info") {
+    const mapVehicle = {
+      id: String(payload.vehicleId ?? "unknown"),
+      route: payload.routeId ?? null,
+      lat: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[0] : null),
+      lng: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[1] : null),
+      bearing: normalizeBearing(payload.bearing),
+      next_stop_id: payload.arrivals?.[0]?.code != null ? String(payload.arrivals[0].code) : null,
+      eta_minutes: null,
+      eta_status: "unassigned",
+    };
+    return {
+      view: "transit_realtime",
+      data: {
+        vehicle_id: String(payload.vehicleId ?? "unknown"),
+        route: payload.routeId ?? null,
+        license_plate: payload.licensePlate ?? null,
+        lat: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[0] : null),
+        lng: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[1] : null),
+        bearing: normalizeBearing(payload.bearing),
+        direction: typeof payload.direction === "number" ? payload.direction : null,
+        upcoming_stops: (Array.isArray(payload.arrivals) ? payload.arrivals : []).map((a) => ({
+          code: a.code,
+          arrival: a.arrival ?? null,
+          departure: a.departure ?? null,
+        })),
+        updated_at: new Date().toISOString(),
+      },
+      ui_blocks: [
+        {
+          type: "map",
+          data: {
+            center: [
+              normalizeCoordinate(Array.isArray(payload.location) ? payload.location[0] : null),
+              normalizeCoordinate(Array.isArray(payload.location) ? payload.location[1] : null),
+            ],
+            zoom: 15,
+            vehicles: [mapVehicle],
+          },
+        },
+      ],
+    };
+  }
+
+  if (toolName === "plan_trip") {
+    return {
+      view: "transit_realtime",
+      data: {
+        origin: payload.origin ?? { id: "?", name: null },
+        destination: payload.destination ?? { id: "?", name: null },
+        options: Array.isArray(payload.options) ? payload.options : [],
+        updated_at: new Date().toISOString(),
+      },
+      ui_blocks: [],
+    };
+  }
+
   return {
     view: "transit_realtime",
     data: payload,
@@ -484,7 +762,11 @@ function formatToolResult(toolName, actionResult) {
 
   if (statusCode >= 400) {
     const errorText =
-      typeof body === "string" ? body : `${toolName} failed with status ${statusCode}`;
+      typeof body === "string"
+        ? body
+        : (typeof body === "object" && body?.error)
+          ? body.error
+          : `${toolName} failed with status ${statusCode}`;
     return {
       isError: true,
       content: [{ type: "text", text: errorText }],
@@ -497,7 +779,7 @@ function formatToolResult(toolName, actionResult) {
     content: [
       {
         type: "text",
-        text: JSON.stringify(structured, null, 2),
+        text: buildTextSummary(toolName, structured),
       },
     ],
   };
@@ -517,6 +799,9 @@ Read-only access to **public** timetable and live vehicle data for municipal tra
 | Which stops does a route serve? / route shape on map / departure times | \`get_route_static\` |
 | Overlay route polylines on a map (no live data needed) | \`get_stop_geometry\` |
 | Only have an address or coordinates, need a stop ID | \`get_stops_around_location\` → then use returned stop IDs |
+| "What vehicles are near me?" / live vehicles near coordinates | \`get_nearby_vehicles\` |
+| Track a specific vehicle by its ID | \`get_vehicle_info\` |
+| "How do I get from stop A to stop B?" | \`plan_trip\` |
 
 ### Input conventions
 
@@ -539,12 +824,14 @@ Every tool result is JSON with three keys: \`view\`, \`data\`, and \`ui_blocks\`
 - Prefer **tools** for live structured data.
 - Use **prompts** (\`transit-map-view\`, \`transit-arrival-list\`, \`transit-hybrid-view\`) for ready-made rendering workflows.
 - Use **resources** (\`timetable://about\`, \`timetable://reference/tools\`, \`timetable://reference/prompts\`) for reference without calling tools.
+- Use **resource templates** (\`timetable://stop/{code}\`, \`timetable://route/{name}\`) to read static stop or route info directly.
 
 ### Data caveats
 
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale values are expected.
 - \`get_route_static\` departure times are only populated for direction 0 (outbound).
 - \`direction\` in \`get_route_realtime\` vehicles maps to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
+- \`plan_trip\` uses the static route graph and does not account for realtime service disruptions.
 `,
 
   tools: `## Tools reference
@@ -555,7 +842,10 @@ Every tool result is JSON with three keys: \`view\`, \`data\`, and \`ui_blocks\`
 | \`get_route_static\` | Route metadata, stop lists for both directions, departure times, and polylines for map rendering. |
 | \`get_route_realtime\` | Live vehicle positions for all vehicles currently running on a route; map UI block. |
 | \`get_stop_geometry\` | Static map context for a stop (stop marker + route polylines). |
-| \`get_stops_around_location\` | Stops near lat/lon (code, name, coordinates, distance); **map** UI block with multiple markers (ChatGPT-friendly). |
+| \`get_stops_around_location\` | Stops near lat/lon (code, name, coordinates, distance); **map** UI block with multiple markers. |
+| \`get_nearby_vehicles\` | Live vehicles within 1 km of coordinates; map UI block. |
+| \`get_vehicle_info\` | Full info for one vehicle by ID: position, route, license plate, upcoming stops. |
+| \`plan_trip\` | Static trip planning from origin stop to destination stop; returns direct and 1-transfer options. |
 
 All tools are **read-only** and safe to retry.
 `,
@@ -563,8 +853,6 @@ All tools are **read-only** and safe to retry.
   prompts: `## Prompts reference
 
 Prompts are reusable instruction templates. Pass the listed **arguments** when invoking a prompt.
-
-### English
 
 | Prompt | Arguments | Use case |
 |--------|-----------|----------|
@@ -606,12 +894,87 @@ function registerResources(server) {
     "timetable://reference/prompts",
     {
       title: "Prompts reference",
-      description: "Catalog of prompt templates (EN/UA) and their arguments.",
+      description: "Catalog of prompt templates and their arguments.",
       mimeType: "text/markdown",
     },
     async (uri) => ({
       contents: [{ uri: uri.href, text: MCP_RESOURCES.prompts }],
     }),
+  );
+
+  // Resource templates: stop and route static data with URI-based completions
+  server.registerResource(
+    "stop-template",
+    new ResourceTemplate("timetable://stop/{code}", {
+      list: undefined,
+    }),
+    {
+      title: "Stop static info",
+      description: "Static info for a stop by numeric code (name, routes served). Use timetable://stop/707 for stop 707.",
+      mimeType: "application/json",
+    },
+    async (uri, { code }) => {
+      const result = await runAction(getSingleStopAction, {
+        stopCode: parseInt(String(code), 10),
+        query: { skipTimetableData: "true" },
+      });
+      if (result.statusCode >= 400) {
+        return {
+          contents: [{ uri: uri.href, text: `Stop ${code} not found`, mimeType: "text/plain" }],
+        };
+      }
+      const b = result.body ?? {};
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({
+            code: b.code,
+            name: b.name ?? null,
+            lat: normalizeCoordinate(b.latitude),
+            lng: normalizeCoordinate(b.longitude),
+            routes: (Array.isArray(b.transfers) ? b.transfers : []).map((t) => t.route).filter(Boolean),
+          }),
+          mimeType: "application/json",
+        }],
+      };
+    },
+  );
+
+  server.registerResource(
+    "route-template",
+    new ResourceTemplate("timetable://route/{name}", {
+      list: undefined,
+    }),
+    {
+      title: "Route static info",
+      description: "Static metadata for a route by short name (e.g. timetable://route/T30). Returns stop counts and color.",
+      mimeType: "application/json",
+    },
+    async (uri, { name }) => {
+      const result = await runAction(routeInfoStaticAction, {
+        params: { name: String(name) },
+      });
+      if (result.statusCode >= 400) {
+        return {
+          contents: [{ uri: uri.href, text: `Route ${name} not found`, mimeType: "text/plain" }],
+        };
+      }
+      const b = result.body ?? {};
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({
+            name: b.route_short_name ?? null,
+            long_name: b.route_long_name ?? null,
+            color: b.color ?? null,
+            type: b.type ?? null,
+            stops_outbound: (Array.isArray(b.stops?.[0]) ? b.stops[0] : []).length,
+            stops_inbound: (Array.isArray(b.stops?.[1]) ? b.stops[1] : []).length,
+          }),
+          mimeType: "application/json",
+        }],
+      };
+    },
   );
 }
 
@@ -632,6 +995,10 @@ function registerTools(server) {
     async ({ stop_id }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stop_realtime' } });
       const stopCode = normalizeStopCode(stop_id);
+      const cacheArgs = { stop_id: stopCode };
+      const cached = getCached("get_stop_realtime", cacheArgs);
+      if (cached) return cached;
+
       const actionResult = await runAction(getSingleStopAction, {
         stopCode,
         query: { skipTimetableData: "false" },
@@ -654,7 +1021,9 @@ function registerTools(server) {
         updated_at: new Date().toISOString(),
       };
 
-      return formatToolResult("get_stop_realtime", { statusCode: 200, body: payload });
+      const result = formatToolResult("get_stop_realtime", { statusCode: 200, body: payload });
+      setCached("get_stop_realtime", cacheArgs, result);
+      return result;
     },
   );
 
@@ -673,6 +1042,10 @@ function registerTools(server) {
     },
     async ({ route_name }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_route_static' } });
+      const cacheArgs = { route_name };
+      const cached = getCached("get_route_static", cacheArgs);
+      if (cached) return cached;
+
       const actionResult = await runAction(routeInfoStaticAction, {
         params: { name: route_name },
       });
@@ -701,7 +1074,9 @@ function registerTools(server) {
         updated_at: new Date().toISOString(),
       };
 
-      return formatToolResult("get_route_static", { statusCode: 200, body: payload });
+      const result = formatToolResult("get_route_static", { statusCode: 200, body: payload });
+      setCached("get_route_static", cacheArgs, result);
+      return result;
     },
   );
 
@@ -721,6 +1096,10 @@ function registerTools(server) {
     },
     async ({ route_name }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_route_realtime' } });
+      const cacheArgs = { route_name };
+      const cached = getCached("get_route_realtime", cacheArgs);
+      if (cached) return cached;
+
       const actionResult = await runAction(routeDynamicInfoAction, {
         params: { name: route_name },
       });
@@ -733,16 +1112,18 @@ function registerTools(server) {
         route_name,
         vehicles: rawVehicles.map((v, index) => ({
           id: v.id ?? `vehicle-${index + 1}`,
-          direction: v.direction ?? null,
+          direction: typeof v.direction === "number" ? v.direction : null,
           lat: normalizeCoordinate(v.location?.[0]),
           lng: normalizeCoordinate(v.location?.[1]),
           bearing: normalizeBearing(v.bearing),
-          lowfloor: v.lowfloor ?? null,
+          lowfloor: typeof v.lowfloor === "boolean" ? v.lowfloor : null,
         })),
         updated_at: new Date().toISOString(),
       };
 
-      return formatToolResult("get_route_realtime", { statusCode: 200, body: payload });
+      const result = formatToolResult("get_route_realtime", { statusCode: 200, body: payload });
+      setCached("get_route_realtime", cacheArgs, result);
+      return result;
     },
   );
 
@@ -762,6 +1143,10 @@ function registerTools(server) {
     async ({ stop_id }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stop_geometry' } });
       const stopCode = normalizeStopCode(stop_id);
+      const cacheArgs = { stop_id: stopCode };
+      const cached = getCached("get_stop_geometry", cacheArgs);
+      if (cached) return cached;
+
       const stopResult = await runAction(getSingleStopAction, {
         stopCode,
         query: { skipTimetableData: "true" },
@@ -784,32 +1169,27 @@ function registerTools(server) {
           .filter((route) => typeof route === "string" && route.length > 0),
       )];
 
-      const routes = [];
-      for (const routeName of routeNames) {
-        const routeResult = await runAction(routeInfoStaticAction, {
-          params: { name: routeName },
-        });
-        if (routeResult.statusCode >= 400) {
-          continue;
-        }
+      // Parallelize route shape fetches
+      const routeResults = await Promise.all(
+        routeNames.map(async (routeName) => {
+          const routeResult = await runAction(routeInfoStaticAction, {
+            params: { name: routeName },
+          });
+          if (routeResult.statusCode >= 400) return null;
+          const routeBody = routeResult.body ?? {};
+          const shapes = Array.isArray(routeBody.shapes) ? routeBody.shapes : [];
+          const polyline = shapes.find((shape) => Array.isArray(shape) && shape.length > 0) ?? [];
+          return { route: routeName, polyline };
+        }),
+      );
 
-        const routeBody = routeResult.body ?? {};
-        const shapes = Array.isArray(routeBody.shapes) ? routeBody.shapes : [];
-        const polyline = shapes.find((shape) => Array.isArray(shape) && shape.length > 0) ?? [];
-        routes.push({
-          route: routeName,
-          polyline,
-        });
-      }
-
-      return formatToolResult("get_stop_geometry", {
+      const routes = routeResults.filter(Boolean);
+      const result = formatToolResult("get_stop_geometry", {
         statusCode: 200,
-        body: {
-          stop,
-          routes,
-          updated_at: new Date().toISOString(),
-        },
+        body: { stop, routes, updated_at: new Date().toISOString() },
       });
+      setCached("get_stop_geometry", cacheArgs, result);
+      return result;
     },
   );
 
@@ -848,6 +1228,10 @@ function registerTools(server) {
     },
     async ({ latitude, longitude, radius_meters }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stops_around_location' } });
+      const cacheArgs = { latitude, longitude, radius_meters };
+      const cached = getCached("get_stops_around_location", cacheArgs);
+      if (cached) return cached;
+
       const query = {
         latitude: String(latitude),
         longitude: String(longitude),
@@ -880,10 +1264,137 @@ function registerTools(server) {
         updated_at: new Date().toISOString(),
       };
 
-      return formatToolResult("get_stops_around_location", {
-        statusCode: 200,
-        body: payload,
+      const result = formatToolResult("get_stops_around_location", { statusCode: 200, body: payload });
+      setCached("get_stops_around_location", cacheArgs, result);
+      return result;
+    },
+  );
+
+  server.registerTool(
+    "get_nearby_vehicles",
+    {
+      title: "Get Nearby Vehicles",
+      description:
+        "Returns live positions for all transit vehicles within 1 km of given coordinates. " +
+        "Use when the user asks 'what transport is near me?' or wants a live map of all vehicles around a location without knowing the route. " +
+        "Prefer `get_route_realtime` when a specific route is already known. " +
+        "Requires decimal latitude and longitude (WGS84); use `get_stops_around_location` first if you only have a stop name.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        latitude: z
+          .number()
+          .min(-90)
+          .max(90)
+          .describe("Decimal latitude of the centre point, WGS84 (e.g. 49.842)."),
+        longitude: z
+          .number()
+          .min(-180)
+          .max(180)
+          .describe("Decimal longitude of the centre point, WGS84 (e.g. 24.031)."),
+      },
+      outputSchema: OUTPUT_SCHEMAS.get_nearby_vehicles,
+    },
+    async ({ latitude, longitude }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_nearby_vehicles' } });
+      const cacheArgs = { latitude, longitude };
+      const cached = getCached("get_nearby_vehicles", cacheArgs);
+      if (cached) return cached;
+
+      const actionResult = await runAction(closestTransportAction, {
+        query: { latitude: String(latitude), longitude: String(longitude) },
       });
+      if (actionResult.statusCode >= 400) {
+        return formatToolResult("get_nearby_vehicles", actionResult);
+      }
+
+      const body = {
+        center_lat: latitude,
+        center_lng: longitude,
+        vehicles: Array.isArray(actionResult.body) ? actionResult.body : [],
+        updated_at: new Date().toISOString(),
+      };
+
+      const result = formatToolResult("get_nearby_vehicles", { statusCode: 200, body });
+      setCached("get_nearby_vehicles", cacheArgs, result);
+      return result;
+    },
+  );
+
+  server.registerTool(
+    "get_vehicle_info",
+    {
+      title: "Get Vehicle Info",
+      description:
+        "Returns full details for a specific transit vehicle by its ID: current position, bearing, route, license plate, direction, and upcoming stop arrivals. " +
+        "Use when the user wants to track a particular vehicle (e.g. after seeing it on a `get_route_realtime` map). " +
+        "Vehicle IDs come from `get_route_realtime`, `get_nearby_vehicles`, or `get_stop_realtime` results. " +
+        "Do NOT use this to get all vehicles on a route — use `get_route_realtime` instead.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        vehicle_id: z
+          .string()
+          .min(1)
+          .describe("Vehicle ID as returned by get_route_realtime, get_nearby_vehicles, or get_stop_realtime."),
+      },
+      outputSchema: OUTPUT_SCHEMAS.get_vehicle_info,
+    },
+    async ({ vehicle_id }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_vehicle_info' } });
+      const cacheArgs = { vehicle_id };
+      const cached = getCached("get_vehicle_info", cacheArgs);
+      if (cached) return cached;
+
+      const actionResult = await runAction(vehicleInfoAction, {
+        params: { vehicleId: vehicle_id },
+      });
+      if (actionResult.statusCode >= 400) {
+        return formatToolResult("get_vehicle_info", actionResult);
+      }
+
+      const result = formatToolResult("get_vehicle_info", actionResult);
+      setCached("get_vehicle_info", cacheArgs, result);
+      return result;
+    },
+  );
+
+  server.registerTool(
+    "plan_trip",
+    {
+      title: "Plan Trip",
+      description:
+        "Plans a transit trip from an origin stop to a destination stop using the static route graph. " +
+        "Returns direct options (single route) and 1-transfer options sorted by fewest stops. " +
+        "Use when the user asks 'how do I get from A to B?' or needs route recommendations between two stops. " +
+        "Requires numeric stop codes for both origin and destination; use `get_stops_around_location` first if you only have addresses or coordinates. " +
+        "Does NOT account for realtime service disruptions or live vehicle positions — combine with `get_stop_realtime` for live ETAs after planning.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        origin_stop_id: zStopId().describe("Numeric stop code of the departure stop."),
+        destination_stop_id: zStopId().describe("Numeric stop code of the destination stop."),
+      },
+      outputSchema: OUTPUT_SCHEMAS.plan_trip,
+    },
+    async ({ origin_stop_id, destination_stop_id }) => {
+      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'plan_trip' } });
+      const originCode = normalizeStopCode(origin_stop_id);
+      const destCode = normalizeStopCode(destination_stop_id);
+      const cacheArgs = { origin: originCode, destination: destCode };
+      const cached = getCached("plan_trip", cacheArgs);
+      if (cached) return cached;
+
+      const actionResult = await runAction(planTripAction, {
+        query: {
+          origin: String(originCode),
+          destination: String(destCode),
+        },
+      });
+      if (actionResult.statusCode >= 400) {
+        return formatToolResult("plan_trip", actionResult);
+      }
+
+      const result = formatToolResult("plan_trip", actionResult);
+      setCached("plan_trip", cacheArgs, result);
+      return result;
     },
   );
 }
@@ -1000,9 +1511,7 @@ export function createTimetableMcpServer() {
   const server = new McpServer(
     mcpServerImplementation(),
     {
-      capabilities: {
-        logging: {},
-      },
+      capabilities: {},
       instructions: MCP_SERVER_INSTRUCTIONS,
     },
   );
@@ -1047,8 +1556,6 @@ export function buildMcpServerCard(baseUrl) {
     ],
   };
 
-  // Smithery static card: serverInfo; registry-style keys (description, homepage, iconUrl) at top level
-  // for tools that do not read MCP's websiteUrl/Implementation only.
   return {
     serverInfo,
     name: serverInfo.name,
