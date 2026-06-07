@@ -7,7 +7,11 @@ import {
   getTrips,
   getStoptimes,
 } from "gtfs";
-import { getTodayServiceIds } from "./utils/appHelpers.js";
+import {
+  getTodayServiceIds,
+  getWorkdayServiceIds,
+  getWeekendServiceIds,
+} from "./utils/appHelpers.js";
 
 import PublicGoogleSheetsParser from "public-google-sheets-parser";
 const spreadsheetId = "1AXRYgB4QqFaUCBEHJ8gueMnpYR2tI2NMgi2d8Ai7nAY";
@@ -259,6 +263,32 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     stopsModels.filter(Boolean).map((s) => [s.microgiz_id, s]),
   );
 
+  const [workdayServiceIds, weekendServiceIds] = await Promise.all([
+    getWorkdayServiceIds(),
+    getWeekendServiceIds(),
+  ]);
+
+  async function buildDepartureTimeMap(routeId, serviceIds) {
+    if (!serviceIds.length) return {};
+    const trips = await getTrips(
+      { route_id: routeId, service_id: serviceIds },
+      ["trip_id"],
+    );
+    if (!trips.length) return {};
+    const stopTimes = await getStoptimes(
+      { trip_id: trips.map((t) => t.trip_id) },
+      ["stop_id", "departure_time"],
+      [["departure_time", "ASC"]],
+    );
+    const grouped = Object.groupBy(stopTimes, (t) => t.stop_id);
+    return Object.fromEntries(
+      Object.entries(grouped).map(([stopId, times]) => [
+        stopId,
+        [...new Set(times.map((t) => t.departure_time.slice(0, 5)))],
+      ]),
+    );
+  }
+
   const routeStopsRelatedPromises = routesCollection
     .find()
     .map(async (routeModel) => {
@@ -320,6 +350,14 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
           [...new Set(times.map((t) => t.departure_time.slice(0, 5)))],
         ]),
       );
+
+      [
+        routeModel.stop_departure_time_map_workday,
+        routeModel.stop_departure_time_map_weekend,
+      ] = await Promise.all([
+        buildDepartureTimeMap(routeModel.external_id, workdayServiceIds),
+        buildDepartureTimeMap(routeModel.external_id, weekendServiceIds),
+      ]);
 
       routesCollection.update(routeModel);
 

@@ -97,7 +97,7 @@ Consistency rule: every vehicle shown on a map must either match an arrival in t
 ## Data caveats
 
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
-- \`get_route_static\` departure times (\`departures\`) are only populated for direction 0 (outbound).
+- \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`schedule.weekend\`) are only populated for direction 0 (outbound, first stop).
 - \`direction\` in \`get_route_realtime\` vehicles corresponds to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
 - \`plan_trip\` returns static route graph options; it does not account for current service disruptions or realtime delays.
 `;
@@ -188,7 +188,10 @@ const OUTPUT_SCHEMAS = {
     view: z.literal("transit_realtime"),
     data: z.object({
       route: z.object({ name: z.string().nullable(), long_name: z.string().nullable(), color: z.string().nullable(), type: z.string().nullable() }),
-      stops: z.array(z.array(zStopObj.extend({ departures: z.array(z.string()) }))),
+      stops: z.array(z.array(zStopObj.extend({
+        departures: z.array(z.string()),
+        schedule: z.object({ workday: z.array(z.string()), weekend: z.array(z.string()) }).optional(),
+      }))),
       shapes: z.array(z.array(z.array(z.number()))),
       updated_at: z.string(),
     }),
@@ -829,7 +832,7 @@ Every tool result is JSON with three keys: \`view\`, \`data\`, and \`ui_blocks\`
 ### Data caveats
 
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale values are expected.
-- \`get_route_static\` departure times are only populated for direction 0 (outbound).
+- \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`schedule.weekend\`) are only populated for direction 0 (outbound, first stop).
 - \`direction\` in \`get_route_realtime\` vehicles maps to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
 - \`plan_trip\` uses the static route graph and does not account for realtime service disruptions.
 `,
@@ -1033,7 +1036,7 @@ function registerTools(server) {
       title: "Get Route Static",
       description:
         "Returns static route metadata: short and long name, vehicle type, brand colour, ordered stop lists for both directions, and route polylines (shapes) for map rendering. " +
-        "Use when the user asks which stops a route serves, what a route looks like on a map, or what the scheduled departure times are. " +
+        "Use when the user asks which stops a route serves, what a route looks like on a map, or what the scheduled departure times are (workday and weekend schedules are included in each stop's `schedule` field). " +
         "Do NOT use this when live vehicle positions are needed — use `get_route_realtime` instead. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID; call `get_stops_around_location` first if you only know a location and need to discover which routes serve it.",
       annotations: TOOL_ANNOTATIONS,
@@ -1068,6 +1071,12 @@ function registerTools(server) {
             lat: normalizeCoordinate(s.loc?.[0]),
             lng: normalizeCoordinate(s.loc?.[1]),
             departures: Array.isArray(s.departures) ? s.departures : [],
+            schedule: s.schedule
+              ? {
+                  workday: Array.isArray(s.schedule.workday) ? s.schedule.workday : [],
+                  weekend: Array.isArray(s.schedule.weekend) ? s.schedule.weekend : [],
+                }
+              : undefined,
           })),
         ),
         shapes: Array.isArray(body.shapes) ? body.shapes : [],

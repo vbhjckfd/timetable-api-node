@@ -56,6 +56,20 @@ export async function getTodayServiceIds() {
   return service_ids;
 }
 
+export async function getWorkdayServiceIds() {
+  return (await getCalendars({ monday: 1 }, ["service_id"])).map(
+    (i) => i.service_id,
+  );
+}
+
+export async function getWeekendServiceIds() {
+  const [sat, sun] = await Promise.all([
+    getCalendars({ saturday: 1 }, ["service_id"]),
+    getCalendars({ sunday: 1 }, ["service_id"]),
+  ]);
+  return [...new Set([...sat, ...sun].map((i) => i.service_id))];
+}
+
 export function isLowFloor(trip, vehiclesLocation, routeLocal) {
   // const is_low_floor = !!trip?.wheelchair_accessible ?? false
   // if (is_low_floor) {

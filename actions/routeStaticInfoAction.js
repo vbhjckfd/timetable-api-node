@@ -46,8 +46,15 @@ export default async (req, res, next) => {
             return a["vehicle_type"] == "bus" ? 1 : -1;
           });
         let departures = [];
+        let schedule = { workday: [], weekend: [] };
         if (0 == index) {
-          departures = routeLocal.stop_departure_time_map[s.microgiz_id];
+          departures = routeLocal.stop_departure_time_map[s.microgiz_id] ?? [];
+          schedule = {
+            workday:
+              routeLocal.stop_departure_time_map_workday?.[s.microgiz_id] ?? [],
+            weekend:
+              routeLocal.stop_departure_time_map_weekend?.[s.microgiz_id] ?? [],
+          };
         }
 
         return {
@@ -56,6 +63,7 @@ export default async (req, res, next) => {
           loc: [s.location.coordinates[0], s.location.coordinates[1]],
           transfers: transfers,
           departures: departures,
+          schedule,
         };
       });
   }

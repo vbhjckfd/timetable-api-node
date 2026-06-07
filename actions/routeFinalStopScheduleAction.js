@@ -44,11 +44,24 @@ export default async (req, res, next) => {
     const departures = terminusStop
       ? routeLocal.stop_departure_time_map[terminusStop.microgiz_id] ?? []
       : [];
+    const schedule = {
+      workday: terminusStop
+        ? routeLocal.stop_departure_time_map_workday?.[
+            terminusStop.microgiz_id
+          ] ?? []
+        : [],
+      weekend: terminusStop
+        ? routeLocal.stop_departure_time_map_weekend?.[
+            terminusStop.microgiz_id
+          ] ?? []
+        : [],
+    };
 
     stopsByShape[key] = {
       direction: key,
       terminus: terminusStop,
       departures,
+      schedule,
     };
   }
 
