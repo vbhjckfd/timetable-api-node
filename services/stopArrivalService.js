@@ -8,7 +8,6 @@ import {
   cleanUpStopName,
   getTextWaitTime,
   isLowFloor,
-  getTodayServiceIds,
 } from "../utils/appHelpers.js";
 import { getArrivalTimes, getVehiclesLocations } from "./microgizService.js";
 
@@ -71,7 +70,6 @@ const stopArrivalService = {
 
     const tripsRaw = await getTrips({
       trip_id: closestVehicles.map((v) => v.trip_id),
-      service_id: await getTodayServiceIds(),
     });
 
     const trips = Object.fromEntries((tripsRaw ?? []).map((t) => [t.trip_id, t]));
