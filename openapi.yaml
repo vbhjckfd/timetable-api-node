@@ -5,7 +5,7 @@ info:
     Real-time and static data for public transport in Lviv, Ukraine.
     Provides stop arrivals, vehicle positions, route schedules, and nearby
     transit lookups backed by GTFS-RT feeds from Microgiz.
-  version: 1.1.0
+  version: 1.2.0
   contact:
     url: https://lad.lviv.ua
 
@@ -131,8 +131,8 @@ paths:
       summary: Static route schedule and shape
       description: >
         Returns the route's stop lists for both directions, their coordinates,
-        connecting transfers, first-stop departure times, and the polyline
-        shapes. Cached for up to 30 days.
+        connecting transfers, first-stop departure times (today, workday, and
+        weekend schedules), and the polyline shapes. Cached for up to 30 days.
       parameters:
         - $ref: '#/components/parameters/routeName'
       responses:
@@ -470,6 +470,30 @@ components:
           type: string
           description: URL to the PDF timetable sign for this stop.
 
+    Schedule:
+      type: object
+      description: >
+        Departure times broken down by day type. Only populated on the first
+        stop of direction 0; empty arrays on all other stops.
+      properties:
+        workday:
+          type: array
+          description: Departure times (HH:MM) on Monday–Friday service.
+          items:
+            type: string
+            pattern: '^[0-2]\d:[0-5]\d$'
+          example: ["05:30", "05:52", "06:10"]
+        weekend:
+          type: array
+          description: Departure times (HH:MM) on Saturday–Sunday service.
+          items:
+            type: string
+            pattern: '^[0-2]\d:[0-5]\d$'
+          example: ["07:00", "07:30", "08:00"]
+      required:
+        - workday
+        - weekend
+
     RouteStop:
       type: object
       properties:
@@ -490,9 +514,14 @@ components:
             $ref: '#/components/schemas/Transfer'
         departures:
           type: array
-          description: Scheduled departure times from the first stop (HH:MM strings, only populated for direction 0 first stop).
+          description: >
+            Departure times (HH:MM) for today's active service, only populated
+            for the first stop of direction 0. Kept for backward compatibility —
+            prefer `schedule` for day-type–specific times.
           items:
             type: string
+        schedule:
+          $ref: '#/components/schemas/Schedule'
 
     RouteStatic:
       type: object

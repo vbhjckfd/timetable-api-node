@@ -182,12 +182,16 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
     },
     "stops": [
       [
-        { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003, "departures": ["05:30", "05:52"] },
-        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [] }
+        {
+          "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003,
+          "departures": ["05:30", "05:52"],
+          "schedule": { "workday": ["05:30", "05:52", "06:10"], "weekend": ["07:00", "07:30"] }
+        },
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [], "schedule": { "workday": [], "weekend": [] } }
       ],
       [
-        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [] },
-        { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003, "departures": [] }
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [], "schedule": { "workday": [], "weekend": [] } },
+        { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003, "departures": [], "schedule": { "workday": [], "weekend": [] } }
       ]
     ],
     "shapes": [
@@ -214,7 +218,7 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 }
 ```
 
-`stops[0]` is direction 0 (outbound), `stops[1]` is direction 1 (return). `departures` is populated only for direction 0. `shapes` follows the same two-element order. The map block uses direction-0 polyline and all unique stops as markers.
+`stops[0]` is direction 0 (outbound), `stops[1]` is direction 1 (return). `departures` and `schedule` are populated only for the **first stop of direction 0**; all other stops have empty arrays. `schedule.workday` contains Monday–Friday departure times; `schedule.weekend` contains Saturday–Sunday departure times. `departures` keeps today's schedule for backward compatibility. `shapes` follows the same two-element order. The map block uses direction-0 polyline and all unique stops as markers.
 
 </details>
 
@@ -583,6 +587,9 @@ All routes as a JSON array, sorted by short name.
 Route shape, stop list, and metadata. Long-cached (30 days).
 
 - **Response:** `{ id, color, type, route_short_name, route_long_name, stops: [[dir0…], [dir1…]], shapes }`.
+- Each stop object: `{ code, name, loc, transfers, departures, schedule }`.
+  - `departures` — today's departure times (HH:MM), populated only for direction 0 first stop. Kept for backward compatibility.
+  - `schedule` — `{ workday: string[], weekend: string[] }` departure times by day type, populated only for direction 0 first stop.
 
 #### `GET /routes/dynamic/:name`
 
