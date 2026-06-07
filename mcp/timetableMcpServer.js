@@ -354,7 +354,7 @@ function normalizeRealtimeArrival(entry) {
     : [entry.lat, entry.lng];
   return {
     route: entry.route ?? null,
-    direction: entry.direction ?? entry.end_stop ?? null,
+    direction: entry.end_stop ?? (typeof entry.direction === "string" ? entry.direction : null),
     vehicle_type: entry.vehicle_type ?? null,
     arrival_minutes: parseArrivalMinutes(entry),
     vehicle_id: entry.vehicle_id ?? null,
