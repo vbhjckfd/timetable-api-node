@@ -46,15 +46,17 @@ export async function getVehiclesLocations() {
 }
 
 export async function getArrivalTimes() {
-  return withBackoff(async () => {
-    const response = await fetchPlus(
-      process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates",
-      {},
-      3,
-    );
-    const data = await response.arrayBuffer();
-    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
-  });
+  // No backoff here: trip_updates is served from our own gtfs-eta worker
+  // (R2-cached, max-age=30). Retrying it fans out request volume to the
+  // worker on every error. A single fetch is enough; backoff stays only on
+  // getVehiclesLocations, which hits the upstream track.ua-gis.com feed.
+  const response = await fetchPlus(
+    process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates",
+    {},
+    0,
+  );
+  const data = await response.arrayBuffer();
+  return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
 }
 export async function routesThroughStop(
   stop,
