@@ -11,7 +11,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install production dependencies.
-RUN npm install --only=production
+RUN apk add --no-cache python3 make g++ && npm install --only=production && apk del make g++
 
 RUN apk add --no-cache tzdata
 ENV TZ=Europe/Kyiv
