@@ -33,17 +33,8 @@ export async function getTimeOfLastStaticUpdate() {
   return new Date(response.headers.get("last-modified"));
 }
 
-let _vehiclesPromise = null;
-let _vehiclesCacheTime = 0;
-const VEHICLES_CACHE_TTL = 10_000;
-
 export async function getVehiclesLocations() {
-  const now = Date.now();
-  if (_vehiclesPromise && now - _vehiclesCacheTime < VEHICLES_CACHE_TTL) {
-    return _vehiclesPromise;
-  }
-  _vehiclesCacheTime = now;
-  _vehiclesPromise = withBackoff(async () => {
+  return withBackoff(async () => {
     const response = await fetchPlus(
       process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position",
       {},
@@ -51,11 +42,7 @@ export async function getVehiclesLocations() {
     );
     const data = await response.arrayBuffer();
     return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
-  }).catch((err) => {
-    _vehiclesPromise = null;
-    throw err;
   });
-  return _vehiclesPromise;
 }
 
 export async function getArrivalTimes() {
