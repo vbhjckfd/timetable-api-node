@@ -10,7 +10,7 @@ async function fetchPlus(url, options = {}, retries) {
     const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...options });
     if (res.ok) return res;
     if (retries > 0) return fetchPlus(url, options, retries - 1);
-    throw new Error(`HTTP ${res.status}`);
+    throw new Error(`HTTP ${res.status} ${url}`);
   } catch (error) {
     if (retries > 0) return fetchPlus(url, options, retries - 1);
     throw error;
