@@ -12,7 +12,7 @@ export default async (req, res, next) => {
 
   let timetableData = [];
   try {
-    const skipPulse = req.headers['user-agent']?.startsWith('timetable-healthcheck');
+    const skipPulse = req.headers?.['user-agent']?.startsWith('timetable-healthcheck');
     timetableData = await stopArrivalService.getTimetableForStop(stop, { skipPulse });
 
     timetableData = timetableData.map((i) => {
