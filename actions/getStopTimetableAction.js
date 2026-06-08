@@ -12,7 +12,8 @@ export default async (req, res, next) => {
 
   let timetableData = [];
   try {
-    timetableData = await stopArrivalService.getTimetableForStop(stop);
+    const skipPulse = req.headers['user-agent'] === 'timetable-healthcheck/1.0';
+    timetableData = await stopArrivalService.getTimetableForStop(stop, { skipPulse });
 
     timetableData = timetableData.map((i) => {
       const { direction, shape_id, ...rest } = i;

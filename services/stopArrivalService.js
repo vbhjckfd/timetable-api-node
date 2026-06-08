@@ -31,7 +31,7 @@ function emitPulseSignal(stop) {
 }
 
 const stopArrivalService = {
-  getTimetableForStop: async function (stop) {
+  getTimetableForStop: async function (stop, { skipPulse = false } = {}) {
     const now = new Date();
 
     const allRoutesRaw = timetableDb.getCollection("routes").find({});
@@ -136,7 +136,7 @@ const stopArrivalService = {
       Sentry.metrics.count('stop_timetable.empty', 1, { tags: { stop: String(stop.code) } });
     }
 
-    emitPulseSignal(stop);
+    if (!skipPulse) emitPulseSignal(stop);
 
     return timetable;
   },
