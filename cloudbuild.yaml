@@ -25,6 +25,7 @@ steps:
       - >-
         --labels=managed-by=gcp-cloud-build-deploy-cloud-run,branch-name=$BRANCH_NAME,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
       - "--region=$_DEPLOY_REGION"
+      - "--startup-probe=httpGet.path=/ping,httpGet.port=8080,initialDelaySeconds=5,periodSeconds=10,failureThreshold=3,timeoutSeconds=5"
       - "--quiet"
     id: Deploy
     entrypoint: gcloud

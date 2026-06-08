@@ -36,5 +36,7 @@ COPY --from=build_image /usr/src/app/last-modified.txt ./last-modified.txt
 
 RUN node ./gtfs-import-slim.js
 
+HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 CMD wget -q --spider http://localhost:8080/health
+
 # Run the web service on container startup.
 CMD [ "npm", "start" ]

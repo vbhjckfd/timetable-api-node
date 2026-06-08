@@ -33,6 +33,7 @@ import {
   handleMcpPostRequest,
 } from "./mcp/timetableMcpServer.js";
 import planTripAction from "./actions/planTripAction.js";
+import healthAction from "./actions/healthAction.js";
 
 const app = express();
 
@@ -200,6 +201,8 @@ app.get("/INTEGRATION.md", (req, res) => {
 app.get("/ping", (req, res) => {
   res.json({});
 });
+
+app.get("/health", healthAction);
 
 // Simple in-memory rate limiter: 60 requests/min per IP
 const _mcpRateLimitMap = new Map();
