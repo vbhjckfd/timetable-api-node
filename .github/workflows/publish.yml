@@ -26,7 +26,7 @@ jobs:
       - name: Set version from git tag
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          npm version "$VERSION" --no-git-tag-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
           node -e "
             const fs = require('fs');
             const s = JSON.parse(fs.readFileSync('server.json', 'utf8'));
