@@ -11,9 +11,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install production dependencies.
-RUN apk add --no-cache python3 make g++ && npm install --only=production && apk del make g++
-
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata && npm install --only=production
 ENV TZ=Europe/Kyiv
 
 # Copy local code to the container image.
