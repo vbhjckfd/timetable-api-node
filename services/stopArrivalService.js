@@ -102,6 +102,7 @@ const stopArrivalService = {
       const vehicleLocation = vehiclesLocations.find(
         (entity) => entity.vehicle.vehicle.id == vh.vehicle,
       );
+      if (!vehicleLocation) return null;
       const position = vehicleLocation.vehicle.position;
       const vehicleInfo = {
         vehicle_id: vehicleLocation.vehicle.vehicle.id,
