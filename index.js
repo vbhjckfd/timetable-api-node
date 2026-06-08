@@ -334,7 +334,7 @@ app.use(function (err, req, res, next) {
 
 app.on("ready", () => {
   app.listen(PORT, () => {
-    console.log("Started!");
+    console.log(`Started! http://localhost:${PORT}`);
   });
 });
 
