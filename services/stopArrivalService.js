@@ -36,9 +36,17 @@ const stopArrivalService = {
 
     const allRoutesRaw = timetableDb.getCollection("routes").find({});
 
+    // Arrivals come from trip_updates and are the core of the response; the
+    // position feed is supplementary (map rendering only). A position-feed
+    // failure must not zero out the arrivals, so it degrades to no positions
+    // rather than rejecting the whole request.
     const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
       getArrivalTimes(),
-      getVehiclesLocations(),
+      getVehiclesLocations().catch((e) => {
+        Sentry.captureException(e);
+        Sentry.metrics.count('stop_timetable.positions_unavailable', 1, { tags: { stop: String(stop.code) } });
+        return [];
+      }),
     ]);
 
     const routesByRouteId = Object.fromEntries(allRoutesRaw.map((r) => [r.external_id, r]));
@@ -99,26 +107,33 @@ const stopArrivalService = {
         };
       }
 
+      // The position feed is fetched separately from trip_updates and is not
+      // snapshot-consistent with it: a vehicle mid-stop routinely blinks out of
+      // the position feed for a poll or two while still having a valid arrival
+      // prediction. Position is only needed for map rendering, so a missing one
+      // must not suppress the arrival itself.
       const vehicleLocation = vehiclesLocations.find(
         (entity) => entity.vehicle.vehicle.id == vh.vehicle,
       );
-      if (!vehicleLocation) return null;
-      const position = vehicleLocation.vehicle.position;
-      const vehicleInfo = {
-        vehicle_id: vehicleLocation.vehicle.vehicle.id,
-        location: [parseFloat(position.latitude.toFixed(5)), parseFloat(position.longitude.toFixed(5))],
-        bearing: position.bearing,
-      };
+      let vehicleInfo;
+      if (vehicleLocation) {
+        const position = vehicleLocation.vehicle.position;
+        vehicleInfo = {
+          vehicle_id: vehicleLocation.vehicle.vehicle.id,
+          location: [parseFloat(position.latitude.toFixed(5)), parseFloat(position.longitude.toFixed(5))],
+          bearing: position.bearing,
+        };
+      } else {
+        vehicleInfo = { vehicle_id: vh.vehicle };
+      }
 
       const trip = trips[vh.trip_id];
       return {
         route_id: vh.route_id,
         direction: getDirectionByTrip(vh.trip_id, routesByRouteId[vh.route_id]),
-        lowfloor: isLowFloor(
-          trip,
-          vehicleLocation,
-          routesByRouteId[vh.route_id],
-        ),
+        lowfloor: vehicleLocation
+          ? isLowFloor(trip, vehicleLocation, routesByRouteId[vh.route_id])
+          : false,
         end_stop:
           trip && trip.trip_headsign ? cleanUpStopName(trip.trip_headsign) : "",
         arrival_time: new Date(vh.time).toUTCString(),
@@ -132,6 +147,10 @@ const stopArrivalService = {
 
     Sentry.metrics.count('stop_timetable.request', 1, { tags: { stop: String(stop.code) } });
     Sentry.metrics.distribution('stop_timetable.arrivals_count', timetable.length, { tags: { stop: String(stop.code) } });
+    const arrivalsWithoutPosition = timetable.filter((i) => !i.location).length;
+    if (arrivalsWithoutPosition > 0) {
+      Sentry.metrics.count('stop_timetable.arrival_without_position', arrivalsWithoutPosition, { tags: { stop: String(stop.code) } });
+    }
     if (timetable.length === 0) {
       Sentry.metrics.count('stop_timetable.empty', 1, { tags: { stop: String(stop.code) } });
     }

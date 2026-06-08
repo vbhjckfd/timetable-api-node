@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const sentryMetrics = vi.hoisted(() => ({ count: vi.fn(), distribution: vi.fn() }));
+const sentryCaptureException = vi.hoisted(() => vi.fn());
 
 vi.mock("../../connections/timetableSqliteDb.js", () => ({
   default: { getCollection: vi.fn() },
@@ -16,7 +17,7 @@ vi.mock("gtfs", () => ({
   getCalendars: vi.fn().mockResolvedValue([{ service_id: "SVC1" }]),
 }));
 
-vi.mock("@sentry/node", () => ({ metrics: sentryMetrics }));
+vi.mock("@sentry/node", () => ({ metrics: sentryMetrics, captureException: sentryCaptureException }));
 
 import stopArrivalService from "../../services/stopArrivalService.js";
 import db from "../../connections/timetableSqliteDb.js";
@@ -136,6 +137,64 @@ describe("stopArrivalService.getTimetableForStop", () => {
     expect(entry.end_stop).toBe("Destination"); // cleanUpStopName strips "(12)"
     expect(entry.arrival_time).toBeDefined();
     expect(entry.time_left).toMatch(/хв$/);
+  });
+
+  it("keeps the arrival when the vehicle is missing from the position feed", async () => {
+    // trip_updates has a prediction but the vehicle blinked out of the
+    // separate position feed (e.g. mid-stop transition) — the arrival must
+    // still be returned, just without location/bearing.
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([
+      {
+        tripUpdate: {
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+          vehicle: { id: "VH1" },
+        },
+      },
+    ]);
+    getVehiclesLocations.mockResolvedValue([]); // no positions
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(result).toHaveLength(1);
+    const entry = result[0];
+    expect(entry.route_id).toBe("ROUTE1");
+    expect(entry.vehicle_id).toBe("VH1");
+    expect(entry.location).toBeUndefined();
+    expect(entry.bearing).toBeUndefined();
+    expect(entry.lowfloor).toBe(false);
+    expect(entry.arrival_time).toBeDefined();
+  });
+
+  it("still serves arrivals when the position feed fetch fails", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([
+      {
+        tripUpdate: {
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+          vehicle: { id: "VH1" },
+        },
+      },
+    ]);
+    getVehiclesLocations.mockRejectedValue(new Error("position feed down"));
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].vehicle_id).toBe("VH1");
+    expect(result[0].location).toBeUndefined();
+    expect(sentryCaptureException).toHaveBeenCalled();
+    expect(sentryMetrics.count).toHaveBeenCalledWith(
+      'stop_timetable.positions_unavailable', 1, { tags: { stop: "1001" } },
+    );
   });
 
   it("filters out past arrivals", async () => {
