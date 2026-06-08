@@ -17,24 +17,40 @@ export default async (req, res, next) => {
 
   const mapInits = [];
 
-  let result = `
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style>
-        table {border-collapse: collapse;}
-        table, th{
-            text-align: left;
-        }
-        table tr {border-bottom: 1pt solid black;}
-        table td {vertical-align: top;}
-        a {
-            text-decoration: none;
-        }
-        .route-map { width: 320px; height: 500px; }
-        td.map-cell { padding-bottom: 15px; }
-        </style>
-        <table>
-    `;
+  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const canonical = `${baseUrl}/routes`;
+  const title = "Маршрути громадського транспорту Львова";
+  const description = "Повний список маршрутів громадського транспорту Львова із зупинками та картами.";
+
+  let result = `<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} | lad.lviv.ua</title>
+<meta name="description" content="${description}">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="${canonical}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+table {border-collapse: collapse;}
+table, th { text-align: left; }
+table tr {border-bottom: 1pt solid black;}
+table td {vertical-align: top;}
+a { text-decoration: none; }
+.route-map { width: 320px; height: 500px; }
+td.map-cell { padding-bottom: 15px; }
+</style>
+</head>
+<body>
+<table>
+`;
   for (let [i, r] of routesRaw.entries()) {
     const stopsArr = db.getCollection("stops").find({
       code: { $in: Object.values(r.stops_by_shape).flat() },
@@ -75,7 +91,7 @@ export default async (req, res, next) => {
         <td class="map-cell"><div id="${mapId}" class="route-map"></div></td>
         </tr>`;
   }
-  result += `</table><script>${mapInits.join("\n")}<\/script>`;
+  result += `</table><script>${mapInits.join("\n")}<\/script>\n</body>\n</html>`;
 
   res
     .set("Cache-Control", `public, max-age=0, s-maxage=${longCacheAgeSeconds}`)

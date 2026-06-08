@@ -29,17 +29,33 @@ export default async (req, res, next) => {
       }),
     );
   } else {
-    let result = `
-        <style>
-        table, th{
-            text-align: left;
-        }
-        a {
-            text-decoration: none;
-        }
-        </style>
-        <table>
-        `;
+    const baseUrl = `${req.protocol}://${req.hostname}`;
+    const canonical = `${baseUrl}/stops`;
+    const title = "Зупинки громадського транспорту Львова";
+    const description = "Повний список зупинок громадського транспорту Львова з кодами, координатами та маршрутами.";
+
+    let result = `<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} | lad.lviv.ua</title>
+<meta name="description" content="${description}">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="${canonical}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<link rel="icon" href="/favicon.ico">
+<style>
+table, th { text-align: left; }
+a { text-decoration: none; }
+</style>
+</head>
+<body>
+<table>
+`;
 
     result += `<tr>
         <th>Код</th>
@@ -70,7 +86,7 @@ export default async (req, res, next) => {
             <td>${transfers.map(escapeHtml).join(" ")}</td>
             </tr>`;
     }
-    result += "</table>";
+    result += "</table>\n</body>\n</html>";
 
     res.send(result);
   }
