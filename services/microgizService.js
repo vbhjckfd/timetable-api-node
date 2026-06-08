@@ -17,29 +17,44 @@ async function fetchPlus(url, options = {}, retries) {
   }
 }
 
+async function withBackoff(fn, retries = 4, baseDelayMs = 200) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt));
+    }
+  }
+}
+
 export async function getTimeOfLastStaticUpdate() {
   const response = await fetchPlus("https://track.ua-gis.com/gtfs/lviv/static.zip", { method: "HEAD" }, 3);
   return new Date(response.headers.get("last-modified"));
 }
 
 export async function getVehiclesLocations() {
-  const response = await fetchPlus(
-    process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position",
-    {},
-    3,
-  );
-  const data = await response.arrayBuffer();
-  return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
+  return withBackoff(async () => {
+    const response = await fetchPlus(
+      process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position",
+      {},
+      3,
+    );
+    const data = await response.arrayBuffer();
+    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
+  });
 }
 
 export async function getArrivalTimes() {
-  const response = await fetchPlus(
-    process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates",
-    {},
-    3,
-  );
-  const data = await response.arrayBuffer();
-  return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
+  return withBackoff(async () => {
+    const response = await fetchPlus(
+      process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates",
+      {},
+      3,
+    );
+    const data = await response.arrayBuffer();
+    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
+  });
 }
 export async function routesThroughStop(
   stop,
