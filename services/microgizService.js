@@ -5,6 +5,14 @@ import {
   getRouteType,
 } from "../utils/appHelpers.js";
 
+class TruncatedResponseError extends Error {
+  name = "TruncatedResponseError";
+}
+
+class FeedDecodeError extends Error {
+  name = "FeedDecodeError";
+}
+
 async function fetchPlus(url, options = {}, retries) {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...options });
@@ -14,6 +22,44 @@ async function fetchPlus(url, options = {}, retries) {
   } catch (error) {
     if (retries > 0) return fetchPlus(url, options, retries - 1);
     throw error;
+  }
+}
+
+// Fetches a binary body and verifies it against Content-Length. A short body
+// returned with HTTP 200 (e.g. a connection cut mid-stream) would otherwise
+// pass res.ok and feed a truncated buffer to the protobuf decoder. Throwing
+// here instead lets the retry path re-fetch a fresh, complete payload.
+async function fetchBytes(url, options = {}, retries) {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...options });
+    if (res.ok) {
+      const data = new Uint8Array(await res.arrayBuffer());
+      const expected = Number(res.headers.get("content-length"));
+      if (expected && data.byteLength !== expected) {
+        throw new TruncatedResponseError(
+          `Truncated response: got ${data.byteLength} of ${expected} bytes ${url}`,
+        );
+      }
+      return data;
+    }
+    if (retries > 0) return fetchBytes(url, options, retries - 1);
+    throw new Error(`HTTP ${res.status} ${url}`);
+  } catch (error) {
+    if (retries > 0) return fetchBytes(url, options, retries - 1);
+    throw error;
+  }
+}
+
+// Decodes a GTFS-realtime FeedMessage, tagging decode failures so logs can
+// tell "upstream sent undecodable bytes" apart from network/retry errors.
+function decodeFeed(bytes, url) {
+  try {
+    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes).entity;
+  } catch (error) {
+    throw new FeedDecodeError(
+      `Failed to decode GTFS-realtime feed (${bytes.byteLength} bytes) from ${url}: ${error.message}`,
+      { cause: error },
+    );
   }
 }
 
@@ -34,14 +80,11 @@ export async function getTimeOfLastStaticUpdate() {
 }
 
 export async function getVehiclesLocations() {
+  const url =
+    process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position";
   return withBackoff(async () => {
-    const response = await fetchPlus(
-      process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position",
-      {},
-      3,
-    );
-    const data = await response.arrayBuffer();
-    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
+    const data = await fetchBytes(url, {}, 3);
+    return decodeFeed(data, url);
   });
 }
 
@@ -50,13 +93,10 @@ export async function getArrivalTimes() {
   // (R2-cached, max-age=30). Retrying it fans out request volume to the
   // worker on every error. A single fetch is enough; backoff stays only on
   // getVehiclesLocations, which hits the upstream track.ua-gis.com feed.
-  const response = await fetchPlus(
-    process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates",
-    {},
-    0,
-  );
-  const data = await response.arrayBuffer();
-  return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(new Uint8Array(data)).entity;
+  const url =
+    process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates";
+  const data = await fetchBytes(url, {}, 0);
+  return decodeFeed(data, url);
 }
 export async function routesThroughStop(
   stop,

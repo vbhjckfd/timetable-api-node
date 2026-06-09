@@ -45,6 +45,7 @@ describe("getVehiclesLocations", () => {
     const mockEntities = [{ id: "v1" }, { id: "v2" }];
     fetchMock.mockResolvedValue({
       ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
     });
     GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
@@ -57,6 +58,21 @@ describe("getVehiclesLocations", () => {
     expect(
       GtfsRealtimeBindings.transit_realtime.FeedMessage.decode,
     ).toHaveBeenCalled();
+  });
+
+  it("retries then rejects when the body is truncated vs Content-Length", async () => {
+    // Body is 8 bytes but the server claims 12 → every attempt is truncated.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("12") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+
+    await expect(getVehiclesLocations()).rejects.toThrow(/Truncated response/);
+    // never hands a short buffer to the decoder
+    expect(
+      GtfsRealtimeBindings.transit_realtime.FeedMessage.decode,
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects when all retries fail", async () => {
@@ -74,6 +90,7 @@ describe("getArrivalTimes", () => {
     const mockEntities = [{ id: "e1" }];
     fetchMock.mockResolvedValue({
       ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
     });
     GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
