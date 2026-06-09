@@ -19,10 +19,13 @@ import {
   getVehiclesLocations,
   getArrivalTimes,
   routesThroughStop,
+  __resetVehiclesCache,
 } from "../../services/microgizService.js";
 
 beforeEach(() => {
+  vi.restoreAllMocks();
   vi.clearAllMocks();
+  __resetVehiclesCache();
 });
 
 describe("getTimeOfLastStaticUpdate", () => {
@@ -81,6 +84,46 @@ describe("getVehiclesLocations", () => {
 
     // fetchPlus exhausts retries and its .catch() returns undefined;
     // the subsequent .then(r => r.arrayBuffer()) then throws on undefined
+    await expect(getVehiclesLocations()).rejects.toThrow();
+  });
+
+  it("serves the cached feed when a later fetch fails within the stale window", async () => {
+    const mockEntities = [{ id: "cached" }];
+    // 1) a good fetch populates the cache
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      entity: mockEntities,
+    });
+    expect(await getVehiclesLocations()).toEqual(mockEntities);
+
+    // 2) every subsequent attempt fails → fall back to the cache
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await getVehiclesLocations()).toEqual(mockEntities);
+  });
+
+  it("rethrows when the cached feed is older than the stale window", async () => {
+    const mockEntities = [{ id: "old" }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      entity: mockEntities,
+    });
+    expect(await getVehiclesLocations()).toEqual(mockEntities);
+
+    // advance past the 3 min stale window, then make every attempt fail
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3 * 60 * 1000 + 1);
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
     await expect(getVehiclesLocations()).rejects.toThrow();
   });
 });

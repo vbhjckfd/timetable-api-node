@@ -79,13 +79,36 @@ export async function getTimeOfLastStaticUpdate() {
   return new Date(response.headers.get("last-modified"));
 }
 
+// Last good vehicle feed, used as a fallback when the upstream is briefly
+// unavailable. Positions go stale fast, so we only serve it for a short window.
+const VEHICLES_STALE_MAX_AGE_MS = 3 * 60 * 1000;
+let vehiclesCache = null; // { entities, at }
+
+// Test seam: drop the in-memory fallback so cases stay isolated.
+export function __resetVehiclesCache() {
+  vehiclesCache = null;
+}
+
 export async function getVehiclesLocations() {
   const url =
     process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position";
-  return withBackoff(async () => {
-    const data = await fetchBytes(url, {}, 3);
-    return decodeFeed(data, url);
-  });
+  try {
+    const entities = await withBackoff(async () => {
+      const data = await fetchBytes(url, {}, 3);
+      return decodeFeed(data, url);
+    });
+    vehiclesCache = { entities, at: Date.now() };
+    return entities;
+  } catch (err) {
+    if (vehiclesCache && Date.now() - vehiclesCache.at <= VEHICLES_STALE_MAX_AGE_MS) {
+      const ageMs = Date.now() - vehiclesCache.at;
+      console.warn(
+        `getVehiclesLocations failed, serving cached feed (${Math.round(ageMs / 1000)}s old): ${err.message}`,
+      );
+      return vehiclesCache.entities;
+    }
+    throw err;
+  }
 }
 
 export async function getArrivalTimes() {
