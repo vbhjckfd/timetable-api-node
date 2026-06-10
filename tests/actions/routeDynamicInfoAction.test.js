@@ -103,6 +103,30 @@ describe("routeDynamicInfoAction", () => {
     );
   });
 
+  it("skips feed entities without an assigned trip", async () => {
+    // GTFS-RT VehiclePosition.trip is optional — one unassigned vehicle in
+    // the feed must not 500 the whole endpoint.
+    const triplessEntity = {
+      vehicle: {
+        vehicle: { id: "VH9", licensePlate: "BC-9999" },
+        position: { latitude: 49.85, longitude: 24.02, bearing: 0 },
+        trip: null,
+      },
+    };
+    db.getCollection.mockReturnValue({
+      findOne: vi.fn().mockReturnValue(mockRoute),
+    });
+    getVehiclesLocations.mockResolvedValue([triplessEntity, mockVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const req = { params: { name: "А01" } };
+    const res = makeRes();
+    await routeDynamicInfoAction(req, res, vi.fn());
+
+    const payload = [...res.send.mock.calls[0][0]];
+    expect(payload.map((v) => v.id)).toEqual(["VH1"]);
+  });
+
   it("looks up route by external_id when param is numeric", async () => {
     const findOneMock = vi.fn().mockReturnValue(null);
     db.getCollection.mockReturnValue({ findOne: findOneMock });

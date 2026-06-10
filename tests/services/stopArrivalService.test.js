@@ -197,6 +197,50 @@ describe("stopArrivalService.getTimetableForStop", () => {
     );
   });
 
+  it("skips stopTimeUpdates that carry neither arrival nor departure", async () => {
+    // GTFS-RT allows SKIPPED/NO_DATA stop time updates with no times — they
+    // must be dropped, not crash the whole timetable.
+    const noTimesArrival = {
+      tripUpdate: {
+        stopTimeUpdate: [{ stopId: "MG1001", arrival: null, departure: null }],
+        trip: { routeId: "ROUTE1", tripId: "TRIP2" },
+        vehicle: { id: "VH2" },
+      },
+    };
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([noTimesArrival, mockArrivalEntity]);
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].vehicle_id).toBe("VH1");
+  });
+
+  it("ignores position feed entities without a vehicle descriptor", async () => {
+    const descriptorlessPosition = {
+      vehicle: {
+        vehicle: null,
+        position: { latitude: 49.9, longitude: 24.1, bearing: 0 },
+        trip: { routeId: "ROUTE1", tripId: "TRIP9" },
+      },
+    };
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([mockArrivalEntity]);
+    getVehiclesLocations.mockResolvedValue([descriptorlessPosition, mockVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].location).toEqual([49.845, 24.023]);
+  });
+
   it("filters out past arrivals", async () => {
     const pastTimeSec = Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
     const pastArrival = {

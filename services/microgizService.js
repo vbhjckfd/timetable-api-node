@@ -145,6 +145,9 @@ export async function routesThroughStop(
       const shapeId = Object.entries(r.shape_direction_map).find(
         ([, d]) => d == directionId,
       )?.[0];
+      // The terminus stop may have been skipped at import (ignore list, bad
+      // code) — keep the route but null the names instead of crashing.
+      const endStop = stopsCollection.findOne({ code: lastStopCode });
 
       return {
         id: r.external_id,
@@ -153,9 +156,8 @@ export async function routesThroughStop(
         vehicle_type: getRouteType(r.short_name),
         shape_id: shapeId,
         direction_id: Number(directionId),
-        end_stop_name: stopsCollection.findOne({ code: lastStopCode }).name,
-        end_stop_eng_name: stopsCollection.findOne({ code: lastStopCode })
-          .eng_name,
+        end_stop_name: endStop?.name ?? null,
+        end_stop_eng_name: endStop?.eng_name ?? null,
         end_stop_code: lastStopCode,
       };
     })

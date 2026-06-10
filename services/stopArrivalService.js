@@ -51,26 +51,27 @@ const stopArrivalService = {
 
     const routesByRouteId = Object.fromEntries(allRoutesRaw.map((r) => [r.external_id, r]));
 
+    // Decoded feed entities are shared (and may be served from a fallback
+    // cache), so this pipeline must not mutate them.
     const closestVehicles = closestVehiclesRaw
-      .filter((entity) => {
-        return entity.tripUpdate.stopTimeUpdate
-          .map((stu) => stu.stopId)
-          .includes(stop.microgiz_id);
-      })
-      .map((i) => i.tripUpdate)
-      .map((i) => {
-        i.stopTimeUpdate = i.stopTimeUpdate
-          .filter((st) => st.stopId == stop.microgiz_id)
-          .shift();
-        return i;
-      })
-      .map((i) => {
-        const time = i.stopTimeUpdate.arrival || i.stopTimeUpdate.departure;
+      .map((entity) => ({
+        tripUpdate: entity.tripUpdate,
+        stopTimeUpdate: (entity.tripUpdate.stopTimeUpdate ?? []).find(
+          (st) => st.stopId == stop.microgiz_id,
+        ),
+      }))
+      // SKIPPED/NO_DATA updates may carry neither arrival nor departure
+      .filter(
+        ({ stopTimeUpdate }) =>
+          stopTimeUpdate?.arrival?.time || stopTimeUpdate?.departure?.time,
+      )
+      .map(({ tripUpdate, stopTimeUpdate }) => {
+        const time = stopTimeUpdate.arrival || stopTimeUpdate.departure;
         return {
           time: parseInt(`${time.time}000`),
-          route_id: i.trip.routeId,
-          trip_id: i.trip.tripId,
-          vehicle: i.vehicle.id,
+          route_id: tripUpdate.trip.routeId,
+          trip_id: tripUpdate.trip.tripId,
+          vehicle: tripUpdate.vehicle?.id,
         };
       })
       .filter((i) => new Date(i.time) >= now)
@@ -84,7 +85,7 @@ const stopArrivalService = {
 
     const vehiclesIds = closestVehicles.map((v) => v.vehicle);
     const vehiclesLocations = vehiclesLocationsRaw.filter((entity) =>
-      vehiclesIds.includes(entity.vehicle.vehicle.id),
+      vehiclesIds.includes(entity.vehicle.vehicle?.id),
     );
     const result = closestVehicles.map((vh) => {
       let routeInfoRaw = stop.transfers.find((i) => i.id == vh.route_id);
@@ -113,7 +114,7 @@ const stopArrivalService = {
       // prediction. Position is only needed for map rendering, so a missing one
       // must not suppress the arrival itself.
       const vehicleLocation = vehiclesLocations.find(
-        (entity) => entity.vehicle.vehicle.id == vh.vehicle,
+        (entity) => entity.vehicle.vehicle?.id == vh.vehicle,
       );
       let vehicleInfo;
       if (vehicleLocation) {

@@ -13,13 +13,13 @@ export default async (req, res, next) => {
   ]);
 
   let vehiclePosition = vehiclePositionRaw.find(
-    (entity) => entity.vehicle.vehicle.id == req.params.vehicleId,
+    (entity) => entity.vehicle.vehicle?.id == req.params.vehicleId,
   );
   if (!vehiclePosition) return res.sendStatus(404);
   vehiclePosition = vehiclePosition.vehicle;
 
   let arrivalTimes = arrivalTimeItemsRaw
-    .filter((e) => e.tripUpdate.vehicle.id == req.params.vehicleId)
+    .filter((e) => e.tripUpdate.vehicle?.id == req.params.vehicleId)
     .flatMap((e) => e.tripUpdate.stopTimeUpdate)
     .sort((a, b) => a.stopSequence - b.stopSequence);
 
@@ -34,19 +34,25 @@ export default async (req, res, next) => {
 
   arrivalTimes = arrivalTimes.filter((item) => !!stopIdsMap[item.stopId]);
 
-  const routeLocal = db
-    .getCollection("routes")
-    .findOne({ external_id: vehiclePosition.trip.routeId });
+  // trip is optional in GTFS-RT (depot runs), and the route may be absent
+  // from the local DB (import intentionally skips some lines) — degrade to
+  // nulls instead of throwing.
+  const routeId = vehiclePosition.trip?.routeId ?? null;
+  const routeLocal = routeId
+    ? db.getCollection("routes").findOne({ external_id: routeId })
+    : null;
 
   res.set("Cache-Control", `public, s-maxage=5`).send({
     location: [
       vehiclePosition.position.latitude,
       vehiclePosition.position.longitude,
     ],
-    routeId: vehiclePosition.trip.routeId,
+    routeId,
     bearing: vehiclePosition.position.bearing,
     direction:
-      routeLocal.trip_direction_map[vehiclePosition.trip.tripId.toString()],
+      routeLocal?.trip_direction_map?.[
+        vehiclePosition.trip?.tripId?.toString()
+      ] ?? null,
     licensePlate: vehiclePosition.vehicle.licensePlate,
     arrivals: arrivalTimes.map((item) => {
       const transfers = stopIdsMap[item.stopId].transfers
@@ -54,7 +60,7 @@ export default async (req, res, next) => {
           const { _id, ...omitted } = i;
           return omitted;
         })
-        .filter((i) => vehiclePosition.trip.routeId != i.id)
+        .filter((i) => routeId != i.id)
         .sort((a, b) => {
           if (a["vehicle_type"] == b["vehicle_type"]) {
             return 0;

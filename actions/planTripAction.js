@@ -1,7 +1,18 @@
 import db from "../connections/timetableSqliteDb.js";
 import { formatRouteName } from "../utils/appHelpers.js";
 
+// Route/stop data only changes on GTFS import (separate process + restart),
+// so the routes×stops index is built once per process, not per request.
+let routesIndexCache = null;
+
+// Test seam: drop the memoized index so cases stay isolated.
+export function __resetRoutesIndexCache() {
+  routesIndexCache = null;
+}
+
 function buildRoutesIndex() {
+  if (routesIndexCache) return routesIndexCache;
+
   const routes = db.getCollection("routes").find({});
   const stopNames = {};
   db.getCollection("stops").find({}).forEach((s) => {
@@ -19,7 +30,8 @@ function buildRoutesIndex() {
       }
     }
   }
-  return { routesByStop, stopNames };
+  routesIndexCache = { routesByStop, stopNames };
+  return routesIndexCache;
 }
 
 function findTripOptions(originCode, destCode) {

@@ -296,6 +296,11 @@ const CACHE_TTL_MS = {
   plan_trip: 60_000,
 };
 
+// Coordinate-keyed tools produce cache keys that essentially never repeat,
+// so expired entries are not reliably cleaned up on read — cap the map and
+// evict before inserting when full.
+export const TOOL_CACHE_MAX_ENTRIES = 500;
+
 function getCached(toolName, args) {
   const key = `${toolName}:${JSON.stringify(args)}`;
   const entry = _toolCache.get(key);
@@ -308,7 +313,26 @@ function getCached(toolName, args) {
 
 function setCached(toolName, args, value) {
   const ttl = CACHE_TTL_MS[toolName] ?? 10_000;
+  if (_toolCache.size >= TOOL_CACHE_MAX_ENTRIES) {
+    const now = Date.now();
+    for (const [key, entry] of _toolCache) {
+      if (now > entry.expiresAt) _toolCache.delete(key);
+    }
+    // Still full → drop the oldest insertions (Map preserves insertion order)
+    while (_toolCache.size >= TOOL_CACHE_MAX_ENTRIES) {
+      _toolCache.delete(_toolCache.keys().next().value);
+    }
+  }
   _toolCache.set(`${toolName}:${JSON.stringify(args)}`, { value, expiresAt: Date.now() + ttl });
+}
+
+// Test seams
+export { getCached as __getCached, setCached as __setCached };
+export function __resetToolCache() {
+  _toolCache.clear();
+}
+export function __toolCacheSize() {
+  return _toolCache.size;
 }
 
 // --- Normalizers ---

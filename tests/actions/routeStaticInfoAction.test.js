@@ -25,11 +25,13 @@ const mockStop = {
   transfers: [{ _id: "x", route: "А01", shape_id: "S1", vehicle_type: "bus" }],
 };
 
+// Realistic shape storage: gtfs-import builds `shapes` as a plain object
+// keyed by shape_id (it is NOT a Map and has no .size property).
 const mockRoute = {
   external_id: "EXT1",
   short_name: "А01",
   long_name: "Route One",
-  shapes: { size: 2 }, // mock object with size property
+  shapes: { S1: [[49.845, 24.023]], S2: [[49.846, 24.024]] },
   stops_by_shape: { 0: ["1001"], 1: ["1001"] },
   stop_departure_time_map: { MG1001: ["08:00", "08:30"] },
 };
@@ -61,7 +63,7 @@ describe("routeStaticInfoAction", () => {
   });
 
   it("returns 500 when route has fewer than 2 shapes", async () => {
-    const routeWithOneShape = { ...mockRoute, shapes: { size: 1 } };
+    const routeWithOneShape = { ...mockRoute, shapes: { S1: [[49.845, 24.023]] } };
     db.getCollection.mockReturnValue({
       findOne: vi.fn().mockReturnValue(routeWithOneShape),
       find: vi.fn().mockReturnValue([]),

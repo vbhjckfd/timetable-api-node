@@ -32,17 +32,14 @@ export function secondsUntilImportDone() {
 }
 
 export async function getTodayServiceIds() {
-  const days = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-
-  const dayname = days[new Date().getDay()];
+  // Resolve the weekday in the city's timezone, not the server's: on a UTC
+  // host the day would otherwise flip 2-3 hours late for Lviv.
+  const dayname = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "Europe/Kyiv",
+  })
+    .format(new Date())
+    .toLowerCase();
 
   const service_ids = (
     await getCalendars(
@@ -294,7 +291,7 @@ export async function getMostPopularShapes(routeId) {
 
 export function getRouteColor(routeName) {
   switch (routeName.charAt(0)) {
-    case "Т":
+    case "Т": {
       const colorMap = {
         33: "6F7C32",
         32: "E51467",
@@ -317,12 +314,14 @@ export function getRouteColor(routeName) {
         "01": "E42D24",
       };
 
-      const rawNumber = routeName.match(/\d+/g).join("");
-      return "#" + colorMap[rawNumber.toString()];
-      break;
+      // Fall back to the default for unmapped numbers (a new line upstream
+      // must not yield the literal "#undefined") or names without digits.
+      const digits = routeName.match(/\d+/g);
+      const color = digits ? colorMap[digits.join("")] : undefined;
+      return color ? "#" + color : "#0E4F95";
+    }
     case "Н":
       return "#000000";
-      break;
   }
 
   return "#0E4F95";

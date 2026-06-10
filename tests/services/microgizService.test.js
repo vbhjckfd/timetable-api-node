@@ -226,6 +226,21 @@ describe("routesThroughStop", () => {
     expect(result).toHaveLength(0);
   });
 
+  it("keeps the route but nulls terminus names when the terminus stop is missing", async () => {
+    // Stops can be skipped at import (ignore list, bad code); a route whose
+    // terminus was skipped must not crash the whole import run.
+    const result = await routesThroughStop(
+      mockStop,
+      makeRoutesCollection([mockRoute]),
+      makeStopsCollection([mockStop]), // endStop (1003) intentionally absent
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("EXT1");
+    expect(result[0].end_stop_name).toBeNull();
+    expect(result[0].end_stop_eng_name).toBeNull();
+  });
+
   it("sorts results by route name", async () => {
     const routeB = {
       external_id: "EXT2",

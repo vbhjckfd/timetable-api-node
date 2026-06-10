@@ -113,6 +113,32 @@ describe("closestTransportAction", () => {
     expect(ids).not.toContain("VH2");
   });
 
+  it("skips feed entities without an assigned trip", async () => {
+    // GTFS-RT VehiclePosition.trip is optional — one unassigned vehicle in
+    // the feed must not 500 the whole endpoint.
+    const triplessEntity = {
+      vehicle: {
+        vehicle: { id: "VH9", licensePlate: "BC-9" },
+        position: { latitude: TARGET_LAT, longitude: TARGET_LON, bearing: 0 },
+        trip: null,
+      },
+    };
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    getVehiclesLocations.mockResolvedValue([triplessEntity, nearVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const req = {
+      query: { latitude: String(TARGET_LAT), longitude: String(TARGET_LON) },
+    };
+    const res = makeRes();
+    await closestTransportAction(req, res, vi.fn());
+
+    const result = res.send.mock.calls[0][0];
+    expect(result.map((v) => v.id)).toEqual(["VH1"]);
+  });
+
   it("returns vehicle with location and bearing fields", async () => {
     db.getCollection.mockReturnValue({
       find: vi.fn().mockReturnValue([mockRoute]),

@@ -18,7 +18,9 @@ import {
   cleanUpStopName,
   getTextWaitTime,
   getDirectionByTrip,
+  getTodayServiceIds,
 } from "../../utils/appHelpers.js";
+import { getCalendars } from "gtfs";
 
 describe("escapeHtml", () => {
   it("escapes ampersands", () => {
@@ -122,6 +124,15 @@ describe("getRouteColor", () => {
   it("returns black for night bus", () => {
     expect(getRouteColor("Н-А01")).toBe("#000000");
   });
+  it("returns default color for a tram/trolleybus number missing from the color map", () => {
+    // A new line added upstream must not produce the literal "#undefined"
+    expect(getRouteColor("Т10")).toBe("#0E4F95");
+  });
+
+  it("returns default color for a Т name without digits instead of throwing", () => {
+    expect(getRouteColor("Т")).toBe("#0E4F95");
+  });
+
   it("returns default color for bus route", () => {
     expect(getRouteColor("А01")).toBe("#0E4F95");
   });
@@ -162,6 +173,40 @@ describe("getTextWaitTime", () => {
   it("shows < 1 when arrival is in the past or immediate", () => {
     const past = new Date(Date.now() - 10000);
     expect(getTextWaitTime(past)).toBe("< 1хв");
+  });
+});
+
+describe("getTodayServiceIds", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("queries calendars for the current weekday and returns service ids", async () => {
+    vi.useFakeTimers();
+    // Wednesday 12:00 Kyiv time (09:00 UTC)
+    vi.setSystemTime(new Date("2026-06-10T09:00:00Z"));
+    getCalendars.mockResolvedValue([{ service_id: "SVC1" }, { service_id: "SVC2" }]);
+
+    const result = await getTodayServiceIds();
+
+    expect(getCalendars).toHaveBeenCalledWith({ wednesday: 1 }, ["service_id"]);
+    expect(result).toEqual(["SVC1", "SVC2"]);
+    vi.useRealTimers();
+  });
+
+  it("resolves the weekday in Europe/Kyiv, not in the server timezone", async () => {
+    vi.useFakeTimers();
+    // Saturday 22:30 UTC = Sunday 01:30 in Kyiv (EEST, UTC+3) — a UTC server
+    // must still pick Sunday's calendar for night/early services.
+    vi.setSystemTime(new Date("2026-06-13T22:30:00Z"));
+    getCalendars.mockResolvedValue([{ service_id: "SUN1" }]);
+
+    const result = await getTodayServiceIds();
+
+    expect(getCalendars).toHaveBeenCalledWith({ sunday: 1 }, ["service_id"]);
+    expect(result).toEqual(["SUN1"]);
+    vi.useRealTimers();
   });
 });
 

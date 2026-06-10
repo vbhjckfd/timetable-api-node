@@ -19,10 +19,11 @@ export default async (req, res, next) => {
 
   const tripDirectionMap = routeLocal.trip_direction_map;
 
+  // trip is optional in GTFS-RT — skip unassigned vehicles instead of throwing
   const vehicles = (await getVehiclesLocations()).filter((entity) => {
     return (
-      entity.vehicle.trip.routeId == routeLocal.external_id &&
-      !!entity.vehicle.trip.tripId
+      entity.vehicle.trip?.routeId == routeLocal.external_id &&
+      !!entity.vehicle.trip?.tripId
     );
   });
   // .filter(e => tripDirectionMap.hasOwnProperty(e.vehicle.trip.tripId.toString()))

@@ -9,7 +9,7 @@ vi.mock("../../utils/appHelpers.js", async (importOriginal) => {
   return { ...actual, formatRouteName: vi.fn((n) => n) };
 });
 
-import planTripAction from "../../actions/planTripAction.js";
+import planTripAction, { __resetRoutesIndexCache } from "../../actions/planTripAction.js";
 import db from "../../connections/timetableSqliteDb.js";
 
 // Minimal stop records
@@ -60,7 +60,10 @@ function setupDb(routes) {
   });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  __resetRoutesIndexCache();
+});
 
 describe("planTripAction", () => {
   it("returns direct trip when a single route serves both stops", async () => {
@@ -142,5 +145,28 @@ describe("planTripAction", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.options).toHaveLength(0);
+  });
+
+  it("builds the routes index once and reuses it across requests", async () => {
+    // Route data only changes on import + restart, so the per-request
+    // routes×stops index rebuild is pure waste.
+    const routesFind = vi.fn().mockReturnValue([routeA]);
+    const stopsFind = vi.fn().mockReturnValue(stops);
+    db.getCollection.mockImplementation((name) => {
+      if (name === "routes") return { find: routesFind };
+      if (name === "stops") return {
+        find: stopsFind,
+        findOne: vi.fn().mockImplementation(({ code }) => stops.find((s) => s.code === code) ?? null),
+      };
+    });
+
+    for (const destination of ["300", "200"]) {
+      const res = makeRes();
+      await planTripAction({ query: { origin: "100", destination } }, res);
+      expect(res.statusCode).toBe(200);
+    }
+
+    expect(routesFind).toHaveBeenCalledTimes(1);
+    expect(stopsFind).toHaveBeenCalledTimes(1);
   });
 });

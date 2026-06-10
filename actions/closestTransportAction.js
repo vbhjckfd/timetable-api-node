@@ -35,8 +35,9 @@ export default async (req, res, next) => {
     db.getCollection("routes").find({}).map((r) => [r.external_id, r]),
   );
 
+  // trip is optional in GTFS-RT — skip unassigned vehicles instead of throwing
   const vehicles = vehiclesRaw
-    .filter((i) => !!routes[i.vehicle.trip.routeId])
+    .filter((i) => !!routes[i.vehicle.trip?.routeId])
     .filter((i) => {
       const position = i.vehicle.position;
       return distanceMeters(position.latitude, position.longitude, latitude, longitude) < 1000;

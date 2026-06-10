@@ -15,6 +15,7 @@ import localDb from "./connections/timetableSqliteDb.js";
 
 import notFoundAction from "./actions/notFoundAction.js";
 import validateStopCode from "./utils/stopCodeMiddleware.js";
+import { createMcpRateLimiter } from "./utils/mcpRateLimiter.js";
 
 import getClosestStopsAction from "./actions/getClosestStopsAction.js";
 import getSingleStopAction from "./actions/getSingleStopAction.js";
@@ -204,30 +205,8 @@ app.get("/ping", (req, res) => {
 
 app.get("/health", healthAction);
 
-// Simple in-memory rate limiter: 60 requests/min per IP
-const _mcpRateLimitMap = new Map();
-const MCP_RATE_LIMIT = 60;
-const MCP_RATE_WINDOW_MS = 60_000;
-
-function mcpRateLimiter(req, res, next) {
-  const ip = req.ip ?? "unknown";
-  const now = Date.now();
-  const entry = _mcpRateLimitMap.get(ip) ?? { count: 0, windowStart: now };
-  if (now - entry.windowStart > MCP_RATE_WINDOW_MS) {
-    entry.count = 0;
-    entry.windowStart = now;
-  }
-  entry.count++;
-  _mcpRateLimitMap.set(ip, entry);
-  if (entry.count > MCP_RATE_LIMIT) {
-    return res.status(429).json({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Rate limit exceeded. Try again later." },
-      id: null,
-    });
-  }
-  next();
-}
+// In-memory rate limiter: 60 requests/min per IP, with stale-entry eviction
+const mcpRateLimiter = createMcpRateLimiter({ limit: 60, windowMs: 60_000 });
 
 app.post("/mcp", mcpRateLimiter, async (req, res) => {
   try {
