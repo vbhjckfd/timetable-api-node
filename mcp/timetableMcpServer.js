@@ -278,7 +278,7 @@ const OUTPUT_SCHEMAS = {
       options: z.array(z.union([zDirectOption, zTransferOption])),
       updated_at: z.string(),
     }),
-    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.unknown() })),
+    ui_blocks: z.tuple([]),
   }),
 };
 
@@ -446,7 +446,7 @@ function buildTextSummary(toolName, structured) {
       return `Transfer trip: ${best.route1} → «${best.transfer_stop_name}», then ${best.route2} → «${best.alight_stop_name}».`;
     }
     default:
-      return JSON.stringify(structured, null, 2);
+      return `${toolName}: data retrieved.`;
   }
 }
 
@@ -1018,9 +1018,11 @@ function registerTools(server) {
           lat: normalizeCoordinate(body.latitude),
           lng: normalizeCoordinate(body.longitude),
         },
-        arrivals: Array.isArray(body.timetable)
-          ? body.timetable.map((item) => normalizeRealtimeArrival(item))
-          : [],
+        arrivals: sortedArrivals(
+          Array.isArray(body.timetable)
+            ? body.timetable.map((item) => normalizeRealtimeArrival(item))
+            : [],
+        ),
         updated_at: new Date().toISOString(),
       };
 
@@ -1187,7 +1189,8 @@ function registerTools(server) {
           if (routeResult.statusCode >= 400) return null;
           const routeBody = routeResult.body ?? {};
           const shapes = Array.isArray(routeBody.shapes) ? routeBody.shapes : [];
-          const polyline = shapes.find((shape) => Array.isArray(shape) && shape.length > 0) ?? [];
+          const nonEmpty = shapes.filter((shape) => Array.isArray(shape) && shape.length > 0);
+          const polyline = nonEmpty.reduce((longest, s) => s.length > longest.length ? s : longest, nonEmpty[0] ?? []);
           return { route: routeName, polyline };
         }),
       );
@@ -1237,7 +1240,7 @@ function registerTools(server) {
     },
     async ({ latitude, longitude, radius_meters }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stops_around_location' } });
-      const cacheArgs = { latitude, longitude, radius_meters };
+      const cacheArgs = { latitude: normalizeCoordinate(latitude), longitude: normalizeCoordinate(longitude), radius_meters };
       const cached = getCached("get_stops_around_location", cacheArgs);
       if (cached) return cached;
 
@@ -1305,7 +1308,7 @@ function registerTools(server) {
     },
     async ({ latitude, longitude }) => {
       Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_nearby_vehicles' } });
-      const cacheArgs = { latitude, longitude };
+      const cacheArgs = { latitude: normalizeCoordinate(latitude), longitude: normalizeCoordinate(longitude) };
       const cached = getCached("get_nearby_vehicles", cacheArgs);
       if (cached) return cached;
 
