@@ -11,6 +11,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
@@ -28,9 +29,10 @@ async function main() {
 
   await upstream.connect(new StreamableHTTPClientTransport(upstreamUrl));
 
-  const [{ tools }, { resources }, { prompts }] = await Promise.all([
+  const [{ tools }, { resources }, { resourceTemplates }, { prompts }] = await Promise.all([
     upstream.listTools(),
     upstream.listResources(),
+    upstream.listResourceTemplates(),
     upstream.listPrompts(),
   ]);
 
@@ -39,7 +41,7 @@ async function main() {
     {
       capabilities: {
         ...(tools.length && { tools: {} }),
-        ...(resources.length && { resources: {} }),
+        ...(resources.length || resourceTemplates.length ? { resources: {} } : {}),
         ...(prompts.length && { prompts: {} }),
       },
     },
@@ -47,6 +49,7 @@ async function main() {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources }));
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates }));
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) =>
