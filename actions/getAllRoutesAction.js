@@ -52,9 +52,23 @@ td.map-cell { padding-bottom: 15px; }
   border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5;
 }
 .dir-btns button.active { background: #dbeafe; border-color: #2563eb; font-weight: bold; }
+.ab-marker { background: none; border: none; }
+.ab-pin {
+  width: 22px; height: 22px; line-height: 22px;
+  border-radius: 50%; background: rgba(17,17,17,.55); color: #fff;
+  text-align: center; font-weight: bold; font-size: 13px;
+  border: 2px solid rgba(255,255,255,.7); box-shadow: 0 0 3px rgba(0,0,0,.4);
+}
 </style>
 <script>
 var _maps = {}, _layers = {};
+function abIcon(label) {
+  return L.divIcon({
+    className: 'ab-marker',
+    html: '<div class="ab-pin">' + label + '</div>',
+    iconSize: [22, 22], iconAnchor: [11, 11],
+  });
+}
 function showDirs(id, dirs) {
   var m = _maps[id], ls = _layers[id];
   if (!m || !ls) return;
@@ -93,6 +107,26 @@ function showDirs(id, dirs) {
 
     const shapes = shapes_by_direction(r);
     const mapId = `map-${i}`;
+
+    // Route terminals: A = start, B = end (from dir0, falling back to dir1 reversed).
+    const dir0 = r.stops_by_shape["0"] || [];
+    const dir1 = r.stops_by_shape["1"] || [];
+    const aCode = dir0.length ? dir0[0] : dir1.at(-1);
+    const bCode = dir0.length ? dir0.at(-1) : dir1[0];
+    const endpoints = [
+      ["A", allStops[aCode]],
+      ["B", allStops[bCode]],
+    ]
+      .filter(([, s]) => !!s)
+      .map(([label, s]) => ({
+        label,
+        ll: s.location.coordinates,
+        title: `${s.name} (${s.code})`,
+      }));
+
+    // Approximate (stop-sequence) shapes are drawn dashed to flag them.
+    const syntheticDirs = r.synthetic_shape_dirs || [];
+
     if (shapes[0] || shapes[1]) {
       mapInits.push(
         `(function(){` +
@@ -100,7 +134,10 @@ function showDirs(id, dirs) {
         `L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);` +
         `var s=${JSON.stringify([shapes[0] ?? null, shapes[1] ?? null])};` +
         `var c=['#2563EB','#DC2626'],pts=[],ls=[null,null];` +
-        `s.forEach(function(sh,i){if(sh&&sh.length){ls[i]=L.polyline(sh,{color:c[i],weight:3}).addTo(m);pts=pts.concat(sh);}});` +
+        `var dash=${JSON.stringify([syntheticDirs.includes(0), syntheticDirs.includes(1)])};` +
+        `s.forEach(function(sh,i){if(sh&&sh.length){var o={color:c[i],weight:3};if(dash[i])o.dashArray='6,8';ls[i]=L.polyline(sh,o).addTo(m);pts=pts.concat(sh);}});` +
+        `var ep=${JSON.stringify(endpoints)};` +
+        `ep.forEach(function(e){L.marker(e.ll,{icon:abIcon(e.label),title:e.title}).addTo(m);pts.push(e.ll);});` +
         `if(pts.length)m.fitBounds(pts);` +
         `_maps['${mapId}']=m;_layers['${mapId}']=ls;})();`,
       );

@@ -380,6 +380,10 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
   // ── Shape quality check ────────────────────────────────────────────────────
   console.log("\nShape quality check…");
   const TERMINAL_THRESHOLD_M = 200;
+  // Gaps up to this are bridged with a straight segment to the terminal stop
+  // (covers rural terminal loops the GTFS shape stops short of); anything
+  // larger is a genuine geometry mismatch and gets flagged.
+  const EXTEND_THRESHOLD_M = 500;
 
   function distM(lat1, lon1, lat2, lon2) {
     const R = 6_371_000, rad = Math.PI / 180;
@@ -389,9 +393,30 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     return 2 * R * Math.asin(Math.sqrt(a));
   }
 
-  let passed = 0, failed = 0, autoFlipped = 0;
+  let passed = 0, failed = 0, autoFlipped = 0, autoExtended = 0, autoSynthesized = 0;
   for (const route of routesCollection.find()) {
     const issues = [];
+
+    // Fallback: the GTFS feed ships some routes with no shape geometry at all
+    // (every trip has shape_id = null). Build an approximate polyline from the
+    // ordered stop sequence so the route still renders on the map.
+    route.synthetic_shape_dirs = [];
+    for (const dir of [0, 1]) {
+      if (shapes_by_direction(route)[dir]?.length) continue;
+      const codes = route.stops_by_shape?.[String(dir)] ?? [];
+      const pts = codes
+        .map((c) => stopsCollection.findOne({ code: c }))
+        .filter(Boolean)
+        .map((s) => s.location.coordinates);
+      if (pts.length < 2) continue;
+      const shapeId = `synthetic-${route.external_id}-${dir}`;
+      route.shapes[shapeId] = pts;
+      route.shape_direction_map[shapeId] = dir;
+      route.synthetic_shape_dirs.push(dir);
+      autoSynthesized++;
+      issues.push(`dir${dir}: synthesized from ${pts.length} stops`);
+    }
+
     const shapeCount = Object.keys(route.shapes).length;
 
     if (shapeCount !== 2) {
@@ -426,23 +451,54 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
         if (ok) continue;
 
         if (flipped) {
-          // Reverse the shape in-place for this direction
-          const shapeId = Object.keys(route.shape_direction_map)
-            .find(id => route.shape_direction_map[id] === dir);
-          if (shapeId) {
-            route.shapes[shapeId].reverse();
-            autoFlipped++;
-            issues.push(`dir${dir}: flipped → auto-reversed`);
-          }
+          shape.reverse();
+          autoFlipped++;
+          issues.push(`dir${dir}: reversed`);
         } else {
-          issues.push(`dir${dir}: start ${Math.round(dStartToFirst)}m from stop ${codes[0]}, end ${Math.round(dEndToLast)}m from stop ${codes.at(-1)}`);
+          // Pick the better orientation; bridge a small gap to the terminals.
+          const flip = Math.max(dStartToLast, dEndToFirst) <
+                       Math.max(dStartToFirst, dEndToLast);
+          if (flip) shape.reverse();
+
+          const startGap = flip ? dEndToFirst : dStartToFirst;
+          const endGap   = flip ? dStartToLast : dEndToLast;
+
+          if (Math.max(startGap, endGap) <= EXTEND_THRESHOLD_M) {
+            if (startGap > TERMINAL_THRESHOLD_M) shape.unshift([fLat, fLon]);
+            if (endGap   > TERMINAL_THRESHOLD_M) shape.push([lLat, lLon]);
+            autoExtended++;
+            issues.push(`dir${dir}: bridged ${Math.round(startGap)}m/${Math.round(endGap)}m to stops${flip ? " (after flip)" : ""}`);
+          } else {
+            if (flip) shape.reverse(); // genuine issue — leave shape as imported, just flag
+
+            // Classify each bad end: a turnaround loop reaches the terminal but
+            // its endpoint overshoots; a genuine short never comes close.
+            const near = (lat, lon) => {
+              let m = Infinity;
+              for (const p of shape) m = Math.min(m, distM(p[0], p[1], lat, lon));
+              return m;
+            };
+            const desc = (gap, lat, lon, code) => {
+              const n = near(lat, lon);
+              return n <= TERMINAL_THRESHOLD_M
+                ? `loop past stop ${code} (overshoots ${Math.round(gap)}m, reaches ${Math.round(n)}m)`
+                : `${Math.round(n)}m from stop ${code}`;
+            };
+
+            const parts = [];
+            if (startGap > TERMINAL_THRESHOLD_M) parts.push(desc(startGap, fLat, fLon, codes[0]));
+            if (endGap   > TERMINAL_THRESHOLD_M) parts.push(desc(endGap,   lLat, lLon, codes.at(-1)));
+            issues.push(`dir${dir}: ${parts.join("; ")}`);
+          }
         }
       }
     }
 
     if (issues.length) {
-      const hasOnlyFlips = issues.every(i => i.includes("auto-reversed"));
-      if (hasOnlyFlips) {
+      const autoResolved = issues.every(
+        i => /reversed|bridged|synthesized/.test(i),
+      );
+      if (autoResolved) {
         routesCollection.update(route);
         passed++;
         console.log(`  ↩ ${route.short_name} (${route.external_id}): ${issues.join("; ")}`);
@@ -454,7 +510,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       passed++;
     }
   }
-  console.log(`  ${passed} routes OK (${autoFlipped} auto-reversed), ${failed} routes with issues`);
+  console.log(`  ${passed} routes OK (${autoFlipped} reversed, ${autoExtended} bridged, ${autoSynthesized} synthesized), ${failed} routes with issues`);
 
   db.saveDatabase();
   console.log(`Calculated stops of ${routeStopsRelatedPromises.length} routes`);
