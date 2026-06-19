@@ -33,6 +33,7 @@ import {
   normalizeRouteNameBase,
   getDirectionByTrip,
   getSmapleTrips,
+  shapes_by_direction,
 } from "./utils/appHelpers.js";
 const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
@@ -78,8 +79,8 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     }
 
     const baseShortName = normalizeRouteNameBase(r.route_short_name);
-    // Emergency bus A08 when tram T08 is out — not a regular line; real service is GTFS A08a → stored as А08.
-    if (baseShortName === "А08") {
+    // Emergency/non-regular routes with no valid GTFS shapes.
+    if (["А08", "А99"].includes(baseShortName)) {
       return null;
     }
 
@@ -135,9 +136,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
     trips.forEach((t) => {
       tripShapeMap[t.trip_id] = t.shape_id;
-      shapeDirectionMap[t.shape_id] = Object.keys(routeModel.shapes).indexOf(
-        t.shape_id,
-      );
+      shapeDirectionMap[t.shape_id] = t.direction_id;
     });
 
     routeModel.trip_shape_map = tripShapeMap;
@@ -377,6 +376,85 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
   console.log("Firing async process of stops transfers processing");
   await Promise.all(stopTransferPromises);
+
+  // ── Shape quality check ────────────────────────────────────────────────────
+  console.log("\nShape quality check…");
+  const TERMINAL_THRESHOLD_M = 200;
+
+  function distM(lat1, lon1, lat2, lon2) {
+    const R = 6_371_000, rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  let passed = 0, failed = 0, autoFlipped = 0;
+  for (const route of routesCollection.find()) {
+    const issues = [];
+    const shapeCount = Object.keys(route.shapes).length;
+
+    if (shapeCount !== 2) {
+      issues.push(`${shapeCount} shape(s) instead of 2`);
+    } else {
+      const shapesByDir = shapes_by_direction(route);
+
+      for (const dir of [0, 1]) {
+        const shape = shapesByDir[dir];
+        const codes = route.stops_by_shape?.[String(dir)];
+
+        if (!shape?.length)  { issues.push(`dir${dir}: no shape points`); continue; }
+        if (!codes?.length)  { issues.push(`dir${dir}: no stops`);        continue; }
+
+        const firstStop = stopsCollection.findOne({ code: codes[0] });
+        const lastStop  = stopsCollection.findOne({ code: codes.at(-1) });
+
+        if (!firstStop) { issues.push(`dir${dir}: stop ${codes[0]} not found`);     continue; }
+        if (!lastStop)  { issues.push(`dir${dir}: stop ${codes.at(-1)} not found`); continue; }
+
+        const [fLat, fLon] = firstStop.location.coordinates;
+        const [lLat, lLon] = lastStop.location.coordinates;
+
+        const dStartToFirst = distM(shape[0][0],     shape[0][1],     fLat, fLon);
+        const dEndToLast    = distM(shape.at(-1)[0], shape.at(-1)[1], lLat, lLon);
+        const dStartToLast  = distM(shape[0][0],     shape[0][1],     lLat, lLon);
+        const dEndToFirst   = distM(shape.at(-1)[0], shape.at(-1)[1], fLat, fLon);
+
+        const ok      = dStartToFirst <= TERMINAL_THRESHOLD_M && dEndToLast  <= TERMINAL_THRESHOLD_M;
+        const flipped = dStartToLast  <= TERMINAL_THRESHOLD_M && dEndToFirst <= TERMINAL_THRESHOLD_M;
+
+        if (ok) continue;
+
+        if (flipped) {
+          // Reverse the shape in-place for this direction
+          const shapeId = Object.keys(route.shape_direction_map)
+            .find(id => route.shape_direction_map[id] === dir);
+          if (shapeId) {
+            route.shapes[shapeId].reverse();
+            autoFlipped++;
+            issues.push(`dir${dir}: flipped → auto-reversed`);
+          }
+        } else {
+          issues.push(`dir${dir}: start ${Math.round(dStartToFirst)}m from stop ${codes[0]}, end ${Math.round(dEndToLast)}m from stop ${codes.at(-1)}`);
+        }
+      }
+    }
+
+    if (issues.length) {
+      const hasOnlyFlips = issues.every(i => i.includes("auto-reversed"));
+      if (hasOnlyFlips) {
+        routesCollection.update(route);
+        passed++;
+        console.log(`  ↩ ${route.short_name} (${route.external_id}): ${issues.join("; ")}`);
+      } else {
+        failed++;
+        console.warn(`  ✗ ${route.short_name} (${route.external_id}): ${issues.join("; ")}`);
+      }
+    } else {
+      passed++;
+    }
+  }
+  console.log(`  ${passed} routes OK (${autoFlipped} auto-reversed), ${failed} routes with issues`);
 
   db.saveDatabase();
   console.log(`Calculated stops of ${routeStopsRelatedPromises.length} routes`);

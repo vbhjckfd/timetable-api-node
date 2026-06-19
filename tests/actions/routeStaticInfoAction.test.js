@@ -13,6 +13,8 @@ vi.mock("../../utils/appHelpers.js", () => ({
   getRouteType: vi.fn(() => "bus"),
 }));
 
+import { shapes_by_direction } from "../../utils/appHelpers.js";
+
 import routeStaticInfoAction from "../../actions/routeStaticInfoAction.js";
 import db from "../../connections/timetableSqliteDb.js";
 
@@ -60,18 +62,22 @@ describe("routeStaticInfoAction", () => {
     expect(res.sendStatus).toHaveBeenCalledWith(404);
   });
 
-  it("returns 500 when route has fewer than 2 shapes", async () => {
-    const routeWithOneShape = { ...mockRoute, shapes: { size: 1 } };
-    db.getCollection.mockReturnValue({
-      findOne: vi.fn().mockReturnValue(routeWithOneShape),
-      find: vi.fn().mockReturnValue([]),
+  it("returns empty shapes array when route has no shapes data", async () => {
+    shapes_by_direction.mockReturnValueOnce([]);
+    const routeWithNoShapes = { ...mockRoute, shapes: {} };
+    db.getCollection.mockImplementation((name) => {
+      if (name === "routes")
+        return { findOne: vi.fn().mockReturnValue(routeWithNoShapes), find: vi.fn() };
+      if (name === "stops")
+        return { find: vi.fn().mockReturnValue([mockStop]) };
     });
 
-    const req = { params: { name: "А01" } };
+    const req = { params: { name: "А58" } };
     const res = makeRes();
     await routeStaticInfoAction(req, res, vi.fn());
 
-    expect(res.sendStatus).toHaveBeenCalledWith(500);
+    expect(res.sendStatus).not.toHaveBeenCalledWith(500);
+    expect(res.send).toHaveBeenCalledWith(expect.objectContaining({ shapes: [] }));
   });
 
   it("returns route data on success", async () => {

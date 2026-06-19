@@ -46,7 +46,28 @@ table td {vertical-align: top;}
 a { text-decoration: none; }
 .route-map { width: 320px; height: 500px; }
 td.map-cell { padding-bottom: 15px; }
+.dir-btns { margin-bottom: 4px; display: flex; gap: 4px; }
+.dir-btns button {
+  padding: 2px 8px; font-size: 12px; cursor: pointer;
+  border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5;
+}
+.dir-btns button.active { background: #dbeafe; border-color: #2563eb; font-weight: bold; }
 </style>
+<script>
+var _maps = {}, _layers = {};
+function showDirs(id, dirs) {
+  var m = _maps[id], ls = _layers[id];
+  if (!m || !ls) return;
+  [0, 1].forEach(function(i) {
+    if (!ls[i]) return;
+    if (dirs.indexOf(i) >= 0) m.addLayer(ls[i]); else m.removeLayer(ls[i]);
+  });
+  var btns = document.querySelectorAll('[data-map="' + id + '"]');
+  btns.forEach(function(b) {
+    b.classList.toggle('active', b.dataset.dirs === dirs.join(','));
+  });
+}
+</script>
 </head>
 <body>
 <table>
@@ -74,21 +95,31 @@ td.map-cell { padding-bottom: 15px; }
     const mapId = `map-${i}`;
     if (shapes[0] || shapes[1]) {
       mapInits.push(
-        `(function(){var m=L.map('${mapId}',{zoomControl:false,attributionControl:false});` +
+        `(function(){` +
+        `var m=L.map('${mapId}',{zoomControl:false,attributionControl:false});` +
         `L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);` +
         `var s=${JSON.stringify([shapes[0] ?? null, shapes[1] ?? null])};` +
-        `var c=['#2563EB','#DC2626'],pts=[];` +
-        `s.forEach(function(sh,i){if(sh&&sh.length){L.polyline(sh,{color:c[i],weight:3}).addTo(m);pts=pts.concat(sh);}});` +
-        `if(pts.length)m.fitBounds(pts);})();`,
+        `var c=['#2563EB','#DC2626'],pts=[],ls=[null,null];` +
+        `s.forEach(function(sh,i){if(sh&&sh.length){ls[i]=L.polyline(sh,{color:c[i],weight:3}).addTo(m);pts=pts.concat(sh);}});` +
+        `if(pts.length)m.fitBounds(pts);` +
+        `_maps['${mapId}']=m;_layers['${mapId}']=ls;})();`,
       );
     }
+
+    const mapControls = (shapes[0] || shapes[1])
+      ? `<div class="dir-btns">` +
+        `<button data-map="${mapId}" data-dirs="0" onclick="showDirs('${mapId}',[0])">Dir 1</button>` +
+        `<button data-map="${mapId}" data-dirs="1" onclick="showDirs('${mapId}',[1])">Dir 2</button>` +
+        `<button data-map="${mapId}" data-dirs="0,1" class="active" onclick="showDirs('${mapId}',[0,1])">Both</button>` +
+        `</div>`
+      : "";
 
     result += `<tr>
         <td><a target="_blank" href="https://lad.lviv.ua/route/${r.short_name}">${escapeHtml(r.short_name)}</a> (${r.external_id})</td>
         <td>${escapeHtml(r.long_name)}</td>
         <td><ol>${stopsByShape[0]}</ol></td>
         <td><ol>${stopsByShape[1]}</ol></td>
-        <td class="map-cell"><div id="${mapId}" class="route-map"></div></td>
+        <td class="map-cell">${mapControls}<div id="${mapId}" class="route-map"></div></td>
         </tr>`;
   }
   result += `</table><script>${mapInits.join("\n")}<\/script>\n</body>\n</html>`;

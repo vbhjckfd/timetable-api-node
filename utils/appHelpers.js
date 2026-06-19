@@ -248,48 +248,35 @@ export function formatRouteName(name) {
 }
 
 export async function getMostPopularShapes(routeId) {
-  const tripsShapes = new Set(
-    (
-      await getTrips(
-        {
-          route_id: routeId,
-          service_id: await getTodayServiceIds(),
-        },
-        ["shape_id"],
-      )
-    ).map((i) => i.shape_id),
-  );
-
-  const existingShapeRaw = await getShapes(
-    {
-      shape_id: Array.from(tripsShapes),
-    },
-    ["shape_id"],
-  );
-
-  const existingShapeIds = new Set(
-    Array.from(existingShapeRaw)
-      .flat()
-      .map((i) => i.shape_id),
-  );
-
   const trips = await getTrips(
-    {
-      route_id: routeId,
-      shape_id: Array.from(existingShapeIds),
-    },
-    ["shape_id"],
+    { route_id: routeId, service_id: await getTodayServiceIds() },
+    ["shape_id", "direction_id"],
   );
 
-  const shapeIdsStat = trips.map((t) => t.shape_id);
+  if (!trips.length) return [];
 
-  const counts = new Map();
-  for (const id of shapeIdsStat) counts.set(id, (counts.get(id) ?? 0) + 1);
-  return [...counts.entries()]
-    .sort((a, b) => a[1] - b[1])
-    .slice(-2)
-    .map(([id]) => id)
-    .sort();
+  const shapeIds = [...new Set(trips.map((t) => t.shape_id).filter(Boolean))];
+  if (!shapeIds.length) return [];
+
+  const existingShapeRaw = await getShapes({ shape_id: shapeIds }, ["shape_id"]);
+  const existingShapeIds = new Set(existingShapeRaw.map((s) => s.shape_id));
+
+  // Count trips per (direction, shape_id), then pick the most-used shape per direction
+  const byDir = new Map();
+  for (const t of trips) {
+    if (!t.shape_id || !existingShapeIds.has(t.shape_id)) continue;
+    const dir = t.direction_id ?? 0;
+    if (!byDir.has(dir)) byDir.set(dir, new Map());
+    const m = byDir.get(dir);
+    m.set(t.shape_id, (m.get(t.shape_id) ?? 0) + 1);
+  }
+
+  const result = [];
+  for (const counts of byDir.values()) {
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    result.push(best);
+  }
+  return result.sort();
 }
 
 export function getRouteColor(routeName) {
