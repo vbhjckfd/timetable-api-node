@@ -151,6 +151,7 @@ vi.mock("../../actions/planTripAction.js", () => ({
 }));
 
 import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
+import pkg from "../../package.json" with { type: "json" };
 import {
   buildMcpServerCard,
   handleMcpPostRequest,
@@ -545,19 +546,19 @@ describe("timetable MCP server", () => {
     await client.close();
   });
 
-  it("server card reflects version 1.1.4", async () => {
+  it("server card reflects the package version", async () => {
     const serverCardResponse = await fetch(`${baseUrl}/.well-known/mcp/server-card.json`);
     const serverCard = await serverCardResponse.json();
     expect(serverCard.remotes[0].type).toBe("streamable-http");
     expect(serverCard.remotes[0].url).toBe(`${baseUrl}/mcp`);
     expect(serverCard.authentication.type).toBe("none");
     expect(serverCard.title).toBe("Lviv Timetable MCP");
-    expect(serverCard.version).toBe("1.1.4");
+    expect(serverCard.version).toBe(pkg.version);
     expect(serverCard.websiteUrl).toBe("https://lad.lviv.ua");
     expect(serverCard.description).toContain("Lviv");
     expect(serverCard.serverInfo?.name).toBe("com.lad.lviv/timetable-api");
     expect(serverCard.serverInfo?.websiteUrl).toBe("https://lad.lviv.ua");
-    expect(serverCard.serverInfo?.version).toBe("1.1.4");
+    expect(serverCard.serverInfo?.version).toBe(pkg.version);
     expect(serverCard.serverInfo?.description).toContain("Lviv");
     expect(serverCard.iconUrl).toBe(`${baseUrl}/mcp-icon.svg`);
     expect(serverCard.homepage).toBe("https://lad.lviv.ua");

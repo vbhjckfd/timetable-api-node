@@ -54,6 +54,23 @@ npx @modelcontextprotocol/inspector \
   --url https://api.lad.lviv.ua/mcp
 ```
 
+### MCP tools & arguments
+
+All tools are read-only. Argument names are **exact** — pass them as shown.
+
+| Tool | Arguments | Purpose |
+|------|-----------|---------|
+| `get_stop_realtime` | `stop_id` (number or digit string) | Live arrivals + vehicle positions for a stop. |
+| `get_route_static` | `route_name` (string, e.g. `"T30"`) | Stop lists (both directions), departures, polylines. |
+| `get_route_realtime` | `route_name` (string) | Live positions of all vehicles on a route. |
+| `get_stop_geometry` | `stop_id` (number or digit string) | Stop marker + route polylines (no live data). |
+| `get_stops_around_location` | `latitude`, `longitude` (numbers), `radius_meters` (int 50–3000, optional) | Discover stops near a coordinate. |
+| `get_nearby_vehicles` | `latitude`, `longitude` (numbers) | Live vehicles within 1 km of a coordinate. |
+| `get_vehicle_info` | `vehicle_id` (string) | Position, route, plate, upcoming stops for one vehicle. |
+| `plan_trip` | `origin_stop_id`, `destination_stop_id` (numbers) | Direct and 1-transfer route options between two stops. |
+
+Every tool result is JSON with three keys — `view`, `data` (raw payload), and `ui_blocks` (ordered map/arrival-list rendering hints). Resolve a place name or address to a `stop_id` with `get_stops_around_location` before calling stop- or trip-based tools.
+
 ---
 
 ## LangChain (Python)

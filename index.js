@@ -2,6 +2,7 @@ import "./instrument.js";
 import "dotenv/config";
 
 import * as Sentry from "@sentry/node";
+import pkg from "./package.json" with { type: "json" };
 import path from "path";
 const __dirname = import.meta.dirname;
 const PORT = process.env.PORT || 8080;
@@ -115,7 +116,7 @@ app.get("/.well-known/agent.json", (req, res) => {
     description:
       "Real-time and static public transport data for Lviv, Ukraine: stops, routes, timetables, and live vehicle positions. No API key required.",
     url: baseUrl,
-    version: "1.1.0",
+    version: pkg.version,
     iconUrl: `${baseUrl}/favicon.png`,
     documentationUrl: `${baseUrl}/llms.txt`,
     capabilities: {
@@ -173,6 +174,36 @@ app.get("/.well-known/agent.json", (req, res) => {
         inputModes: ["text/plain"],
         outputModes: ["application/json"],
         examples: ["Get map data for stop 707"],
+      },
+      {
+        id: "get_nearby_vehicles",
+        name: "Get Nearby Vehicles",
+        description:
+          "Live positions for all transit vehicles within 1 km of a given latitude/longitude.",
+        tags: ["transit", "realtime", "vehicles", "location", "lviv"],
+        inputModes: ["text/plain", "application/json"],
+        outputModes: ["application/json"],
+        examples: ["What transport is near 49.84, 24.03?", "Live vehicles around me"],
+      },
+      {
+        id: "get_vehicle_info",
+        name: "Get Vehicle Info",
+        description:
+          "Full details for one vehicle by ID: position, bearing, route, license plate, and upcoming stops.",
+        tags: ["transit", "realtime", "vehicle", "tracking", "lviv"],
+        inputModes: ["text/plain"],
+        outputModes: ["application/json"],
+        examples: ["Track vehicle 12345", "Where is vehicle 12345 heading?"],
+      },
+      {
+        id: "plan_trip",
+        name: "Plan Trip",
+        description:
+          "Plan a transit trip between two stop codes; returns direct and 1-transfer route options.",
+        tags: ["transit", "trip-planning", "routing", "lviv"],
+        inputModes: ["text/plain", "application/json"],
+        outputModes: ["application/json"],
+        examples: ["How do I get from stop 707 to stop 808?", "Plan a trip from 707 to 1234"],
       },
     ],
     authentication: { schemes: [] },

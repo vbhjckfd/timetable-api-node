@@ -23,7 +23,7 @@
       "description": "Live vehicle positions for all vehicles currently running on a route",
       "tool": "get_route_realtime",
       "input": {
-        "route": "T30"
+        "route_name": "T30"
       }
     },
     {
@@ -31,7 +31,7 @@
       "description": "Route metadata, stop lists, departure times, and polylines for map rendering",
       "tool": "get_route_static",
       "input": {
-        "route": "32A"
+        "route_name": "32A"
       }
     },
     {
@@ -39,9 +39,9 @@
       "description": "Discover stops near a given latitude/longitude",
       "tool": "get_stops_around_location",
       "input": {
-        "lat": 49.8397,
-        "lng": 24.0297,
-        "radius": 300
+        "latitude": 49.8397,
+        "longitude": 24.0297,
+        "radius_meters": 300
       }
     },
     {

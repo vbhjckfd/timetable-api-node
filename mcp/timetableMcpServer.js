@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import * as z from "zod/v4";
+import pkg from "../package.json" with { type: "json" };
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -22,7 +23,7 @@ const TOOL_ANNOTATIONS = {
 const MCP_SERVER_INFO = {
   name: "com.lad.lviv/timetable-api",
   title: "Lviv Timetable MCP",
-  version: "1.1.4",
+  version: pkg.version,
   description:
     "Read-only access to Lviv, Ukraine public transport: stops, routes, static shapes, live vehicle positions, and terminus timetables. Sourced from municipal GTFS and GTFS-RT. No API key, OAuth, or user configuration is required.",
   websiteUrl: "https://lad.lviv.ua",
@@ -278,7 +279,7 @@ const OUTPUT_SCHEMAS = {
       options: z.array(z.union([zDirectOption, zTransferOption])),
       updated_at: z.string(),
     }),
-    ui_blocks: z.tuple([]),
+    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), stops: z.array(zStopObj), vehicles: z.array(zMapVehicleObj) }) })),
   }),
 };
 
@@ -668,15 +669,38 @@ function buildUiPayload(toolName, body) {
   }
 
   if (toolName === "plan_trip") {
+    const origin = payload.origin ?? { id: "?", name: null };
+    const destination = payload.destination ?? { id: "?", name: null };
+    const endpointMarkers = [origin, destination]
+      .map((s) => ({
+        id: String(s.id),
+        name: s.name ?? null,
+        lat: normalizeCoordinate(s.lat),
+        lng: normalizeCoordinate(s.lng),
+      }))
+      .filter((s) => s.lat !== null && s.lng !== null);
+    const uiBlocks = endpointMarkers.length
+      ? [
+          {
+            type: "map",
+            data: {
+              center: [endpointMarkers[0].lat, endpointMarkers[0].lng],
+              zoom: 13,
+              stops: endpointMarkers,
+              vehicles: [],
+            },
+          },
+        ]
+      : [];
     return {
       view: "transit_realtime",
       data: {
-        origin: payload.origin ?? { id: "?", name: null },
-        destination: payload.destination ?? { id: "?", name: null },
+        origin: { id: String(origin.id), name: origin.name ?? null },
+        destination: { id: String(destination.id), name: destination.name ?? null },
         options: Array.isArray(payload.options) ? payload.options : [],
         updated_at: new Date().toISOString(),
       },
-      ui_blocks: [],
+      ui_blocks: uiBlocks,
     };
   }
 
@@ -758,6 +782,26 @@ async function runAction(action, reqOverrides = {}) {
     headers: res.headers,
     body: res.body,
   };
+}
+
+/** Fetch minimal stop info (name + coordinates) for a numeric stop code, or null on failure. */
+async function fetchStopBrief(stopCode) {
+  try {
+    const result = await runAction(getSingleStopAction, {
+      stopCode,
+      query: { skipTimetableData: "true" },
+    });
+    if (result.statusCode >= 400) return null;
+    const b = result.body ?? {};
+    return {
+      id: String(b.code ?? stopCode),
+      name: b.name ?? null,
+      lat: normalizeCoordinate(b.latitude),
+      lng: normalizeCoordinate(b.longitude),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function formatToolResult(toolName, actionResult) {
@@ -1404,7 +1448,19 @@ function registerTools(server) {
         return formatToolResult("plan_trip", actionResult);
       }
 
-      const result = formatToolResult("plan_trip", actionResult);
+      // Enrich origin/destination with coordinates so a map block can be rendered.
+      const body = actionResult.body ?? {};
+      const [originStop, destStop] = await Promise.all([
+        fetchStopBrief(originCode),
+        fetchStopBrief(destCode),
+      ]);
+      const enrichedBody = {
+        ...body,
+        origin: { ...(body.origin ?? { id: String(originCode), name: null }), lat: originStop?.lat ?? null, lng: originStop?.lng ?? null },
+        destination: { ...(body.destination ?? { id: String(destCode), name: null }), lat: destStop?.lat ?? null, lng: destStop?.lng ?? null },
+      };
+
+      const result = formatToolResult("plan_trip", { statusCode: 200, body: enrichedBody });
       setCached("plan_trip", cacheArgs, result);
       return result;
     },

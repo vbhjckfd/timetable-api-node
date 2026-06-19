@@ -3,6 +3,7 @@
 // to the live Lviv Public Transport MCP server without requiring a local database.
 import "dotenv/config";
 
+import pkg from "../package.json" with { type: "json" };
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -23,7 +24,7 @@ const upstreamUrl = new URL(
 
 async function main() {
   const upstream = new Client(
-    { name: "lviv-timetable-stdio-proxy", version: "1.0.0" },
+    { name: "lviv-timetable-stdio-proxy", version: pkg.version },
     { capabilities: {} },
   );
 
@@ -37,7 +38,7 @@ async function main() {
   ]);
 
   const server = new Server(
-    { name: "com.lad.lviv/timetable-api", version: "1.0.0" },
+    { name: "com.lad.lviv/timetable-api", version: pkg.version },
     {
       capabilities: {
         ...(tools.length && { tools: {} }),
