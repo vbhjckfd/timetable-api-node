@@ -75,7 +75,7 @@ a { text-decoration: none; }
         .sort();
 
       result += `<tr>
-            <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a></td>
+            <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a> (${s.microgiz_id})</td>
             <td>
                 <a target="blank" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
                 &nbsp;

@@ -84,7 +84,7 @@ td.map-cell { padding-bottom: 15px; }
     }
 
     result += `<tr>
-        <td><a target="_blank" href="https://lad.lviv.ua/route/${r.short_name}">${escapeHtml(r.short_name)}</a></td>
+        <td><a target="_blank" href="https://lad.lviv.ua/route/${r.short_name}">${escapeHtml(r.short_name)}</a> (${r.external_id})</td>
         <td>${escapeHtml(r.long_name)}</td>
         <td><ol>${stopsByShape[0]}</ol></td>
         <td><ol>${stopsByShape[1]}</ol></td>
