@@ -66,5 +66,5 @@ export default async (req, res, next) => {
     };
   });
 
-  res.set("Cache-Control", `public, s-maxage=10`).send(result);
+  res.set("Cache-Control", `public, s-maxage=5`).send(result);
 };
