@@ -45,6 +45,7 @@ export default async (req, res, next) => {
     ],
     routeId: vehiclePosition.trip.routeId,
     bearing: vehiclePosition.position.bearing,
+    speed: vehiclePosition.position.speed ?? null,
     direction:
       routeLocal.trip_direction_map[vehiclePosition.trip.tripId.toString()],
     licensePlate: vehiclePosition.vehicle.licensePlate,

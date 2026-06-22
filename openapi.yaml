@@ -583,6 +583,10 @@ components:
           maxItems: 2
         bearing:
           type: number
+        speed:
+          type: number
+          nullable: true
+          description: Vehicle speed in m/s as reported by the GPS unit. Null when not provided by the feed.
         lowfloor:
           type: boolean
 
@@ -619,6 +623,10 @@ components:
           type: string
         bearing:
           type: number
+        speed:
+          type: number
+          nullable: true
+          description: Vehicle speed in m/s as reported by the GPS unit. Null when not provided by the feed.
         direction:
           type: integer
           enum: [0, 1]
@@ -654,5 +662,9 @@ components:
           maxItems: 2
         bearing:
           type: number
+        speed:
+          type: number
+          nullable: true
+          description: Vehicle speed in m/s as reported by the GPS unit. Null when not provided by the feed.
         lowfloor:
           type: boolean

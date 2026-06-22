@@ -59,6 +59,7 @@ export default async (req, res, next) => {
       vehicle_type: getRouteType(route.short_name),
       location: [position.latitude, position.longitude],
       bearing: position.bearing,
+      speed: position.speed ?? null,
       lowfloor: isLowFloor(trips[i.vehicle.trip.tripId], i, route),
     };
   });

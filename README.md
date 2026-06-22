@@ -595,7 +595,7 @@ Route shape, stop list, and metadata. Long-cached (30 days).
 
 Live vehicle positions for a route. Short-cached (10 s).
 
-- **Response:** array of `{ id, direction, location: [lat, lng], bearing, lowfloor }`.
+- **Response:** array of `{ id, direction, location: [lat, lng], bearing, speed, lowfloor }`. `speed` is m/s from the GPS unit, or `null` when not reported.
 
 ### Vehicles
 
@@ -603,7 +603,7 @@ Live vehicle positions for a route. Short-cached (10 s).
 
 Live position and upcoming stop arrivals for one vehicle. Short-cached (5 s).
 
-- **Response:** `{ location: [lat, lng], routeId, bearing, direction, licensePlate, arrivals }`.
+- **Response:** `{ location: [lat, lng], routeId, bearing, speed, direction, licensePlate, arrivals }`. `speed` is m/s from the GPS unit, or `null` when not reported.
 
 #### `GET /vehicle-by-plate/:plate`
 
@@ -616,7 +616,7 @@ Look up a vehicle ID by its license plate. Short-cached (5 s).
 
 Vehicles within 1 km of a point. Short-cached (10 s).
 
-- **Response:** array of `{ id, route, vehicle_type, color, location: [lat, lng], bearing, lowfloor }`.
+- **Response:** array of `{ id, route, vehicle_type, color, location: [lat, lng], bearing, speed, lowfloor }`. `speed` is m/s from the GPS unit, or `null` when not reported.
 
 ### Trip planning
 

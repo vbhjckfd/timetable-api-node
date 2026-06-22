@@ -41,6 +41,7 @@ export default async (req, res, next) => {
       direction: tripDirectionMap[i.vehicle.trip.tripId.toString()],
       location: [position.latitude, position.longitude],
       bearing: position.bearing,
+      speed: position.speed ?? null,
       lowfloor: isLowFloor(trips[i.vehicle.trip.tripId], i, routeLocal),
     };
   });
