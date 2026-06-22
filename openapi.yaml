@@ -647,6 +647,14 @@ components:
         route:
           type: string
           example: "5"
+        routeId:
+          type: string
+          description: Numeric route identifier, usable as the :name parameter in /routes/static/:name.
+        direction:
+          type: integer
+          enum: [0, 1]
+          nullable: true
+          description: Trip direction index (0 = outbound, 1 = return). Null if unknown.
         vehicle_type:
           type: string
           enum: [bus, tram, trolleybus]

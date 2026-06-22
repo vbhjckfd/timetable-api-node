@@ -57,6 +57,8 @@ export default async (req, res, next) => {
       color: getRouteColor(route.short_name),
       route: formatRouteName(route.short_name),
       vehicle_type: getRouteType(route.short_name),
+      routeId: String(i.vehicle.trip.routeId),
+      direction: route.trip_direction_map?.[String(i.vehicle.trip.tripId)] ?? null,
       location: [position.latitude, position.longitude],
       bearing: position.bearing,
       speed: position.speed ?? null,

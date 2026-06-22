@@ -616,7 +616,7 @@ Look up a vehicle ID by its license plate. Short-cached (5 s).
 
 Vehicles within 1 km of a point. Short-cached (10 s).
 
-- **Response:** array of `{ id, route, vehicle_type, color, location: [lat, lng], bearing, speed, lowfloor }`. `speed` is m/s from the GPS unit, or `null` when not reported.
+- **Response:** array of `{ id, route, routeId, direction, vehicle_type, color, location: [lat, lng], bearing, speed, lowfloor }`. `routeId` is usable as `:name` in `/routes/static/:name`; `direction` matches the index into `stops`/`shapes` (0 = outbound, 1 = return, null if unknown). `speed` is m/s or `null`.
 
 ### Trip planning
 
