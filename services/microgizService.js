@@ -113,7 +113,7 @@ export async function getVehiclesLocations() {
 
 export async function getArrivalTimes() {
   // No backoff here: trip_updates is served from our own gtfs-eta worker
-  // (R2-cached, max-age=30). Retrying it fans out request volume to the
+  // (R2-cached, max-age=10). Retrying it fans out request volume to the
   // worker on every error. A single fetch is enough; backoff stays only on
   // getVehiclesLocations, which hits the upstream track.ua-gis.com feed.
   const url =
