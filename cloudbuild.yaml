@@ -1,43 +1,64 @@
 steps:
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - "--no-cache"
-      - "-t"
-      - "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
-      - .
-      - "-f"
-      - Dockerfile
-    id: Build
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
-    id: Push
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    args:
-      - run
-      - services
-      - update
-      - $_SERVICE_NAME
-      - "--platform=managed"
-      - "--image=$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
-      - >-
-        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,branch-name=$BRANCH_NAME,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
-      - "--region=$_DEPLOY_REGION"
-      - "--quiet"
-    id: Deploy
-    entrypoint: gcloud
+  # For scheduled data-refresh builds (_DATA_REFRESH=1), skip the whole
+  # build/push/deploy when the upstream GTFS static.zip has not changed since
+  # the currently deployed revision. Code-push builds leave _DATA_REFRESH unset
+  # and always proceed. Fails open: any error checking freshness -> build anyway.
   - name: gcr.io/cloud-builders/curl
+    id: CheckFreshness
+    entrypoint: bash
     args:
-      [
-        "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=short",
-        "-s",
-        "--max-time",
-        "10",
-      ]
-images:
-  - "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
+      - -c
+      - |
+        if [ "${_DATA_REFRESH}" != "1" ]; then
+          echo "Not a data-refresh build; proceeding."
+          exit 0
+        fi
+        UP=$$(curl -fsS -I https://track.ua-gis.com/gtfs/lviv/static.zip 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($$1)=="last-modified"{print $$2}')
+        DEP=$$(curl -fsS https://timetable-api-node-1041251696619.us-central1.run.app/last-modified.txt 2>/dev/null | tr -d '\r\n')
+        echo "upstream=[$$UP] deployed=[$$DEP]"
+        if [ -n "$$UP" ] && [ "$$UP" = "$$DEP" ]; then
+          echo "GTFS static unchanged; skipping rebuild."
+          touch /workspace/SKIP
+        else
+          echo "GTFS static changed or undetermined; proceeding with build."
+        fi
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
+        docker build --no-cache -t "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME" . -f Dockerfile
+  - name: gcr.io/cloud-builders/docker
+    id: Push
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
+        docker push "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: Deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
+        gcloud run services update "$_SERVICE_NAME" \
+          --platform=managed \
+          --image="$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME" \
+          --labels=managed-by=gcp-cloud-build-deploy-cloud-run,branch-name=$BRANCH_NAME,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS \
+          --region=$_DEPLOY_REGION \
+          --quiet
+  - name: gcr.io/cloud-builders/curl
+    id: DropCache
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
+        curl -s --max-time 10 "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=short"
 options:
   substitutionOption: ALLOW_LOOSE
 substitutions:
@@ -47,6 +68,7 @@ substitutions:
   _PLATFORM: managed
   _SERVICE_NAME: timetable-api-node
   _LABELS: gcb-trigger-id=3cfc8543-fcbb-4a25-a504-60cd67484549
+  _DATA_REFRESH: ""
 tags:
   - gcp-cloud-build-deploy-cloud-run
   - gcp-cloud-build-deploy-cloud-run-managed

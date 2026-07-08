@@ -1,0 +1,17 @@
+[
+  {
+    "name": "delete-untagged",
+    "action": { "type": "Delete" },
+    "condition": {
+      "tagState": "untagged",
+      "olderThan": "3d"
+    }
+  },
+  {
+    "name": "keep-recent-tagged",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": {
+      "keepCount": 5
+    }
+  }
+]
