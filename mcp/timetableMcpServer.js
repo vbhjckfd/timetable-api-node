@@ -11,7 +11,6 @@ import closestTransportAction from "../actions/closestTransportAction.js";
 import vehicleInfoAction from "../actions/vehicleInfoAction.js";
 import routeInfoStaticAction from "../actions/routeStaticInfoAction.js";
 import routeDynamicInfoAction from "../actions/routeDynamicInfoAction.js";
-import planTripAction from "../actions/planTripAction.js";
 
 const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
@@ -62,9 +61,12 @@ const SMITHERY_CONFIG_JSON_SCHEMA = {
   exampleConfig: { default_language: "any" },
 };
 
-const MCP_SERVER_INSTRUCTIONS = `\
-Lviv, Ukraine public transport assistant. Read-only. No authentication required.
-
+/**
+ * Shared tool-selection/UI-contract/data-caveat guidance. Reused verbatim by both
+ * MCP_SERVER_INSTRUCTIONS (sent as the MCP `instructions` field) and the `timetable://about`
+ * resource, so the two never drift out of sync.
+ */
+const TRANSIT_ASSISTANT_GUIDANCE = `\
 ## Tool selection
 
 - User asks about arrivals or "when is the next bus/tram at stop X" → \`get_stop_realtime\`
@@ -74,7 +76,6 @@ Lviv, Ukraine public transport assistant. Read-only. No authentication required.
 - User provides an address or coordinates instead of a stop ID → \`get_stops_around_location\` first, then use the returned stop IDs
 - User asks "what vehicles are near me" or wants live vehicles near a location → \`get_nearby_vehicles\`
 - User wants to track a specific vehicle by ID → \`get_vehicle_info\`
-- User asks "how do I get from A to B" or needs trip planning → \`plan_trip\`
 
 ## Input conventions
 
@@ -100,8 +101,12 @@ Consistency rule: every vehicle shown on a map must either match an arrival in t
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
 - \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`schedule.weekend\`) are only populated for direction 0 (outbound, first stop).
 - \`direction\` in \`get_route_realtime\` vehicles corresponds to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
-- \`plan_trip\` returns static route graph options; it does not account for current service disruptions or realtime delays.
 `;
+
+const MCP_SERVER_INSTRUCTIONS = `\
+Lviv, Ukraine public transport assistant. Read-only. No authentication required.
+
+${TRANSIT_ASSISTANT_GUIDANCE}`;
 
 function zRouteName() {
   return z
@@ -151,30 +156,6 @@ const zMapVehicleObj = z.object({
   eta_status: z.enum(["assigned", "unassigned"]),
 });
 const zCenter = z.tuple([zCoord, zCoord]);
-
-const zDirectOption = z.object({
-  type: z.literal("direct"),
-  route: z.string(),
-  direction: z.number().int(),
-  board_stop_code: z.number().int(),
-  board_stop_name: z.string().nullable(),
-  alight_stop_code: z.number().int(),
-  alight_stop_name: z.string().nullable(),
-  stops_count: z.number().int(),
-});
-const zTransferOption = z.object({
-  type: z.literal("transfer"),
-  route1: z.string(),
-  route2: z.string(),
-  board_stop_code: z.number().int(),
-  board_stop_name: z.string().nullable(),
-  transfer_stop_code: z.number().int(),
-  transfer_stop_name: z.string().nullable(),
-  alight_stop_code: z.number().int(),
-  alight_stop_name: z.string().nullable(),
-  stops_count_1: z.number().int(),
-  stops_count_2: z.number().int(),
-});
 
 const OUTPUT_SCHEMAS = {
   get_stop_realtime: z.object({
@@ -271,16 +252,6 @@ const OUTPUT_SCHEMAS = {
     }),
     ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), vehicles: z.array(zMapVehicleObj) }) })),
   }),
-  plan_trip: z.object({
-    view: z.literal("transit_realtime"),
-    data: z.object({
-      origin: z.object({ id: z.string(), name: z.string().nullable() }),
-      destination: z.object({ id: z.string(), name: z.string().nullable() }),
-      options: z.array(z.union([zDirectOption, zTransferOption])),
-      updated_at: z.string(),
-    }),
-    ui_blocks: z.array(z.object({ type: z.literal("map"), data: z.object({ center: zCenter, zoom: z.number(), stops: z.array(zStopObj), vehicles: z.array(zMapVehicleObj) }) })),
-  }),
 };
 
 // --- In-process TTL cache ---
@@ -294,7 +265,6 @@ const CACHE_TTL_MS = {
   get_stops_around_location: 60_000,
   get_route_static: 5 * 60_000,
   get_stop_geometry: 5 * 60_000,
-  plan_trip: 60_000,
 };
 
 function getCached(toolName, args) {
@@ -436,15 +406,6 @@ function buildTextSummary(toolName, structured) {
     case "get_vehicle_info": {
       const upcoming = data.upcoming_stops?.length ?? 0;
       return `Vehicle ${data.vehicle_id ?? "?"} (plate: ${data.license_plate ?? "?"}) on route ${data.route ?? "?"}. ${upcoming} upcoming stop${upcoming !== 1 ? "s" : ""}.`;
-    }
-    case "plan_trip": {
-      const opts = data.options ?? [];
-      if (opts.length === 0) return `No trip found from «${data.origin?.name}» to «${data.destination?.name}».`;
-      const best = opts[0];
-      if (best.type === "direct") {
-        return `Direct trip on route ${best.route}: board at «${best.board_stop_name}», alight at «${best.alight_stop_name}» (${best.stops_count} stops).`;
-      }
-      return `Transfer trip: ${best.route1} → «${best.transfer_stop_name}», then ${best.route2} → «${best.alight_stop_name}».`;
     }
     default:
       return `${toolName}: data retrieved.`;
@@ -668,42 +629,6 @@ function buildUiPayload(toolName, body) {
     };
   }
 
-  if (toolName === "plan_trip") {
-    const origin = payload.origin ?? { id: "?", name: null };
-    const destination = payload.destination ?? { id: "?", name: null };
-    const endpointMarkers = [origin, destination]
-      .map((s) => ({
-        id: String(s.id),
-        name: s.name ?? null,
-        lat: normalizeCoordinate(s.lat),
-        lng: normalizeCoordinate(s.lng),
-      }))
-      .filter((s) => s.lat !== null && s.lng !== null);
-    const uiBlocks = endpointMarkers.length
-      ? [
-          {
-            type: "map",
-            data: {
-              center: [endpointMarkers[0].lat, endpointMarkers[0].lng],
-              zoom: 13,
-              stops: endpointMarkers,
-              vehicles: [],
-            },
-          },
-        ]
-      : [];
-    return {
-      view: "transit_realtime",
-      data: {
-        origin: { id: String(origin.id), name: origin.name ?? null },
-        destination: { id: String(destination.id), name: destination.name ?? null },
-        options: Array.isArray(payload.options) ? payload.options : [],
-        updated_at: new Date().toISOString(),
-      },
-      ui_blocks: uiBlocks,
-    };
-  }
-
   return {
     view: "transit_realtime",
     data: payload,
@@ -784,26 +709,6 @@ async function runAction(action, reqOverrides = {}) {
   };
 }
 
-/** Fetch minimal stop info (name + coordinates) for a numeric stop code, or null on failure. */
-async function fetchStopBrief(stopCode) {
-  try {
-    const result = await runAction(getSingleStopAction, {
-      stopCode,
-      query: { skipTimetableData: "true" },
-    });
-    if (result.statusCode >= 400) return null;
-    const b = result.body ?? {};
-    return {
-      id: String(b.code ?? stopCode),
-      name: b.name ?? null,
-      lat: normalizeCoordinate(b.latitude),
-      lng: normalizeCoordinate(b.longitude),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function formatToolResult(toolName, actionResult) {
   const { statusCode, body } = actionResult;
 
@@ -833,52 +738,17 @@ function formatToolResult(toolName, actionResult) {
 }
 
 const MCP_RESOURCES = {
-  about: `## Lviv Timetable MCP
+  about: `# Lviv Timetable MCP
 
 Read-only access to **public** timetable and live vehicle data for municipal transit in **Lviv, Ukraine** (lad.lviv.ua ecosystem). No authentication required.
 
-### Tool selection
-
-| Situation | Tool |
-|-----------|------|
-| "When is the next bus/tram at stop X?" | \`get_stop_realtime\` |
-| "Where is route X right now?" / live vehicle positions on a route | \`get_route_realtime\` |
-| Which stops does a route serve? / route shape on map / departure times | \`get_route_static\` |
-| Overlay route polylines on a map (no live data needed) | \`get_stop_geometry\` |
-| Only have an address or coordinates, need a stop ID | \`get_stops_around_location\` → then use returned stop IDs |
-| "What vehicles are near me?" / live vehicles near coordinates | \`get_nearby_vehicles\` |
-| Track a specific vehicle by its ID | \`get_vehicle_info\` |
-| "How do I get from stop A to stop B?" | \`plan_trip\` |
-
-### Input conventions
-
-- **Stop IDs** are numeric codes printed on physical stop signage (e.g. \`707\`). Accept integer or digits-only string.
-- **Route names** are short names as shown on vehicles (e.g. \`"T30"\`, \`"32A"\`). Numeric external IDs also work.
-- Never guess a stop ID — call \`get_stops_around_location\` whenever only an address or coordinates are provided.
-
-### UI contract
-
-Every tool result is JSON with three keys: \`view\`, \`data\`, and \`ui_blocks\`.
-
-- \`data\` — raw structured payload; use for text summaries and value extraction.
-- \`ui_blocks\` — ordered rendering hints. Process in array order.
-  - \`map\` block: render centred on \`center [lat, lng]\` at \`zoom\`. Plot \`stops\` as markers, \`vehicles\` as directional icons, \`polylines\` as route shapes.
-  - \`arrival_list\` block: render arrivals sorted by \`arrival_minutes\` ascending. Show \`route\`, \`direction\`, \`vehicle_type\`, ETA. Missing ETA → \`eta_status: "unassigned"\`.
-- Consistency rule: every vehicle on the map must either match an arrival in the list (by \`vehicle_id\`) or have \`eta_status: "unassigned"\`.
-
-### How to work with this server
+${TRANSIT_ASSISTANT_GUIDANCE}
+## How to work with this server
 
 - Prefer **tools** for live structured data.
 - Use **prompts** (\`transit-map-view\`, \`transit-arrival-list\`, \`transit-hybrid-view\`) for ready-made rendering workflows.
 - Use **resources** (\`timetable://about\`, \`timetable://reference/tools\`, \`timetable://reference/prompts\`) for reference without calling tools.
 - Use **resource templates** (\`timetable://stop/{code}\`, \`timetable://route/{name}\`) to read static stop or route info directly.
-
-### Data caveats
-
-- Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale values are expected.
-- \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`schedule.weekend\`) are only populated for direction 0 (outbound, first stop).
-- \`direction\` in \`get_route_realtime\` vehicles maps to the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return).
-- \`plan_trip\` uses the static route graph and does not account for realtime service disruptions.
 `,
 
   tools: `## Tools reference
@@ -892,7 +762,6 @@ Every tool result is JSON with three keys: \`view\`, \`data\`, and \`ui_blocks\`
 | \`get_stops_around_location\` | Stops near lat/lon (code, name, coordinates, distance); **map** UI block with multiple markers. |
 | \`get_nearby_vehicles\` | Live vehicles within 1 km of coordinates; map UI block. |
 | \`get_vehicle_info\` | Full info for one vehicle by ID: position, route, license plate, upcoming stops. |
-| \`plan_trip\` | Static trip planning from origin stop to destination stop; returns direct and 1-transfer options. |
 
 All tools are **read-only** and safe to retry.
 `,
@@ -1413,58 +1282,6 @@ function registerTools(server) {
     },
   );
 
-  server.registerTool(
-    "plan_trip",
-    {
-      title: "Plan Trip",
-      description:
-        "Plans a transit trip from an origin stop to a destination stop using the static route graph. " +
-        "Returns direct options (single route) and 1-transfer options sorted by fewest stops. " +
-        "Use when the user asks 'how do I get from A to B?' or needs route recommendations between two stops. " +
-        "Requires numeric stop codes for both origin and destination; use `get_stops_around_location` first if you only have addresses or coordinates. " +
-        "Does NOT account for realtime service disruptions or live vehicle positions — combine with `get_stop_realtime` for live ETAs after planning.",
-      annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
-        origin_stop_id: zStopId().describe("Numeric stop code of the departure stop."),
-        destination_stop_id: zStopId().describe("Numeric stop code of the destination stop."),
-      },
-      outputSchema: OUTPUT_SCHEMAS.plan_trip,
-    },
-    async ({ origin_stop_id, destination_stop_id }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'plan_trip' } });
-      const originCode = normalizeStopCode(origin_stop_id);
-      const destCode = normalizeStopCode(destination_stop_id);
-      const cacheArgs = { origin: originCode, destination: destCode };
-      const cached = getCached("plan_trip", cacheArgs);
-      if (cached) return cached;
-
-      const actionResult = await runAction(planTripAction, {
-        query: {
-          origin: String(originCode),
-          destination: String(destCode),
-        },
-      });
-      if (actionResult.statusCode >= 400) {
-        return formatToolResult("plan_trip", actionResult);
-      }
-
-      // Enrich origin/destination with coordinates so a map block can be rendered.
-      const body = actionResult.body ?? {};
-      const [originStop, destStop] = await Promise.all([
-        fetchStopBrief(originCode),
-        fetchStopBrief(destCode),
-      ]);
-      const enrichedBody = {
-        ...body,
-        origin: { ...(body.origin ?? { id: String(originCode), name: null }), lat: originStop?.lat ?? null, lng: originStop?.lng ?? null },
-        destination: { ...(body.destination ?? { id: String(destCode), name: null }), lat: destStop?.lat ?? null, lng: destStop?.lng ?? null },
-      };
-
-      const result = formatToolResult("plan_trip", { statusCode: 200, body: enrichedBody });
-      setCached("plan_trip", cacheArgs, result);
-      return result;
-    },
-  );
 }
 
 function registerPrompts(server) {

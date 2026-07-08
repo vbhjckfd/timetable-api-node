@@ -7,7 +7,7 @@ on:
 
 permissions:
   id-token: write  # Required for OIDC (npm provenance + MCP registry)
-  contents: read
+  contents: write  # Required to commit synced manifest versions back to master
 
 jobs:
   publish:
@@ -33,6 +33,7 @@ jobs:
             s.version = '$VERSION';
             fs.writeFileSync('server.json', JSON.stringify(s, null, 2) + '\n');
           "
+          sed -i "s/^  version: .*/  version: $VERSION/" openapi.yaml
 
       - run: npm ci
       - run: npm run build --if-present
@@ -49,3 +50,14 @@ jobs:
       - name: Publish to Smithery
         if: env.SMITHERY_API_KEY != ''
         run: npx --yes @smithery/cli mcp publish https://api.lad.lviv.ua/mcp -n vbhjckfd/timetable-api-node
+
+      - name: Sync manifest versions back to master
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          if ! git diff --quiet -- package.json server.json openapi.yaml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add package.json server.json openapi.yaml
+            git commit -m "chore: sync manifest versions to $VERSION [skip ci]"
+            git push origin HEAD:master
+          fi

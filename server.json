@@ -3,7 +3,7 @@
   "name": "io.github.vbhjckfd/timetable-api-node",
   "title": "Lviv Public Transport",
   "description": "Lviv public transport MCP: stops, timetables, routes, and live vehicle positions. No API key.",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "websiteUrl": "https://lad.lviv.ua",
   "repository": {
     "url": "https://github.com/vbhjckfd/timetable-api-node",

@@ -124,32 +124,6 @@ vi.mock("../../actions/vehicleInfoAction.js", () => ({
   },
 }));
 
-vi.mock("../../actions/planTripAction.js", () => ({
-  default: async (req, res) => {
-    const origin = parseInt(req.query.origin, 10);
-    const destination = parseInt(req.query.destination, 10);
-    if (origin === destination) {
-      return res.status(400).json({ error: "Origin and destination must be different stops" });
-    }
-    res.json({
-      origin: { id: String(origin), name: "Origin Stop" },
-      destination: { id: String(destination), name: "Destination Stop" },
-      options: [
-        {
-          type: "direct",
-          route: "Т01",
-          direction: 0,
-          board_stop_code: origin,
-          board_stop_name: "Origin Stop",
-          alight_stop_code: destination,
-          alight_stop_name: "Destination Stop",
-          stops_count: 5,
-        },
-      ],
-    });
-  },
-}));
-
 import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
 import pkg from "../../package.json" with { type: "json" };
 import {
@@ -208,7 +182,6 @@ const TOOL_NAMES = [
   "get_stops_around_location",
   "get_nearby_vehicles",
   "get_vehicle_info",
-  "plan_trip",
 ];
 
 describe("timetable MCP server", () => {
@@ -262,13 +235,11 @@ describe("timetable MCP server", () => {
     expect(aboutText).toContain("get_stop_realtime");
     expect(aboutText).toContain("get_stops_around_location");
     expect(aboutText).toContain("get_nearby_vehicles");
-    expect(aboutText).toContain("plan_trip");
 
     const toolsResource = await client.readResource({ uri: "timetable://reference/tools" });
     const toolsText = toolsResource.contents[0].text;
     expect(toolsText).toContain("get_nearby_vehicles");
     expect(toolsText).toContain("get_vehicle_info");
-    expect(toolsText).toContain("plan_trip");
 
     // Resource templates
     const stopResource = await client.readResource({ uri: "timetable://stop/1234" });
@@ -492,56 +463,6 @@ describe("timetable MCP server", () => {
     expect(sc.data.license_plate).toBe("BC-1234-AB");
     expect(sc.data.upcoming_stops).toHaveLength(2);
     expect(sc.data.upcoming_stops[0].code).toBe(707);
-
-    await client.close();
-  });
-
-  it("plan_trip returns direct trip option with NL summary", async () => {
-    const client = new Client(
-      { name: "test-client", version: "1.0.0" },
-      { capabilities: {} },
-    );
-    const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
-    await client.connect(transport);
-
-    const result = await client.callTool({
-      name: "plan_trip",
-      arguments: { origin_stop_id: 707, destination_stop_id: 808 },
-    });
-
-    const text = result.content.find((c) => c.type === "text")?.text;
-    expect(text).toContain("Direct trip");
-    expect(text).toContain("Origin Stop");
-    expect(text).toContain("Destination Stop");
-    expect(text).toContain("5 stops");
-
-    const sc = result.structuredContent;
-    expect(sc.view).toBe("transit_realtime");
-    expect(sc.data.options).toHaveLength(1);
-    expect(sc.data.options[0].type).toBe("direct");
-    expect(sc.data.options[0].route).toBe("Т01");
-    expect(sc.data.options[0].stops_count).toBe(5);
-    expect(sc.data.origin.id).toBe("707");
-    expect(sc.data.destination.id).toBe("808");
-
-    await client.close();
-  });
-
-  it("plan_trip returns error result for same origin and destination", async () => {
-    const client = new Client(
-      { name: "test-client", version: "1.0.0" },
-      { capabilities: {} },
-    );
-    const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
-    await client.connect(transport);
-
-    const result = await client.callTool({
-      name: "plan_trip",
-      arguments: { origin_stop_id: 707, destination_stop_id: 707 },
-    });
-
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("different");
 
     await client.close();
   });

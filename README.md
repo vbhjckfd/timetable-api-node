@@ -1,7 +1,7 @@
 # Timetable API Node
 
 [![CI](https://img.shields.io/github/actions/workflow/status/vbhjckfd/timetable-api-node/ci.yml?branch=master&logo=github&label=CI)](https://github.com/vbhjckfd/timetable-api-node/actions/workflows/ci.yml)
-[![Node.js](https://img.shields.io/badge/node.js-24-43853d?logo=node.js&logoColor=white)](https://github.com/vbhjckfd/timetable-api-node/blob/master/.nvmrc)
+[![Node.js](https://img.shields.io/badge/node.js-26-43853d?logo=node.js&logoColor=white)](https://github.com/vbhjckfd/timetable-api-node/blob/master/.nvmrc)
 [![License: WTFPL](https://img.shields.io/github/license/vbhjckfd/timetable-api-node?label=license)](https://github.com/vbhjckfd/timetable-api-node/blob/master/LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-6366f1?style=flat-square)](https://registry.modelcontextprotocol.io/v0/servers/io.github.vbhjckfd%2Ftimetable-api-node/versions)
 
@@ -14,7 +14,7 @@ Express-based API for Lviv transport timetable data with a read-only MCP endpoin
 
 ## Requirements
 
-- Node.js 24 (see `.nvmrc`)
+- Node.js 26 (see `.nvmrc`)
 
 ## Run locally
 
@@ -112,7 +112,6 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 - `get_stops_around_location`
 - `get_nearby_vehicles`
 - `get_vehicle_info`
-- `plan_trip`
 
 <details>
 <summary><code>get_stop_realtime</code> — input &amp; example</summary>
@@ -453,65 +452,6 @@ Full details for one vehicle by its ID: position, route, license plate, directio
 
 </details>
 
-<details>
-<summary><code>plan_trip</code> — input &amp; example</summary>
-
-Plans a transit trip from an origin stop to a destination stop using the static route graph. Returns direct options (one route) and 1-transfer options sorted by fewest stops. Does **not** account for realtime disruptions — combine with `get_stop_realtime` for live ETAs after planning.
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `origin_stop_id` | positive integer or digits-only string | yes |
-| `destination_stop_id` | positive integer or digits-only string | yes |
-
-**Example result** (direct trip):
-
-```json
-{
-  "view": "transit_realtime",
-  "data": {
-    "origin": { "id": "101", "name": "Головний вокзал" },
-    "destination": { "id": "707", "name": "Стадіон Сільмаш" },
-    "options": [
-      {
-        "type": "direct",
-        "route": "T30",
-        "direction": 0,
-        "board_stop_code": 101,
-        "board_stop_name": "Головний вокзал",
-        "alight_stop_code": 707,
-        "alight_stop_name": "Стадіон Сільмаш",
-        "stops_count": 4
-      }
-    ],
-    "updated_at": "2026-01-23T12:00:00Z"
-  },
-  "ui_blocks": []
-}
-```
-
-**Transfer trip** option shape:
-
-```json
-{
-  "type": "transfer",
-  "route1": "T01",
-  "route2": "А05",
-  "board_stop_code": 101,
-  "board_stop_name": "Головний вокзал",
-  "transfer_stop_code": 303,
-  "transfer_stop_name": "Площа Ринок",
-  "alight_stop_code": 707,
-  "alight_stop_name": "Стадіон Сільмаш",
-  "stops_count_1": 3,
-  "stops_count_2": 2
-}
-```
-
-Up to 5 direct and 3 transfer options are returned. Use `get_stops_around_location` to resolve addresses or coordinates to stop codes before calling this tool.
-
-</details>
 
 ### Resources and resource templates
 
@@ -617,12 +557,3 @@ Look up a vehicle ID by its license plate. Short-cached (5 s).
 Vehicles within 1 km of a point. Short-cached (10 s).
 
 - **Response:** array of `{ id, route, routeId, direction, vehicle_type, color, location: [lat, lng], bearing, speed, lowfloor }`. `routeId` is usable as `:name` in `/routes/static/:name`; `direction` matches the index into `stops`/`shapes` (0 = outbound, 1 = return, null if unknown). `speed` is m/s or `null`.
-
-### Trip planning
-
-#### `GET /trip-plan?origin={code}&destination={code}`
-
-Static trip planning between two stops using the route graph.
-
-- **Response:** `{ origin, destination, options }` where each option is either a `direct` trip (single route) or a `transfer` trip (two routes with a transfer stop). Up to 5 direct and 3 transfer options, sorted by fewest stops.
-- Cached for 60 s.

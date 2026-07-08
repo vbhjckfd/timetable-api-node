@@ -33,7 +33,6 @@ import {
   buildMcpServerCard,
   handleMcpPostRequest,
 } from "./mcp/timetableMcpServer.js";
-import planTripAction from "./actions/planTripAction.js";
 import healthAction from "./actions/healthAction.js";
 
 const app = express();
@@ -72,7 +71,6 @@ app.get("/routes/static/:name", routeInfoStaticAction);
 app.get("/vehicle/:vehicleId", vehicleInfoAction);
 app.get("/vehicle-by-plate/:plate", vehicleByPlateAction);
 app.get("/transport", closestTransportAction);
-app.get("/trip-plan", planTripAction);
 
 app.get("/sitemap.xml", sitemapAction);
 
@@ -194,16 +192,6 @@ app.get("/.well-known/agent.json", (req, res) => {
         inputModes: ["text/plain"],
         outputModes: ["application/json"],
         examples: ["Track vehicle 12345", "Where is vehicle 12345 heading?"],
-      },
-      {
-        id: "plan_trip",
-        name: "Plan Trip",
-        description:
-          "Plan a transit trip between two stop codes; returns direct and 1-transfer route options.",
-        tags: ["transit", "trip-planning", "routing", "lviv"],
-        inputModes: ["text/plain", "application/json"],
-        outputModes: ["application/json"],
-        examples: ["How do I get from stop 707 to stop 808?", "Plan a trip from 707 to 1234"],
       },
     ],
     authentication: { schemes: [] },
