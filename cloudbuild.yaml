@@ -59,6 +59,20 @@ steps:
       - |
         if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
         curl -s --max-time 10 "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=short"
+  # Scheduled cleanup builds (_CLEANUP=1): reclaim storage from stale Cloud Run
+  # revisions and untagged GCR digests. Runs cleanup-revisions.sh, which was
+  # previously only ever invoked manually via `make cleanup-revisions`.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: Cleanup
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ "${_CLEANUP}" != "1" ]; then
+          echo "Not a cleanup build; skipping."
+          exit 0
+        fi
+        bash cleanup-revisions.sh
 options:
   substitutionOption: ALLOW_LOOSE
 substitutions:
@@ -69,6 +83,7 @@ substitutions:
   _SERVICE_NAME: timetable-api-node
   _LABELS: gcb-trigger-id=3cfc8543-fcbb-4a25-a504-60cd67484549
   _DATA_REFRESH: ""
+  _CLEANUP: ""
 tags:
   - gcp-cloud-build-deploy-cloud-run
   - gcp-cloud-build-deploy-cloud-run-managed
