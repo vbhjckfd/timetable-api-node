@@ -50,6 +50,7 @@ steps:
           --image="$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME" \
           --labels=managed-by=gcp-cloud-build-deploy-cloud-run,branch-name=$BRANCH_NAME,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS \
           --region=$_DEPLOY_REGION \
+          --memory=$_MEMORY \
           --quiet
   - name: gcr.io/cloud-builders/curl
     id: DropCache
@@ -84,6 +85,10 @@ substitutions:
   _LABELS: gcb-trigger-id=3cfc8543-fcbb-4a25-a504-60cd67484549
   _DATA_REFRESH: ""
   _CLEANUP: ""
+  # Startup loads the loki Timetable file plus the embedded sqlite DB; 256Mi
+  # OOM'd once GTFS data grew (revision 02126, 2026-07-27). Pinned here so a
+  # console-side change can't silently drop it back.
+  _MEMORY: 512Mi
 tags:
   - gcp-cloud-build-deploy-cloud-run
   - gcp-cloud-build-deploy-cloud-run-managed

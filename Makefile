@@ -8,6 +8,8 @@ IMAGE ?= gcr.io/$(PROJECT_ID)/timetable-api-node-sqlite
 SERVICE_NAME ?= timetable-api-node
 REGION ?= us-central1
 DOCKER_PLATFORM ?= linux/amd64
+# Keep in sync with _MEMORY in cloudbuild.yaml — 256Mi OOMs at startup.
+MEMORY ?= 512Mi
 
 start:
 	$(NVM_USE) && npm start
@@ -32,7 +34,7 @@ publish:
 	$(NVM_USE) && npm version patch && git push --tags
 
 deploy: build
-	gcloud run deploy $(SERVICE_NAME) --image $(IMAGE) --region $(REGION) --platform managed --project $(PROJECT_ID) --quiet
+	gcloud run deploy $(SERVICE_NAME) --image $(IMAGE) --region $(REGION) --platform managed --project $(PROJECT_ID) --memory $(MEMORY) --quiet
 
 CF_CACHE_PURGE_URL := https://drop-cloudflare-cache-1041251696619.us-central1.run.app
 SHORT_CACHE_TAGS ?= short
