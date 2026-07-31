@@ -29,6 +29,36 @@ make start
 nvm use && make test
 ```
 
+## Monitoring
+
+Two optional integrations, both off unless their environment variable is set:
+
+| Variable | Effect |
+| --- | --- |
+| `SENTRY_DSN` | Error reporting via `instrument.js` |
+| `NEW_RELIC_LICENSE_KEY` | New Relic APM via `newrelic.cjs` |
+
+New Relic runs as a preloaded agent, so `npm start` carries the flags:
+
+```bash
+node -r dotenv/config -r newrelic --import newrelic/esm-loader.mjs index.js
+```
+
+`dotenv/config` is preloaded first so `.env` is populated before the agent
+reads its configuration. The config file is `newrelic.cjs` (the agent is
+CommonJS and this project is ESM) and holds no secrets — the key comes from the
+environment. `/health` is excluded from transactions via `rules.ignore`.
+
+The account is in the **EU** region; its license key starts with `eu01xx` and
+the agent picks the collector from that prefix. Use the 40-character ingest
+license key, not an `NRAK-...` user API key.
+
+Cloud Run reads the key from Secret Manager:
+
+```bash
+gcloud run services update timetable-api-node --region=us-central1 --project=timetable-252615 --set-secrets=NEW_RELIC_LICENSE_KEY=new-relic-license-key:latest
+```
+
 ## MCP Server
 
 This service exposes a public read-only MCP endpoint over Streamable HTTP.

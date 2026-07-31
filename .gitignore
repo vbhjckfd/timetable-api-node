@@ -107,6 +107,7 @@ dist
 
 database/*
 static.zip
+newrelic_agent.log
 
 .cursor
 .claude
