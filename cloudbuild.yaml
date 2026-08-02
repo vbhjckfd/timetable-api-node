@@ -59,7 +59,16 @@ steps:
       - -c
       - |
         if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
+        # "short" = GTFS-derived pages (/routes, /stops, route and stop statics,
+        # sitemap); any build can change them, so always purge.
         curl -s --max-time 10 "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=short"
+        # "long" = docs, manifests and icons baked into the image (openapi.yaml,
+        # llms.txt, favicon, server.json, ...). A data refresh cannot change
+        # those, so only purge them when code actually shipped.
+        if [ "${_DATA_REFRESH}" != "1" ]; then
+          echo "Code-push build; purging long-tagged static assets too."
+          curl -s --max-time 10 "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=long"
+        fi
   # Scheduled cleanup builds (_CLEANUP=1): reclaim storage from stale Cloud Run
   # revisions and untagged GCR digests. Runs cleanup-revisions.sh, which was
   # previously only ever invoked manually via `make cleanup-revisions`.

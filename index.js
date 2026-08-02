@@ -39,6 +39,18 @@ const app = express();
 
 app.set("trust proxy", true);
 
+/**
+ * Cache headers for responses baked into the image: docs, manifests, icons.
+ * A GTFS data refresh never changes these, so they are tagged "long" and the
+ * daily refresh build leaves them alone; only code-push builds purge the tag
+ * (see the DropCache step in cloudbuild.yaml). GTFS-derived responses use
+ * "short" instead and are purged by every build.
+ */
+const setStaticAssetCache = (res, maxAgeSeconds = 3600 * 24) =>
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${maxAgeSeconds}`)
+    .set("Cache-Tag", "long");
+
 app.use(cors());
 
 app.use((req, res, next) => {
@@ -75,7 +87,7 @@ app.get("/transport", closestTransportAction);
 app.get("/sitemap.xml", sitemapAction);
 
 app.get("/openapi.yaml", (req, res) => {
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  setStaticAssetCache(res);
   res.type("application/yaml");
   res.sendFile(path.join(__dirname, "openapi.yaml"));
 });
@@ -86,7 +98,7 @@ app.get("/.well-known/openapi.yaml", (req, res) => {
 
 app.get("/.well-known/ai-plugin.json", (req, res) => {
   const baseUrl = `${req.protocol}://${req.hostname}`;
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  setStaticAssetCache(res);
   res.json({
     schema_version: "v1",
     name_for_human: "Lviv Public Transport",
@@ -108,7 +120,7 @@ app.get("/.well-known/ai-plugin.json", (req, res) => {
 
 app.get("/.well-known/agent.json", (req, res) => {
   const baseUrl = `${req.protocol}://${req.hostname}`;
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  setStaticAssetCache(res);
   res.json({
     name: "Lviv Public Transport",
     description:
@@ -206,13 +218,13 @@ app.get("/.well-known/agent.json", (req, res) => {
 });
 
 app.get("/llms.txt", (req, res) => {
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  setStaticAssetCache(res);
   res.type("text/plain");
   res.sendFile(path.join(__dirname, "llms.txt"));
 });
 
 app.get("/INTEGRATION.md", (req, res) => {
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  setStaticAssetCache(res);
   res.type("text/markdown");
   res.sendFile(path.join(__dirname, "INTEGRATION.md"));
 });
@@ -279,7 +291,7 @@ app.all("/mcp", (req, res) => {
 
 app.get("/.well-known/oauth-protected-resource", (req, res) => {
   const baseUrl = `${req.protocol}://${req.hostname}`;
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24}`);
+  setStaticAssetCache(res);
   res.json({
     resource: baseUrl,
     authorization_required: false,
@@ -300,7 +312,9 @@ app.get("/.well-known/mcp/server-card.json", (req, res) => {
 
 app.get("/mcp-icon.svg", (req, res) => {
   res.type("image/svg+xml");
-  res.set("Cache-Control", "public, max-age=86400");
+  // Was a browser-side max-age=86400, which no purge can reach; moved to
+  // s-maxage so a code push actually invalidates it.
+  setStaticAssetCache(res);
   res.sendFile(path.join(__dirname, "mcp", "mcp-icon.svg"));
 });
 
@@ -322,23 +336,17 @@ app.get("/last-modified.txt", (req, res, next) => {
 });
 
 app.get("/favicon.ico", (req, res, next) => {
-  res
-    .set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24 * 31}`)
-    .set("Cache-Tag", "short");
+  setStaticAssetCache(res, 3600 * 24 * 31);
   res.sendFile(path.join(__dirname, "favicon.ico"));
 });
 
 app.get("/smithery.json", (req, res) => {
-  res
-    .set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24 * 7}`)
-    .set("Cache-Tag", "short");
+  setStaticAssetCache(res, 3600 * 24 * 7);
   res.sendFile(path.join(__dirname, "smithery.json"));
 });
 
 app.get("/server.json", (req, res) => {
-  res
-    .set("Cache-Control", `public, max-age=0, s-maxage=${3600 * 24 * 7}`)
-    .set("Cache-Tag", "short");
+  setStaticAssetCache(res, 3600 * 24 * 7);
   res.sendFile(path.join(__dirname, "server.json"));
 });
 
