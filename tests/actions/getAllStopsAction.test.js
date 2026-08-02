@@ -50,7 +50,7 @@ describe("getAllStopsAction", () => {
     );
   });
 
-  it("sets long cache headers for Cloudflare", async () => {
+  it("sets cache headers for Cloudflare", async () => {
     const { req, res, next } = makeReqRes({ path: "/stops.json" });
     await getAllStopsAction(req, res, next);
 
@@ -58,6 +58,6 @@ describe("getAllStopsAction", () => {
       "Cache-Control",
       "public, max-age=0, s-maxage=2592000",
     );
-    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 });

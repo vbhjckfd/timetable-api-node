@@ -41,7 +41,7 @@ describe("sitemapAction", () => {
       "Cache-Control",
       "public, max-age=0, s-maxage=2592000",
     );
-    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 
   it("returns valid XML with urlset root", () => {

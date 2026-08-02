@@ -2,7 +2,10 @@ import db from "../connections/timetableSqliteDb.js";
 import { escapeHtml } from "../utils/appHelpers.js";
 
 export default async (req, res, next) => {
-  const longCacheAgeSeconds = 30 * 24 * 3600;
+  // Tagged "short" so the post-deploy cache drop in cloudbuild.yaml purges it:
+  // this listing changes whenever a GTFS import adds or removes a stop, and a
+  // "long"-tagged copy survived deploys for up to the full 30 days.
+  const cacheAgeSeconds = 30 * 24 * 3600;
   const stopsRaw = db
     .getCollection("stops")
     .chain()
@@ -10,8 +13,8 @@ export default async (req, res, next) => {
     .simplesort("code")
     .data();
   res
-    .set("Cache-Control", `public, max-age=0, s-maxage=${longCacheAgeSeconds}`)
-    .set("Cache-Tag", "long");
+    .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAgeSeconds}`)
+    .set("Cache-Tag", "short");
 
   if (req.path.endsWith(".json")) {
     res.json(

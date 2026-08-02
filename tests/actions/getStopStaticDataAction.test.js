@@ -62,7 +62,7 @@ describe("getStopStaticDataAction", () => {
     expect(payload.transfers[0].route).toBe("А01");
   });
 
-  it("sets long cache headers for Cloudflare", async () => {
+  it("sets cache headers for Cloudflare", async () => {
     db.getCollection.mockReturnValue({
       findOne: vi.fn().mockReturnValue(mockStop),
     });
@@ -75,6 +75,6 @@ describe("getStopStaticDataAction", () => {
       "Cache-Control",
       "public, max-age=0, s-maxage=2592000",
     );
-    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 });

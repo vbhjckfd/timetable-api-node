@@ -6,7 +6,7 @@ import {
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
-  const longCacheAgeSeconds = 30 * 24 * 3600;
+  const cacheAgeSeconds = 30 * 24 * 3600;
   const query = Number(req.params.name)
     ? { external_id: req.params.name }
     : { short_name: normalizeRouteName(req.params.name) };
@@ -68,9 +68,9 @@ export default async (req, res, next) => {
   res
     .set(
       "Cache-Control",
-      `public, max-age=0, s-maxage=${longCacheAgeSeconds}`,
+      `public, max-age=0, s-maxage=${cacheAgeSeconds}`,
     )
-    .set("Cache-Tag", "long")
+    .set("Cache-Tag", "short")
     .json({
       id: routeLocal.external_id,
       color: getRouteColor(routeLocal.short_name),

@@ -7,7 +7,7 @@ import {
 const BASE_URL = "https://lad.lviv.ua";
 
 export default (req, res) => {
-  const longCacheAgeSeconds = 30 * 24 * 3600;
+  const cacheAgeSeconds = 30 * 24 * 3600;
   const stops = db
     .getCollection("stops")
     .chain()
@@ -48,7 +48,7 @@ ${scheduleUrls}
 </urlset>`;
 
   res.set("Content-Type", "application/xml");
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${longCacheAgeSeconds}`);
-  res.set("Cache-Tag", "long");
+  res.set("Cache-Control", `public, max-age=0, s-maxage=${cacheAgeSeconds}`);
+  res.set("Cache-Tag", "short");
   res.send(xml);
 };

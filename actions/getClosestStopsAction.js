@@ -3,7 +3,7 @@ import { distanceMeters } from "../utils/appHelpers.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
-  const longCacheAgeSeconds = 30 * 24 * 3600;
+  const cacheAgeSeconds = 30 * 24 * 3600;
   const stopsCollection = db.getCollection("stops");
 
   const latitude = parseFloat(req.query.latitude);
@@ -46,14 +46,14 @@ export default async (req, res, next) => {
   Sentry.metrics.distribution('closest_stops.radius_meters', radiusMeters);
   Sentry.metrics.distribution('closest_stops.results_count', results.length);
 
-  let cacheLine = `public, max-age=0, s-maxage=${longCacheAgeSeconds}, stale-while-revalidate=15`;
+  let cacheLine = `public, max-age=0, s-maxage=${cacheAgeSeconds}, stale-while-revalidate=15`;
   if (!results.length) {
     cacheLine = "no-cache"; // Do not cache if no stops around point
   }
 
   const response = res.set("Cache-Control", cacheLine);
   if (cacheLine !== "no-cache") {
-    response.set("Cache-Tag", "long");
+    response.set("Cache-Tag", "short");
   }
 
   response.json(

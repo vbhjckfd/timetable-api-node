@@ -40,7 +40,16 @@ describe("getAllRoutesAction", () => {
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining("Route One"));
   });
 
-  it("sets long cache headers for Cloudflare", async () => {
+  it("links to the Latin route id so the frontend does not 301", async () => {
+    const { req, res, next } = makeReqRes();
+    await getAllRoutesAction(req, res, next);
+
+    expect(res.send).toHaveBeenCalledWith(
+      expect.stringContaining('href="https://lad.lviv.ua/route/A01"'),
+    );
+  });
+
+  it("sets cache headers for Cloudflare", async () => {
     const { req, res, next } = makeReqRes();
     await getAllRoutesAction(req, res, next);
 
@@ -48,6 +57,6 @@ describe("getAllRoutesAction", () => {
       "Cache-Control",
       "public, max-age=0, s-maxage=2592000",
     );
-    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "long");
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 });
