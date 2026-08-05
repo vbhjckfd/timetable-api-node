@@ -337,6 +337,7 @@ export function shapes_by_direction(route) {
 
 // Contact banner shown at the top of the public HTML listings (/stops, /routes).
 export const CONTACT_PHONE = "+380638628402";
+export const CONTACT_TELEGRAM = "vbhjckfd";
 
 export function contactBannerStyle() {
   return `.contact-banner {
@@ -350,7 +351,8 @@ export function contactBannerStyle() {
   padding: 3px 10px; border-radius: 4px; color: #fff;
 }
 .contact-banner .viber { background: #7360f2; }
-.contact-banner .whatsapp { background: #25d366; }`;
+.contact-banner .whatsapp { background: #25d366; }
+.contact-banner .telegram { background: #229ed9; }`;
 }
 
 export function contactBannerHtml() {
@@ -359,5 +361,6 @@ export function contactBannerHtml() {
 <span>Будь-які запитання — Мирослав, <a href="tel:${CONTACT_PHONE}">${CONTACT_PHONE}</a></span>
 <a class="chat-link viber" href="viber://chat?number=%2B${digits}">Viber</a>
 <a class="chat-link whatsapp" target="_blank" rel="noopener" href="https://wa.me/${digits}">WhatsApp</a>
+<a class="chat-link telegram" target="_blank" rel="noopener" href="https://t.me/${CONTACT_TELEGRAM}">Telegram</a>
 </div>`;
 }
