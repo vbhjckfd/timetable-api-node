@@ -352,15 +352,29 @@ export function contactBannerStyle() {
 }
 .contact-banner .viber { background: #7360f2; }
 .contact-banner .whatsapp { background: #25d366; }
-.contact-banner .telegram { background: #229ed9; }`;
+.contact-banner .telegram { background: #229ed9; }
+.contact-banner .page-link {
+  margin-left: auto; padding: 3px 10px;
+  border: 1px solid #1d4ed8; border-radius: 4px;
+}`;
 }
 
-export function contactBannerHtml() {
+// Cross-links between the two public listings; key is the page being rendered.
+const CROSS_PAGE_LINK = {
+  stops: { href: "/routes", label: "Маршрути" },
+  routes: { href: "/stops", label: "Зупинки" },
+};
+
+export function contactBannerHtml(page) {
   const digits = CONTACT_PHONE.replace(/\D/g, "");
+  const cross = CROSS_PAGE_LINK[page];
+  const crossHtml = cross
+    ? `\n<a class="page-link" href="${cross.href}">${cross.label}</a>`
+    : "";
   return `<div class="contact-banner">
 <span>Будь-які запитання — Мирослав, <a href="tel:${CONTACT_PHONE}">${CONTACT_PHONE}</a></span>
 <a class="chat-link viber" href="viber://chat?number=%2B${digits}">Viber</a>
 <a class="chat-link whatsapp" target="_blank" rel="noopener" href="https://wa.me/${digits}">WhatsApp</a>
-<a class="chat-link telegram" target="_blank" rel="noopener" href="https://t.me/${CONTACT_TELEGRAM}">Telegram</a>
+<a class="chat-link telegram" target="_blank" rel="noopener" href="https://t.me/${CONTACT_TELEGRAM}">Telegram</a>${crossHtml}
 </div>`;
 }

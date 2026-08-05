@@ -62,7 +62,7 @@ ${contactBannerStyle()}
 </style>
 </head>
 <body>
-${contactBannerHtml()}
+${contactBannerHtml("stops")}
 <table>
 `;
 

@@ -94,7 +94,7 @@ function showDirs(id, dirs) {
 </script>
 </head>
 <body>
-${contactBannerHtml()}
+${contactBannerHtml("routes")}
 <table>
 `;
   for (let [i, r] of routesRaw.entries()) {
