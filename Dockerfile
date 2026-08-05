@@ -1,5 +1,5 @@
 # https://hub.docker.com/_/node
-FROM node:24-alpine AS build_image
+FROM node:26-alpine AS build_image
 ARG CACHEBUST=1
 
 # Create and change to the app directory.
@@ -11,7 +11,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install production dependencies.
-RUN apk add --no-cache tzdata && npm install --only=production
+RUN apk add --no-cache tzdata python3 make g++ && npm install --omit=dev
 ENV TZ=Europe/Kyiv
 
 # Copy local code to the container image.
@@ -23,7 +23,7 @@ RUN apk --no-cache add curl && curl --silent --head "https://track.ua-gis.com/gt
 
 RUN node ./gtfs-import.js
 
-FROM node:24-alpine
+FROM node:26-alpine
 
 WORKDIR /usr/src/app
 
