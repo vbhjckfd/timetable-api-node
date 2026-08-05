@@ -1,5 +1,7 @@
 import db from "../connections/timetableSqliteDb.js";
 import {
+  contactBannerHtml,
+  contactBannerStyle,
   escapeHtml,
   routeNameToUrlFriendly,
   shapes_by_direction,
@@ -66,6 +68,7 @@ td.map-cell { padding-bottom: 15px; }
   text-align: center; font-weight: bold; font-size: 13px;
   border: 2px solid rgba(255,255,255,.7); box-shadow: 0 0 3px rgba(0,0,0,.4);
 }
+${contactBannerStyle()}
 </style>
 <script>
 var _maps = {}, _layers = {};
@@ -91,6 +94,7 @@ function showDirs(id, dirs) {
 </script>
 </head>
 <body>
+${contactBannerHtml()}
 <table>
 `;
   for (let [i, r] of routesRaw.entries()) {

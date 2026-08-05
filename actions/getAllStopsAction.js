@@ -1,5 +1,9 @@
 import db from "../connections/timetableSqliteDb.js";
-import { escapeHtml } from "../utils/appHelpers.js";
+import {
+  contactBannerHtml,
+  contactBannerStyle,
+  escapeHtml,
+} from "../utils/appHelpers.js";
 
 export default async (req, res, next) => {
   // Tagged "short" so the post-deploy cache drop in cloudbuild.yaml purges it:
@@ -54,9 +58,11 @@ export default async (req, res, next) => {
 <style>
 table, th { text-align: left; }
 a { text-decoration: none; }
+${contactBannerStyle()}
 </style>
 </head>
 <body>
+${contactBannerHtml()}
 <table>
 `;
 

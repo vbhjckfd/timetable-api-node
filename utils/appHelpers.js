@@ -334,3 +334,30 @@ export function shapes_by_direction(route) {
 
   return shapes;
 }
+
+// Contact banner shown at the top of the public HTML listings (/stops, /routes).
+export const CONTACT_PHONE = "+380638628402";
+
+export function contactBannerStyle() {
+  return `.contact-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px; margin: 0 0 12px;
+  background: #dbeafe; border-bottom: 1px solid #93c5fd;
+  font: 15px/1.4 system-ui, sans-serif; color: #1e3a8a;
+}
+.contact-banner a { color: #1d4ed8; font-weight: bold; }
+.contact-banner .chat-link {
+  padding: 3px 10px; border-radius: 4px; color: #fff;
+}
+.contact-banner .viber { background: #7360f2; }
+.contact-banner .whatsapp { background: #25d366; }`;
+}
+
+export function contactBannerHtml() {
+  const digits = CONTACT_PHONE.replace(/\D/g, "");
+  return `<div class="contact-banner">
+<span>Будь-які запитання — Мирослав, <a href="tel:${CONTACT_PHONE}">${CONTACT_PHONE}</a></span>
+<a class="chat-link viber" href="viber://chat?number=%2B${digits}">Viber</a>
+<a class="chat-link whatsapp" target="_blank" rel="noopener" href="https://wa.me/${digits}">WhatsApp</a>
+</div>`;
+}
