@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   addRoute,
   applyOverride,
+  formatOverrideLine,
+  formatSummary,
   isEmptyOverride,
   isValidRouteName,
   loadOverrides,
@@ -174,6 +176,52 @@ describe("addRoute", () => {
 
   it("does not add the same route twice", () => {
     expect(addRoute({ add: ["Т03"] }, ROUTES, "Т03").add).toEqual(["Т03"]);
+  });
+});
+
+describe("formatOverrideLine", () => {
+  it("includes both clauses when both lists are non-empty", () => {
+    expect(formatOverrideLine(20, { add: ["T01", "A56"], remove: ["A03", "T22"] })).toBe(
+      "Зупинка №20. Додати T01, A56. Видалити: A03, T22",
+    );
+  });
+
+  it("omits Додати when nothing was added", () => {
+    expect(formatOverrideLine(20, { add: [], remove: ["A03"] })).toBe(
+      "Зупинка №20. Видалити: A03",
+    );
+  });
+
+  it("omits Видалити when nothing was removed", () => {
+    expect(formatOverrideLine(20, { add: ["T01"], remove: [] })).toBe(
+      "Зупинка №20. Додати T01.",
+    );
+  });
+
+  it("drops names that are not route names before formatting", () => {
+    expect(formatOverrideLine(20, { add: ["T01", "../etc"], remove: [] })).toBe(
+      "Зупинка №20. Додати T01.",
+    );
+  });
+});
+
+describe("formatSummary", () => {
+  it("is empty when there are no overrides", () => {
+    expect(formatSummary({})).toBe("");
+  });
+
+  it("skips a stop whose override is empty after normalising", () => {
+    expect(formatSummary({ 20: { add: ["../etc"], remove: [] } })).toBe("");
+  });
+
+  it("orders stops by code, not insertion order", () => {
+    const overrides = {
+      80: { add: ["T02"], remove: [] },
+      20: { add: ["T01"], remove: [] },
+    };
+    expect(formatSummary(overrides)).toBe(
+      "Зупинка №20. Додати T01.\nЗупинка №80. Додати T02.",
+    );
   });
 });
 

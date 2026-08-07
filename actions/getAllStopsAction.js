@@ -61,6 +61,8 @@ a { text-decoration: none; }
 .route.removed { color: red; text-decoration: line-through; }
 .route.added { color: green; }
 .route { cursor: pointer; }
+#overrides-summary { margin-top: 1em; }
+#overrides-summary textarea { width: 100%; max-width: 600px; box-sizing: border-box; }
 ${contactBannerStyle()}
 </style>
 <script type="module" src="/stop-overrides.js"></script>
@@ -104,7 +106,16 @@ ${contactBannerHtml("stops")}
               .join(" ")}</td>
             </tr>`;
     }
-    result += "</table>\n</body>\n</html>";
+    // Filled and shown by /stop-overrides.js only once there is at least one
+    // override — nothing rendered here, since overrides live in the browser's
+    // own localStorage and the server has no idea whether there are any.
+    result += `</table>
+<div id="overrides-summary" style="display:none;">
+<h2>Підсумок змін для власника бази</h2>
+<textarea id="overrides-summary-text" readonly rows="6"></textarea><br>
+<button type="button" id="overrides-summary-copy">Скопіювати</button>
+</div>
+</body>\n</html>`;
 
     res.send(result);
   }

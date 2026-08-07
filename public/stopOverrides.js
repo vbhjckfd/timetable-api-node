@@ -129,6 +129,33 @@ export function addRoute(entry, routes, name) {
   return normalizeOverride({ add: [...add, name], remove });
 }
 
+/**
+ * One line of the plain-text summary an editor pastes to whoever maintains
+ * the upstream database. "Додати"/"Видалити" only appear when that list is
+ * non-empty, so a stop with just one side reads as one clause.
+ */
+export function formatOverrideLine(code, entry) {
+  const { add, remove } = normalizeOverride(entry);
+  const parts = [`Зупинка №${code}.`];
+
+  if (add.length) parts.push(`Додати ${add.join(", ")}.`);
+  if (remove.length) parts.push(`Видалити: ${remove.join(", ")}`);
+
+  return parts.join(" ");
+}
+
+/**
+ * All overridden stops, one line each, lowest code first. Empty when nothing
+ * has been changed, so the caller can hide the box entirely.
+ */
+export function formatSummary(overrides) {
+  return Object.keys(overrides ?? {})
+    .filter((code) => !isEmptyOverride(overrides[code]))
+    .sort((a, b) => Number(a) - Number(b))
+    .map((code) => formatOverrideLine(code, overrides[code]))
+    .join("\n");
+}
+
 // ── DOM ─────────────────────────────────────────────────────────────────────
 
 function renderRow(row, overrides) {
@@ -184,12 +211,37 @@ export function saveOverrides(overrides) {
   }
 }
 
+function renderSummary(overrides) {
+  const box = document.getElementById("overrides-summary");
+  const textarea = document.getElementById("overrides-summary-text");
+  if (!box || !textarea) return;
+
+  const text = formatSummary(overrides);
+  textarea.value = text;
+  box.style.display = text ? "" : "none";
+}
+
 export function init() {
   const rows = Array.from(document.querySelectorAll("tr[data-code]"));
   if (!rows.length) return;
 
   const overrides = loadOverrides();
   for (const row of rows) renderRow(row, overrides);
+  renderSummary(overrides);
+
+  const copyButton = document.getElementById("overrides-summary-copy");
+  if (copyButton) {
+    copyButton.addEventListener("click", async () => {
+      const textarea = document.getElementById("overrides-summary-text");
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+      } catch {
+        // Clipboard permission denied or unavailable — select it instead so
+        // the user can still copy by hand.
+        textarea.select();
+      }
+    });
+  }
 
   const routesOf = (row) => {
     const cell = row.querySelector("[data-routes]");
@@ -198,6 +250,7 @@ export function init() {
 
   const persist = (row, code) => {
     renderRow(row, overrides);
+    renderSummary(overrides);
     if (!saveOverrides(overrides)) {
       row.querySelector("[data-routes]").append(" ⚠️");
     }

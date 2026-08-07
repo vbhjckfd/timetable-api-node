@@ -83,6 +83,18 @@ describe("getAllStopsAction", () => {
     expect(html).not.toContain('class="route added"');
   });
 
+  // Empty and hidden server-side: whether there is anything to summarise is
+  // known only in the browser, from localStorage.
+  it("renders a hidden, empty overrides summary box", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain('id="overrides-summary" style="display:none;"');
+    expect(html).toContain('<textarea id="overrides-summary-text" readonly rows="6"></textarea>');
+    expect(html).toContain('id="overrides-summary-copy"');
+  });
+
   it("sets cache headers for Cloudflare", async () => {
     const { req, res, next } = makeReqRes({ path: "/stops.json" });
     await getAllStopsAction(req, res, next);
