@@ -1,15 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   addRoute,
   applyOverride,
   isEmptyOverride,
   isValidRouteName,
+  loadOverrides,
   normalizeOverride,
   overrideQuery,
+  saveOverrides,
   signLinks,
   toggleRoute,
   MAX_ROUTES_PER_LIST,
+  STORAGE_KEY,
 } from "../../public/stopOverrides.js";
+
+/** In-memory localStorage stand-in — no jsdom needed for two get/set calls. */
+function makeStorage() {
+  const data = new Map();
+  return {
+    getItem: (key) => (data.has(key) ? data.get(key) : null),
+    setItem: (key, value) => data.set(key, String(value)),
+  };
+}
 
 const ROUTES = ["А03", "А05", "А55"];
 
@@ -162,5 +174,61 @@ describe("addRoute", () => {
 
   it("does not add the same route twice", () => {
     expect(addRoute({ add: ["Т03"] }, ROUTES, "Т03").add).toEqual(["Т03"]);
+  });
+});
+
+describe("loadOverrides / saveOverrides", () => {
+  let originalStorage;
+
+  beforeEach(() => {
+    originalStorage = globalThis.localStorage;
+    globalThis.localStorage = makeStorage();
+  });
+
+  afterEach(() => {
+    globalThis.localStorage = originalStorage;
+  });
+
+  it("returns an empty map when nothing is stored", () => {
+    expect(loadOverrides()).toEqual({});
+  });
+
+  it("round-trips what was saved", () => {
+    saveOverrides({ 62: { add: ["Т03"], remove: ["А57"] } });
+    expect(loadOverrides()).toEqual({ 62: { add: ["Т03"], remove: ["А57"] } });
+  });
+
+  it("stores under the documented key, plain JSON", () => {
+    saveOverrides({ 62: { add: ["Т03"], remove: [] } });
+    expect(JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY))).toEqual({
+      62: { add: ["Т03"], remove: [] },
+    });
+  });
+
+  it("falls back to no overrides when the stored value is not JSON", () => {
+    globalThis.localStorage.setItem(STORAGE_KEY, "not json");
+    expect(loadOverrides()).toEqual({});
+  });
+
+  it("falls back to no overrides when storage access throws", () => {
+    globalThis.localStorage = {
+      getItem: () => {
+        throw new Error("storage disabled");
+      },
+    };
+    expect(loadOverrides()).toEqual({});
+  });
+
+  it("reports failure rather than throwing when the write is rejected", () => {
+    globalThis.localStorage = {
+      setItem: () => {
+        throw new Error("quota exceeded");
+      },
+    };
+    expect(saveOverrides({ 62: { add: ["Т03"], remove: [] } })).toBe(false);
+  });
+
+  it("reports success on a normal write", () => {
+    expect(saveOverrides({})).toBe(true);
   });
 });

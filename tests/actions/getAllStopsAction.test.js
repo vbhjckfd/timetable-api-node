@@ -79,7 +79,6 @@ describe("getAllStopsAction", () => {
     await getAllStopsAction(req, res, next);
 
     const html = res.send.mock.calls[0][0];
-    expect(html).not.toContain("stop-overrides/admin");
     expect(html).not.toContain('class="route removed"');
     expect(html).not.toContain('class="route added"');
   });

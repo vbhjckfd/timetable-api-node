@@ -525,11 +525,13 @@ that row's SVG and PDF links, which `offline.lad.lviv.ua` and `pdf.lad.lviv.ua`
 both understand.
 
 Add `?edit=1` to the listing to change them: click a route to drop or restore it,
-type one into the `+` box to add it. Saving goes through Cloudflare Access.
+type one into the `+` box to add it.
 
-The overrides are fetched by the browser rather than rendered into the page, so
-the listing stays cacheable for 30 days and an edit needs no purge. They live in
-Workers KV behind a small Worker — see [`worker/stop-overrides`](worker/stop-overrides).
+Overrides live in the browser's own `localStorage` (see
+[`public/stopOverrides.js`](public/stopOverrides.js)), not on a server — no
+account to edit through, no cache to purge, an edit applies at once. The trade
+is scope: an override is visible only in the browser that made it, not to
+anyone else who opens `/stops`.
 
 `/stops.json` reports `sign` and `sign_pdf` without overrides applied.
 

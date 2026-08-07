@@ -1,17 +1,16 @@
 /**
  * Per-stop route overrides for the /stops listing.
  *
- * The listing itself is cached at Cloudflare for 30 days, so the overrides are
- * never rendered into it — the browser fetches them separately and rewrites the
- * route column and the SVG/PDF links in place. An edit goes live without
- * purging anything.
+ * Stored in the browser's own localStorage, not on a server: no account to
+ * edit through, no round trip, no cache to purge. The trade is scope — an
+ * edit is visible only in the browser that made it, not to anyone else who
+ * opens /stops.
  *
  * This file is served to the browser as an ES module and imported directly by
  * the test suite, so the DOM half only runs when init() is called.
  */
 
-export const OVERRIDES_URL = "/stop-overrides";
-export const ADMIN_URL = "/stop-overrides/admin";
+export const STORAGE_KEY = "lad-route-overrides";
 
 export const MAX_ROUTES_PER_LIST = 40;
 
@@ -158,34 +157,39 @@ function renderRow(row, overrides, editing) {
   }
 }
 
-async function save(code, entry) {
-  const response = await fetch(`${ADMIN_URL}/${code}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(normalizeOverride(entry)),
-  });
-
-  if (!response.ok) {
-    throw new Error(`save failed: ${response.status}`);
+/**
+ * Reads the stored map. Private browsing / storage-disabled throws on access
+ * in some browsers rather than just returning null, and a hand-edited or
+ * previous-format value in there is not JSON worth trusting either — either
+ * way this falls back to no overrides rather than breaking the listing.
+ */
+export function loadOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {};
+  } catch {
+    return {};
   }
 }
 
-export async function init() {
+export function saveOverrides(overrides) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
+    return true;
+  } catch {
+    // Storage disabled, full, or the quota was hit — the in-page state still
+    // reflects the edit, it just will not survive a reload.
+    return false;
+  }
+}
+
+export function init() {
   const rows = Array.from(document.querySelectorAll("tr[data-code]"));
   if (!rows.length) return;
 
   const editing = new URLSearchParams(location.search).has("edit");
   if (editing) document.body.dataset.edit = "";
-  let overrides = {};
 
-  try {
-    const response = await fetch(OVERRIDES_URL, { headers: { Accept: "application/json" } });
-    if (response.ok) overrides = await response.json();
-  } catch {
-    // An unreachable override store leaves the upstream listing as it is,
-    // which is still the truth the API knows.
-  }
-
+  const overrides = loadOverrides();
   for (const row of rows) renderRow(row, overrides, editing);
 
   if (!editing) return;
@@ -195,13 +199,10 @@ export async function init() {
     return cell.dataset.routes ? cell.dataset.routes.split(" ") : [];
   };
 
-  const persist = async (row, code) => {
+  const persist = (row, code) => {
     renderRow(row, overrides, editing);
-    try {
-      await save(code, overrides[code]);
-    } catch (error) {
+    if (!saveOverrides(overrides)) {
       row.querySelector("[data-routes]").append(" ⚠️");
-      console.error(error);
     }
   };
 
@@ -212,6 +213,7 @@ export async function init() {
     const row = chip.closest("tr[data-code]");
     const code = row.dataset.code;
     overrides[code] = toggleRoute(overrides[code], routesOf(row), chip.dataset.route);
+    if (isEmptyOverride(overrides[code])) delete overrides[code];
     persist(row, code);
   });
 
@@ -226,6 +228,8 @@ export async function init() {
     if (!isValidRouteName(name)) return;
 
     overrides[code] = addRoute(overrides[code], routesOf(row), name);
+    if (isEmptyOverride(overrides[code])) delete overrides[code];
+    input.value = "";
     persist(row, code);
   });
 }
