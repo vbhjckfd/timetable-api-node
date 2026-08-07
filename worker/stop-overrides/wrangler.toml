@@ -14,7 +14,7 @@ workers_dev = false
 
 [[kv_namespaces]]
 binding = "STOP_OVERRIDES"
-id = "REPLACE_WITH_NAMESPACE_ID"
+id = "46ab3cf327a642529ce22c895be007f8"
 
 [vars]
 ACCESS_TEAM_DOMAIN = "REPLACE.cloudflareaccess.com"
