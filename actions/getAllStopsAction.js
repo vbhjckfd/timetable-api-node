@@ -58,8 +58,12 @@ export default async (req, res, next) => {
 <style>
 table, th { text-align: left; }
 a { text-decoration: none; }
+.route.removed { color: red; text-decoration: line-through; }
+.route.added { color: green; }
+[data-edit] .route { cursor: pointer; }
 ${contactBannerStyle()}
 </style>
+<script type="module" src="/stop-overrides.js"></script>
 </head>
 <body>
 ${contactBannerHtml("stops")}
@@ -83,16 +87,21 @@ ${contactBannerHtml("stops")}
         })
         .sort();
 
-      result += `<tr>
+      // data-code and data-routes are what /stop-overrides.js rewrites the row
+      // from: the served HTML stays the plain upstream listing, cacheable for
+      // 30 days, and the overrides are applied in the browser.
+      result += `<tr data-code="${s.code}">
             <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a> (${s.microgiz_id})</td>
             <td>
-                <a target="blank" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
+                <a target="blank" data-kind="svg" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
                 &nbsp;
-                <a target="blank" href="https://pdf.lad.lviv.ua/${s.code}.pdf">PDF</a>
+                <a target="blank" data-kind="pdf" href="https://pdf.lad.lviv.ua/${s.code}.pdf">PDF</a>
             </td>
             <td>${escapeHtml(s.name)}</td>
             <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]}, ${loc[1]}</a></td>
-            <td>${transfers.map(escapeHtml).join(" ")}</td>
+            <td data-routes="${escapeHtml(transfers.join(" "))}">${transfers
+              .map((r) => `<span class="route kept" data-route="${escapeHtml(r)}">${escapeHtml(r)}</span>`)
+              .join(" ")}</td>
             </tr>`;
     }
     result += "</table>\n</body>\n</html>";

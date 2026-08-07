@@ -516,6 +516,25 @@ All stops as a JSON array, sorted by code.
 
 (`GET /stops` returns an HTML table instead.)
 
+#### Per-stop route overrides
+
+The upstream route list for a stop is sometimes behind reality. `GET /stops`
+applies a stored override to its `Маршрути` column — removed routes shown red and
+struck through, added ones green — and hangs the matching `?add=`/`?remove=` on
+that row's SVG and PDF links, which `offline.lad.lviv.ua` and `pdf.lad.lviv.ua`
+both understand.
+
+Add `?edit=1` to the listing to change them: click a route to drop or restore it,
+type one into the `+` box to add it.
+
+Overrides live in the browser's own `localStorage` (see
+[`public/stopOverrides.js`](public/stopOverrides.js)), not on a server — no
+account to edit through, no cache to purge, an edit applies at once. The trade
+is scope: an override is visible only in the browser that made it, not to
+anyone else who opens `/stops`.
+
+`/stops.json` reports `sign` and `sign_pdf` without overrides applied.
+
 #### `GET /stops/:code`
 
 Single stop with live realtime timetable. Short-cached (5–10 s).
