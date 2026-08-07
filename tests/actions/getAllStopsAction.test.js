@@ -50,6 +50,40 @@ describe("getAllStopsAction", () => {
     );
   });
 
+  // /stop-overrides.js rewrites the row from these; without them the overrides
+  // have nothing to attach to.
+  it("marks up each row for the override script", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain('<tr data-code="1001">');
+    expect(html).toContain('data-routes="А01 Т1"');
+    expect(html).toContain('<span class="route kept" data-route="А01">А01</span>');
+    expect(html).toContain('data-kind="svg"');
+    expect(html).toContain('data-kind="pdf"');
+    expect(html).toContain('src="/stop-overrides.js"');
+  });
+
+  it("styles removed routes red and struck through, added ones green", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain(".route.removed { color: red; text-decoration: line-through; }");
+    expect(html).toContain(".route.added { color: green; }");
+  });
+
+  it("serves the bare upstream route list, so the page stays cacheable", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).not.toContain("stop-overrides/admin");
+    expect(html).not.toContain('class="route removed"');
+    expect(html).not.toContain('class="route added"');
+  });
+
   it("sets cache headers for Cloudflare", async () => {
     const { req, res, next } = makeReqRes({ path: "/stops.json" });
     await getAllStopsAction(req, res, next);

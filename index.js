@@ -340,6 +340,15 @@ app.get("/favicon.ico", (req, res, next) => {
   res.sendFile(path.join(__dirname, "favicon.ico"));
 });
 
+// Applies the per-stop route overrides to the /stops listing in the browser.
+// Tagged "long" like the other baked-in assets: it ships with the image, so a
+// GTFS refresh leaves it alone and a code push purges it.
+app.get("/stop-overrides.js", (req, res) => {
+  setStaticAssetCache(res);
+  res.type("text/javascript");
+  res.sendFile(path.join(__dirname, "public", "stopOverrides.js"));
+});
+
 app.get("/smithery.json", (req, res) => {
   setStaticAssetCache(res, 3600 * 24 * 7);
   res.sendFile(path.join(__dirname, "smithery.json"));
