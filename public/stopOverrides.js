@@ -6,6 +6,10 @@
  * edit is visible only in the browser that made it, not to anyone else who
  * opens /stops.
  *
+ * The route column is always clickable — there is no separate edit mode. A
+ * click only writes to this browser's own storage, so there is nothing for a
+ * stray click to damage beyond it.
+ *
  * This file is served to the browser as an ES module and imported directly by
  * the test suite, so the DOM half only runs when init() is called.
  */
@@ -127,7 +131,7 @@ export function addRoute(entry, routes, name) {
 
 // ── DOM ─────────────────────────────────────────────────────────────────────
 
-function renderRow(row, overrides, editing) {
+function renderRow(row, overrides) {
   const code = row.dataset.code;
   const cell = row.querySelector("[data-routes]");
   const routes = cell.dataset.routes ? cell.dataset.routes.split(" ") : [];
@@ -139,17 +143,15 @@ function renderRow(row, overrides, editing) {
     chip.className = `route ${state}`;
     chip.dataset.route = name;
     chip.textContent = name;
-    if (editing) chip.title = "Клацніть, щоб прибрати або повернути";
+    chip.title = "Клацніть, щоб прибрати або повернути";
     cell.append(chip, document.createTextNode(" "));
   }
 
-  if (editing) {
-    const input = document.createElement("input");
-    input.className = "route-add";
-    input.size = 6;
-    input.placeholder = "+";
-    cell.append(input);
-  }
+  const input = document.createElement("input");
+  input.className = "route-add";
+  input.size = 6;
+  input.placeholder = "+";
+  cell.append(input);
 
   const links = signLinks(code, entry);
   for (const link of row.querySelectorAll("[data-kind]")) {
@@ -186,13 +188,8 @@ export function init() {
   const rows = Array.from(document.querySelectorAll("tr[data-code]"));
   if (!rows.length) return;
 
-  const editing = new URLSearchParams(location.search).has("edit");
-  if (editing) document.body.dataset.edit = "";
-
   const overrides = loadOverrides();
-  for (const row of rows) renderRow(row, overrides, editing);
-
-  if (!editing) return;
+  for (const row of rows) renderRow(row, overrides);
 
   const routesOf = (row) => {
     const cell = row.querySelector("[data-routes]");
@@ -200,7 +197,7 @@ export function init() {
   };
 
   const persist = (row, code) => {
-    renderRow(row, overrides, editing);
+    renderRow(row, overrides);
     if (!saveOverrides(overrides)) {
       row.querySelector("[data-routes]").append(" ⚠️");
     }

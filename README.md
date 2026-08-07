@@ -524,8 +524,8 @@ struck through, added ones green — and hangs the matching `?add=`/`?remove=` o
 that row's SVG and PDF links, which `offline.lad.lviv.ua` and `pdf.lad.lviv.ua`
 both understand.
 
-Add `?edit=1` to the listing to change them: click a route to drop or restore it,
-type one into the `+` box to add it.
+The route column is always clickable: click a route to drop or restore it, type
+one into the `+` box to add it.
 
 Overrides live in the browser's own `localStorage` (see
 [`public/stopOverrides.js`](public/stopOverrides.js)), not on a server — no

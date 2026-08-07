@@ -60,7 +60,7 @@ table, th { text-align: left; }
 a { text-decoration: none; }
 .route.removed { color: red; text-decoration: line-through; }
 .route.added { color: green; }
-[data-edit] .route { cursor: pointer; }
+.route { cursor: pointer; }
 ${contactBannerStyle()}
 </style>
 <script type="module" src="/stop-overrides.js"></script>
