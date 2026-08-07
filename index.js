@@ -10,6 +10,7 @@ const PORT = process.env.PORT || 8080;
 import { openDb } from "gtfs";
 import { readFile } from "fs/promises";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import express from "express";
 import bodyParser from "body-parser";
 import localDb from "./connections/timetableSqliteDb.js";
@@ -333,10 +334,11 @@ app.get("/favicon.ico", (req, res, next) => {
 // for a day on that tag, so an uncached request reaching this far is rare —
 // the limiter is here so a cache-bypassing client can't turn the file read
 // underneath sendFile into an amplifier.
-const staticFileRateLimiter = createRateLimiter({
-  limit: 120,
+const staticFileRateLimiter = rateLimit({
   windowMs: 60_000,
-  onLimit: (res) => res.status(429).type("text/plain").send("Rate limit exceeded"),
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 app.get("/stop-overrides.js", staticFileRateLimiter, (req, res) => {
