@@ -11,7 +11,12 @@ DOCKER_PLATFORM ?= linux/amd64
 # Keep in sync with _MEMORY in cloudbuild.yaml — 256Mi OOMs at startup.
 MEMORY ?= 512Mi
 
+# index.js logs the same URL on boot, but New Relic's connection chatter
+# buries it — print it up front, before that noise, so it's the first thing
+# on screen.
 start:
+	@bash -c 'set -a; [ -f .env ] && source .env; set +a; \
+		echo ""; echo "==> http://localhost:$${PORT:-8080}"; echo ""'
 	$(NVM_USE) && npm start
 
 import:
