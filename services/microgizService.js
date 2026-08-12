@@ -111,15 +111,47 @@ export async function getVehiclesLocations() {
   }
 }
 
+// Last good arrival feed. Arrivals carry absolute timestamps and callers drop
+// the ones already in the past, so a slightly stale feed degrades to "fewer
+// arrivals" rather than wrong ones — but it still thins out fast, hence a
+// window much shorter than the position feed's.
+const ARRIVALS_STALE_MAX_AGE_MS = 60 * 1000;
+let arrivalsCache = null; // { entities, at }
+
+// Test seam: drop the in-memory fallback so cases stay isolated.
+export function __resetArrivalsCache() {
+  arrivalsCache = null;
+}
+
 export async function getArrivalTimes() {
-  // No backoff here: trip_updates is served from our own gtfs-eta worker
-  // (R2-cached, max-age=10). Retrying it fans out request volume to the
-  // worker on every error. A single fetch is enough; backoff stays only on
-  // getVehiclesLocations, which hits the upstream track.ua-gis.com feed.
+  // trip_updates is served from our own gtfs-eta worker (R2-cached,
+  // max-age=10), so the full backoff ladder used for the upstream position
+  // feed would fan request volume out to the worker on every error. One
+  // retry is the compromise: it covers the common blip — a body cut
+  // mid-stream, which HTTP 200s and surfaces only as a Content-Length
+  // mismatch or a decode error — without turning a worker hiccup into a
+  // stampede. Arrivals are the whole response for /stops/:code/timetable, so
+  // a single unretried failure blanks every stop at once.
   const url =
     process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates";
-  const data = await fetchBytes(url, {}, 0);
-  return decodeFeed(data, url);
+  try {
+    const entities = await withBackoff(
+      async () => decodeFeed(await fetchBytes(url, {}, 0), url),
+      1,
+      100,
+    );
+    arrivalsCache = { entities, at: Date.now() };
+    return entities;
+  } catch (err) {
+    if (arrivalsCache && Date.now() - arrivalsCache.at <= ARRIVALS_STALE_MAX_AGE_MS) {
+      const ageMs = Date.now() - arrivalsCache.at;
+      console.warn(
+        `getArrivalTimes failed, serving cached feed (${Math.round(ageMs / 1000)}s old): ${err.message}`,
+      );
+      return arrivalsCache.entities;
+    }
+    throw err;
+  }
 }
 export async function routesThroughStop(
   stop,

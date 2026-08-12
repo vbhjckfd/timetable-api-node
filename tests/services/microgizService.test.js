@@ -20,12 +20,14 @@ import {
   getArrivalTimes,
   routesThroughStop,
   __resetVehiclesCache,
+  __resetArrivalsCache,
 } from "../../services/microgizService.js";
 
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
   __resetVehiclesCache();
+  __resetArrivalsCache();
 });
 
 describe("getTimeOfLastStaticUpdate", () => {
@@ -143,6 +145,83 @@ describe("getArrivalTimes", () => {
     const result = await getArrivalTimes();
 
     expect(result).toEqual(mockEntities);
+  });
+
+  it("retries once when the first attempt is truncated", async () => {
+    const mockEntities = [{ id: "e1" }];
+    // 1st attempt: 8 bytes delivered, 12 promised → truncated
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("12") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    // 2nd attempt: complete body
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      entity: mockEntities,
+    });
+
+    expect(await getArrivalTimes()).toEqual(mockEntities);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries once when the first attempt fails to decode", async () => {
+    const mockEntities = [{ id: "e1" }];
+    fetchMock.mockResolvedValue({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode
+      .mockImplementationOnce(() => {
+        throw new Error("index out of range");
+      })
+      .mockReturnValue({ entity: mockEntities });
+
+    expect(await getArrivalTimes()).toEqual(mockEntities);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves the cached feed when a later fetch fails within the stale window", async () => {
+    const mockEntities = [{ id: "cached" }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      entity: mockEntities,
+    });
+    expect(await getArrivalTimes()).toEqual(mockEntities);
+
+    // every subsequent attempt fails → fall back to the cache
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await getArrivalTimes()).toEqual(mockEntities);
+  });
+
+  it("rethrows when the cached feed is older than the stale window", async () => {
+    const mockEntities = [{ id: "old" }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue("8") },
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      entity: mockEntities,
+    });
+    expect(await getArrivalTimes()).toEqual(mockEntities);
+
+    // advance past the 60s stale window, then make every attempt fail
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60 * 1000 + 1);
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+
+    await expect(getArrivalTimes()).rejects.toThrow();
   });
 });
 
