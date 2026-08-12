@@ -228,8 +228,8 @@ export function getDirectionByTrip(tripId, routeModel) {
   return shapesSortedById.indexOf(routeModel.trip_shape_map[tripId]);
 }
 
-export function getTextWaitTime(busArrivalTime) {
-  let minutesLeft = Math.round((busArrivalTime - new Date()) / 1000 / 60);
+export function getTextWaitTime(busArrivalTime, from = new Date()) {
+  let minutesLeft = Math.round((busArrivalTime - from) / 1000 / 60);
   return (minutesLeft > 0 ? minutesLeft : "< 1") + "хв";
 }
 

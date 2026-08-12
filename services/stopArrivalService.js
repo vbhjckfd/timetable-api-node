@@ -10,6 +10,7 @@ import {
   isLowFloor,
 } from "../utils/appHelpers.js";
 import { getArrivalTimes, getVehiclesLocations } from "./microgizService.js";
+import { getScheduledArrivalsForStop } from "./stopScheduleService.js";
 
 import timetableDb from "../connections/timetableSqliteDb.js";
 
@@ -40,8 +41,17 @@ const stopArrivalService = {
     // position feed is supplementary (map rendering only). A position-feed
     // failure must not zero out the arrivals, so it degrades to no positions
     // rather than rejecting the whole request.
+    //
+    // A trip_updates failure used to reject the whole call, which the action
+    // turned into an empty list — the stop then looked exactly like "nothing is
+    // coming". It now degrades the same way: no live arrivals, and the schedule
+    // fallback below carries the response.
     const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
-      getArrivalTimes(),
+      getArrivalTimes().catch((e) => {
+        Sentry.captureException(e);
+        Sentry.metrics.count('stop_timetable.arrivals_unavailable', 1, { attributes: { stop: String(stop.code) } });
+        return [];
+      }),
       getVehiclesLocations().catch((e) => {
         Sentry.captureException(e);
         Sentry.metrics.count('stop_timetable.positions_unavailable', 1, { attributes: { stop: String(stop.code) } });
@@ -143,16 +153,29 @@ const stopArrivalService = {
       };
     });
 
-    const timetable = result.filter((i) => !!i);
+    const liveTimetable = result.filter((i) => !!i);
 
+    // No live prediction does not mean nothing is coming: the feed only covers
+    // each vehicle's next few stops, so an outer stop goes blank between the
+    // moments a vehicle is close enough to be predicted. Falling back to the
+    // published schedule keeps the stop answering the rider's actual question
+    // instead of showing an empty page mid-service.
+    const timetable = liveTimetable.length
+      ? liveTimetable
+      : getScheduledArrivalsForStop(stop, routesByRouteId, { now });
+
+    // arrivals_count stays the *live* count so the schedule fallback cannot
+    // paper over a feed-side regression in the dashboards; schedule_fallback
+    // is what the rider was served instead.
     Sentry.metrics.count('stop_timetable.request', 1, { attributes: { stop: String(stop.code) } });
-    Sentry.metrics.distribution('stop_timetable.arrivals_count', timetable.length, { attributes: { stop: String(stop.code) } });
-    const arrivalsWithoutPosition = timetable.filter((i) => !i.location).length;
+    Sentry.metrics.distribution('stop_timetable.arrivals_count', liveTimetable.length, { attributes: { stop: String(stop.code) } });
+    const arrivalsWithoutPosition = liveTimetable.filter((i) => !i.location).length;
     if (arrivalsWithoutPosition > 0) {
       Sentry.metrics.count('stop_timetable.arrival_without_position', arrivalsWithoutPosition, { attributes: { stop: String(stop.code) } });
     }
-    if (timetable.length === 0) {
+    if (liveTimetable.length === 0) {
       Sentry.metrics.count('stop_timetable.empty', 1, { attributes: { stop: String(stop.code) } });
+      Sentry.metrics.distribution('stop_timetable.schedule_fallback', timetable.length, { attributes: { stop: String(stop.code) } });
     }
 
     if (!skipPulse) emitPulseSignal(stop);

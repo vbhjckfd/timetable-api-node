@@ -219,6 +219,108 @@ describe("stopArrivalService.getTimetableForStop", () => {
   });
 });
 
+describe("stopArrivalService.getTimetableForStop — schedule fallback", () => {
+  // 10 minutes from now, as "HH:MM" in the same local timezone the departure
+  // maps are written in.
+  function localHHMM(offsetMinutes) {
+    const at = new Date(Date.now() + offsetMinutes * 60 * 1000);
+    return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+  }
+
+  const scheduledRoute = {
+    ...mockRoute,
+    stop_departure_time_map: { MG1001: [localHHMM(10)] },
+    stop_departure_time_map_workday: { MG1001: [localHHMM(10)] },
+    stop_departure_time_map_weekend: { MG1001: [localHHMM(10)] },
+  };
+
+  const stopWithSchedule = {
+    ...testStop,
+    transfers: [{ ...testStop.transfers[0], end_stop_name: "Terminus (3)" }],
+  };
+
+  it("serves scheduled departures when the live feed predicts nothing", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([scheduledRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([]);
+    getVehiclesLocations.mockResolvedValue([]);
+    getTrips.mockResolvedValue([]);
+
+    const result = await stopArrivalService.getTimetableForStop(stopWithSchedule);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].scheduled).toBe(true);
+    expect(result[0].route).toBe("А01");
+    expect(result[0].end_stop).toBe("Terminus");
+    expect(result[0].vehicle_id).toBeUndefined();
+  });
+
+  it("prefers live arrivals over the schedule", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([scheduledRoute]),
+    });
+    // A fresh entity per call: getTimetableForStop rewrites stopTimeUpdate in
+    // place, so a shared fixture cannot be fed to the service twice.
+    getArrivalTimes.mockResolvedValue([
+      {
+        tripUpdate: {
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+          vehicle: { id: "VH1" },
+        },
+      },
+    ]);
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(stopWithSchedule);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].scheduled).toBeUndefined();
+    expect(result[0].vehicle_id).toBe("VH1");
+  });
+
+  it("falls back to the schedule when the arrivals feed itself fails", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([scheduledRoute]),
+    });
+    getArrivalTimes.mockRejectedValue(new Error("trip_updates down"));
+    getVehiclesLocations.mockResolvedValue([]);
+    getTrips.mockResolvedValue([]);
+
+    const result = await stopArrivalService.getTimetableForStop(stopWithSchedule);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].scheduled).toBe(true);
+    expect(sentryCaptureException).toHaveBeenCalled();
+    expect(sentryMetrics.count).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_unavailable', 1, { attributes: { stop: "1001" } },
+    );
+  });
+
+  it("still reports the live feed as empty when the schedule fills in", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([scheduledRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([]);
+    getVehiclesLocations.mockResolvedValue([]);
+    getTrips.mockResolvedValue([]);
+
+    await stopArrivalService.getTimetableForStop(stopWithSchedule);
+
+    expect(sentryMetrics.count).toHaveBeenCalledWith(
+      'stop_timetable.empty', 1, { attributes: { stop: "1001" } },
+    );
+    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_count', 0, { attributes: { stop: "1001" } },
+    );
+    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.schedule_fallback', 1, { attributes: { stop: "1001" } },
+    );
+  });
+});
+
 describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
   function freshArrivalEntity() {
     return {

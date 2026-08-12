@@ -21,7 +21,9 @@ paths:
       description: >
         Returns upcoming vehicle arrivals at the stop identified by its
         numeric code. Data is sourced from live GTFS-RT feeds and refreshes
-        every 5–10 seconds.
+        every 5–10 seconds. When the live feed has no prediction for the stop,
+        the response falls back to the published timetable; those entries are
+        flagged `scheduled: true` and carry no vehicle.
       parameters:
         - $ref: '#/components/parameters/stopCode'
       responses:
@@ -381,6 +383,15 @@ components:
           type: integer
           description: Route direction index (0 or 1).
           enum: [0, 1]
+        scheduled:
+          type: boolean
+          description: >
+            Present and `true` when the entry comes from the published
+            timetable rather than a live vehicle prediction. The stop falls
+            back to the schedule when the real-time feed has no prediction for
+            it — common at stops far along a route, where no vehicle is yet
+            close enough to be predicted. Scheduled entries carry no
+            `vehicle_id`, `location`, or `bearing`.
 
     StopStatic:
       type: object
