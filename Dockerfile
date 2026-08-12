@@ -25,6 +25,13 @@ RUN node ./gtfs-import.js
 
 FROM node:26-alpine
 
+# ENV does not cross a build stage: without this the runtime container ran on
+# UTC while the build stage was on Kyiv time. Anything reading a local wall
+# clock — the schedule fallback, getTodayServiceIds' day-of-week — was then
+# three hours off in summer.
+RUN apk add --no-cache tzdata
+ENV TZ=Europe/Kyiv
+
 WORKDIR /usr/src/app
 
 COPY . ./

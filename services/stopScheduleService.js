@@ -12,10 +12,27 @@ const MAX_ENTRIES_PER_ROUTE = 2;
 
 const MAX_ENTRIES = 8;
 
-// Departure maps are keyed by stop and hold "HH:MM" strings in local (Kyiv)
-// time. The service day here never crosses midnight — the latest departure in
-// the data is 23:59 — so a plain same-day parse is enough.
-function parseLocalTime(hhmm, reference) {
+// The departure maps hold Lviv wall-clock times. Reading them with the host's
+// local clock silently produces nothing whenever the process is not on Kyiv
+// time — which is exactly what happened in production, where the runtime image
+// ran on UTC and every departure landed hours in the past. The zone is named
+// explicitly here so the result no longer depends on the container's TZ.
+const SCHEDULE_TIME_ZONE = "Europe/Kyiv";
+
+/** `date` with its fields shifted so local getters read the zone's wall clock. */
+function asZoned(date, timeZone) {
+  return new Date(date.toLocaleString("en-US", { timeZone }));
+}
+
+/**
+ * The instant at which the zone's wall clock next reads "HH:MM" on the same
+ * day as `reference`. Derived as a wall-clock delta from `reference`, so it
+ * needs no offset table and stays correct on either side of a DST switch.
+ *
+ * The service day never crosses midnight — the latest departure in the data is
+ * 23:59 — so a same-day answer is enough.
+ */
+function resolveDepartureTime(hhmm, reference, zonedReference) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm ?? "");
   if (!match) return null;
 
@@ -23,9 +40,10 @@ function parseLocalTime(hhmm, reference) {
   const minutes = Number(match[2]);
   if (hours > 23 || minutes > 59) return null;
 
-  const at = new Date(reference);
-  at.setHours(hours, minutes, 0, 0);
-  return at;
+  const wallTarget = new Date(zonedReference);
+  wallTarget.setHours(hours, minutes, 0, 0);
+
+  return new Date(reference.getTime() + (wallTarget - zonedReference));
 }
 
 // The import writes three maps: a combined one plus workday/weekend splits.
@@ -59,11 +77,17 @@ function departuresForStop(route, microgizId, isWeekend) {
 export function getScheduledArrivalsForStop(
   stop,
   routesByRouteId,
-  { now = new Date(), windowMinutes = SCHEDULE_WINDOW_MINUTES, limit = MAX_ENTRIES } = {},
+  {
+    now = new Date(),
+    windowMinutes = SCHEDULE_WINDOW_MINUTES,
+    limit = MAX_ENTRIES,
+    timeZone = SCHEDULE_TIME_ZONE,
+  } = {},
 ) {
   if (!stop?.microgiz_id || !Array.isArray(stop.transfers)) return [];
 
-  const isWeekend = [0, 6].includes(now.getDay());
+  const zonedNow = asZoned(now, timeZone);
+  const isWeekend = [0, 6].includes(zonedNow.getDay());
   const until = new Date(now.getTime() + windowMinutes * 60 * 1000);
 
   const entries = [];
@@ -75,7 +99,7 @@ export function getScheduledArrivalsForStop(
     const { _id, id, ...routeInfo } = transfer;
 
     const upcoming = departuresForStop(route, stop.microgiz_id, isWeekend)
-      .map((hhmm) => parseLocalTime(hhmm, now))
+      .map((hhmm) => resolveDepartureTime(hhmm, now, zonedNow))
       .filter((at) => at && at > now && at <= until)
       .sort((a, b) => a - b)
       .slice(0, MAX_ENTRIES_PER_ROUTE);
