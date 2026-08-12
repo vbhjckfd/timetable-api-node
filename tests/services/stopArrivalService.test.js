@@ -197,6 +197,39 @@ describe("stopArrivalService.getTimetableForStop", () => {
     );
   });
 
+  it("ignores a NO_DATA stop_time_update instead of failing the whole stop", async () => {
+    // gtfs-eta fences off the stops past its prediction horizon with a
+    // stop_time_update that names the stop and carries no times. Reading
+    // .arrival.time off it used to throw, and getStopTimetableAction turned
+    // that into an empty list — so one fenced trip blanked the whole stop.
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    getArrivalTimes.mockResolvedValue([
+      {
+        tripUpdate: {
+          stopTimeUpdate: [{ stopId: "MG1001", scheduleRelationship: 2 }],
+          trip: { routeId: "ROUTE1", tripId: "TRIP2" },
+          vehicle: { id: "VH2" },
+        },
+      },
+      {
+        tripUpdate: {
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+          vehicle: { id: "VH1" },
+        },
+      },
+    ]);
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(testStop);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].vehicle_id).toBe("VH1");
+  });
+
   it("filters out past arrivals", async () => {
     const pastTimeSec = Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
     const pastArrival = {

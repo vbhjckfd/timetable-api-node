@@ -74,6 +74,13 @@ const stopArrivalService = {
           .shift();
         return i;
       })
+      // A stop_time_update can name our stop and carry no time at all: that is
+      // the NO_DATA sentinel gtfs-eta appends to fence off the stops past its
+      // prediction horizon (a stop deliberately without times). Reading .time
+      // off it threw, and the throw took down the whole request — the stop then
+      // served [] even when other trips had perfectly good predictions for it.
+      // No times means no prediction from this trip, nothing more.
+      .filter((i) => i.stopTimeUpdate?.arrival || i.stopTimeUpdate?.departure)
       .map((i) => {
         const time = i.stopTimeUpdate.arrival || i.stopTimeUpdate.departure;
         return {
@@ -83,7 +90,7 @@ const stopArrivalService = {
           vehicle: i.vehicle.id,
         };
       })
-      .filter((i) => new Date(i.time) >= now)
+      .filter((i) => Number.isFinite(i.time) && new Date(i.time) >= now)
       .sort((a, b) => a.time - b.time);
 
     const tripsRaw = await getTrips({
