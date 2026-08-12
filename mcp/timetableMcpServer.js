@@ -115,19 +115,17 @@ function zRouteName() {
     .describe("Route short name (e.g. \"T30\", \"32A\") or numeric external ID.");
 }
 
+/**
+ * Coercion rather than a number|string union on purpose: a union publishes
+ * `anyOf` in the tool inputSchema, which several tool-calling stacks (OpenAI
+ * strict function schemas among them) reject or silently degrade. `z.coerce`
+ * emits a plain `{"type":"integer"}` and still accepts "707" at call time.
+ */
 function zStopId() {
-  return z
-    .union([
-      z
-        .number()
-        .int()
-        .positive()
-        .describe("Positive integer stop code (e.g. 707)."),
-      z
-        .string()
-        .regex(/^\d+$/)
-        .describe("Stop code as a digits-only string (e.g. \"707\")."),
-    ])
+  return z.coerce
+    .number()
+    .int()
+    .positive()
     .describe(
       "Municipal stop code shown on stop signage (e.g. 707). Accepts a positive integer or an equivalent digit-only string.",
     );
@@ -277,9 +275,31 @@ function getCached(toolName, args) {
   return entry.value;
 }
 
+/**
+ * Entries are only ever evicted when their own key is read again, so a stream
+ * of one-shot keys (vehicle IDs, arbitrary coordinates) would grow the map
+ * forever on a long-lived instance. Cap it and sweep on insert.
+ */
+const MAX_CACHE_ENTRIES = 500;
+
 function setCached(toolName, args, value) {
   const ttl = CACHE_TTL_MS[toolName] ?? 10_000;
-  _toolCache.set(`${toolName}:${JSON.stringify(args)}`, { value, expiresAt: Date.now() + ttl });
+  const now = Date.now();
+
+  if (_toolCache.size >= MAX_CACHE_ENTRIES) {
+    for (const [key, entry] of _toolCache) {
+      if (now > entry.expiresAt) _toolCache.delete(key);
+    }
+    // Everything still live: drop the least recently written keys.
+    while (_toolCache.size >= MAX_CACHE_ENTRIES) {
+      _toolCache.delete(_toolCache.keys().next().value);
+    }
+  }
+
+  const key = `${toolName}:${JSON.stringify(args)}`;
+  // Re-insert so Map iteration order tracks write recency.
+  _toolCache.delete(key);
+  _toolCache.set(key, { value, expiresAt: now + ttl });
 }
 
 // --- Normalizers ---
@@ -586,9 +606,13 @@ function buildUiPayload(toolName, body) {
   }
 
   if (toolName === "get_vehicle_info") {
+    // `route` is the short name ("Т30"); fall back to the opaque GTFS routeId
+    // only when the route is missing from the local DB. Both are accepted as
+    // the `route_name` input of get_route_static / get_route_realtime.
+    const routeName = payload.route ?? payload.routeId ?? null;
     const mapVehicle = {
       id: String(payload.vehicleId ?? "unknown"),
-      route: payload.routeId ?? null,
+      route: routeName,
       lat: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[0] : null),
       lng: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[1] : null),
       bearing: normalizeBearing(payload.bearing),
@@ -600,7 +624,7 @@ function buildUiPayload(toolName, body) {
       view: "transit_realtime",
       data: {
         vehicle_id: String(payload.vehicleId ?? "unknown"),
-        route: payload.routeId ?? null,
+        route: routeName,
         license_plate: payload.licensePlate ?? null,
         lat: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[0] : null),
         lng: normalizeCoordinate(Array.isArray(payload.location) ? payload.location[1] : null),
@@ -909,7 +933,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_stop_realtime,
     },
     async ({ stop_id }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stop_realtime' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_stop_realtime' } });
       const stopCode = normalizeStopCode(stop_id);
       const cacheArgs = { stop_id: stopCode };
       const cached = getCached("get_stop_realtime", cacheArgs);
@@ -959,7 +983,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_route_static,
     },
     async ({ route_name }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_route_static' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_route_static' } });
       const cacheArgs = { route_name };
       const cached = getCached("get_route_static", cacheArgs);
       if (cached) return cached;
@@ -994,7 +1018,13 @@ function registerTools(server) {
               : undefined,
           })),
         ),
-        shapes: Array.isArray(body.shapes) ? body.shapes : [],
+        // shapes_by_direction() assigns by direction index, so a route with
+        // only one direction leaves a hole. Holes are `undefined`, which fails
+        // the output schema and turns the whole call into an McpError — drop
+        // them here, the same way buildUiPayload drops them from `polylines`.
+        shapes: (Array.isArray(body.shapes) ? body.shapes : []).filter(
+          (shape) => Array.isArray(shape) && shape.length > 0,
+        ),
         updated_at: new Date().toISOString(),
       };
 
@@ -1019,7 +1049,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_route_realtime,
     },
     async ({ route_name }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_route_realtime' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_route_realtime' } });
       const cacheArgs = { route_name };
       const cached = getCached("get_route_realtime", cacheArgs);
       if (cached) return cached;
@@ -1065,7 +1095,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_stop_geometry,
     },
     async ({ stop_id }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stop_geometry' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_stop_geometry' } });
       const stopCode = normalizeStopCode(stop_id);
       const cacheArgs = { stop_id: stopCode };
       const cached = getCached("get_stop_geometry", cacheArgs);
@@ -1152,7 +1182,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_stops_around_location,
     },
     async ({ latitude, longitude, radius_meters }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_stops_around_location' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_stops_around_location' } });
       const cacheArgs = { latitude: normalizeCoordinate(latitude), longitude: normalizeCoordinate(longitude), radius_meters };
       const cached = getCached("get_stops_around_location", cacheArgs);
       if (cached) return cached;
@@ -1220,7 +1250,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_nearby_vehicles,
     },
     async ({ latitude, longitude }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_nearby_vehicles' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_nearby_vehicles' } });
       const cacheArgs = { latitude: normalizeCoordinate(latitude), longitude: normalizeCoordinate(longitude) };
       const cached = getCached("get_nearby_vehicles", cacheArgs);
       if (cached) return cached;
@@ -1264,7 +1294,7 @@ function registerTools(server) {
       outputSchema: OUTPUT_SCHEMAS.get_vehicle_info,
     },
     async ({ vehicle_id }) => {
-      Sentry.metrics.count('mcp.tool_call', 1, { tags: { tool: 'get_vehicle_info' } });
+      Sentry.metrics.count('mcp.tool_call', 1, { attributes: { tool: 'get_vehicle_info' } });
       const cacheArgs = { vehicle_id };
       const cached = getCached("get_vehicle_info", cacheArgs);
       if (cached) return cached;

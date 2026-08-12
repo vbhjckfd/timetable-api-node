@@ -193,7 +193,7 @@ describe("stopArrivalService.getTimetableForStop", () => {
     expect(result[0].location).toBeUndefined();
     expect(sentryCaptureException).toHaveBeenCalled();
     expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.positions_unavailable', 1, { tags: { stop: "1001" } },
+      'stop_timetable.positions_unavailable', 1, { attributes: { stop: "1001" } },
     );
   });
 
@@ -243,10 +243,10 @@ describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
     await stopArrivalService.getTimetableForStop(testStop);
 
     expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.request', 1, { tags: { stop: "1001" } },
+      'stop_timetable.request', 1, { attributes: { stop: "1001" } },
     );
     expect(sentryMetrics.distribution).toHaveBeenCalledWith(
-      'stop_timetable.arrivals_count', 1, { tags: { stop: "1001" } },
+      'stop_timetable.arrivals_count', 1, { attributes: { stop: "1001" } },
     );
     expect(sentryMetrics.count).not.toHaveBeenCalledWith(
       'stop_timetable.empty', expect.anything(), expect.anything(),
@@ -258,10 +258,10 @@ describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
     await stopArrivalService.getTimetableForStop(testStop);
 
     expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.empty', 1, { tags: { stop: "1001" } },
+      'stop_timetable.empty', 1, { attributes: { stop: "1001" } },
     );
     expect(sentryMetrics.distribution).toHaveBeenCalledWith(
-      'stop_timetable.arrivals_count', 0, { tags: { stop: "1001" } },
+      'stop_timetable.arrivals_count', 0, { attributes: { stop: "1001" } },
     );
   });
 });

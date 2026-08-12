@@ -17,7 +17,6 @@ import localDb from "./connections/timetableSqliteDb.js";
 
 import notFoundAction from "./actions/notFoundAction.js";
 import validateStopCode from "./utils/stopCodeMiddleware.js";
-import createRateLimiter from "./utils/rateLimiter.js";
 
 import getClosestStopsAction from "./actions/getClosestStopsAction.js";
 import getSingleStopAction from "./actions/getSingleStopAction.js";
@@ -56,7 +55,7 @@ const setStaticAssetCache = (res, maxAgeSeconds = 3600 * 24) =>
 app.use(cors());
 
 app.use((req, res, next) => {
-  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const baseUrl = `${req.protocol}://${req.host}`;
   res.set(
     "Link",
     [
@@ -99,7 +98,7 @@ app.get("/.well-known/openapi.yaml", (req, res) => {
 });
 
 app.get("/.well-known/ai-plugin.json", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const baseUrl = `${req.protocol}://${req.host}`;
   setStaticAssetCache(res);
   res.json({
     schema_version: "v1",
@@ -121,7 +120,7 @@ app.get("/.well-known/ai-plugin.json", (req, res) => {
 });
 
 app.get("/.well-known/agent.json", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const baseUrl = `${req.protocol}://${req.host}`;
   setStaticAssetCache(res);
   res.json({
     name: "Lviv Public Transport",
@@ -237,10 +236,15 @@ app.get("/ping", (req, res) => {
 
 app.get("/health", healthAction);
 
-const mcpRateLimiter = createRateLimiter({
-  limit: 60,
+// express-rate-limit rather than a hand-rolled counter map: its MemoryStore
+// drops the whole hit table each window, so the key space cannot grow without
+// bound across the instance's lifetime.
+const mcpRateLimiter = rateLimit({
   windowMs: 60_000,
-  onLimit: (res) =>
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) =>
     res.status(429).json({
       jsonrpc: "2.0",
       error: { code: -32000, message: "Rate limit exceeded. Try again later." },
@@ -278,7 +282,7 @@ app.all("/mcp", (req, res) => {
 });
 
 app.get("/.well-known/oauth-protected-resource", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const baseUrl = `${req.protocol}://${req.host}`;
   setStaticAssetCache(res);
   res.json({
     resource: baseUrl,
@@ -294,7 +298,7 @@ app.get("/.well-known/oauth-protected-resource", (req, res) => {
 });
 
 app.get("/.well-known/mcp/server-card.json", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const baseUrl = `${req.protocol}://${req.host}`;
   res.json(buildMcpServerCard(baseUrl));
 });
 
@@ -307,7 +311,7 @@ app.get("/mcp-icon.svg", (req, res) => {
 });
 
 app.get("/robots.txt", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.hostname}`;
+  const baseUrl = `${req.protocol}://${req.host}`;
   const lines = [
     "User-agent: *",
     "Disallow: /private/",

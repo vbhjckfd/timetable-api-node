@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import db from "../connections/timetableSqliteDb.js";
+import { formatRouteName } from "../utils/appHelpers.js";
 import {
   getVehiclesLocations,
   getArrivalTimes,
@@ -44,10 +45,16 @@ export default async (req, res, next) => {
       vehiclePosition.position.longitude,
     ],
     routeId: vehiclePosition.trip.routeId,
+    // Short name as shown on the vehicle ("Т30"), alongside the opaque GTFS
+    // routeId. Same formatting as /transport and the stop timetable, so a
+    // client can carry it straight into /routes/static/:name.
+    route: routeLocal ? formatRouteName(routeLocal.short_name) : null,
     bearing: vehiclePosition.position.bearing,
     speed: vehiclePosition.position.speed ?? null,
     direction:
-      routeLocal.trip_direction_map[vehiclePosition.trip.tripId.toString()],
+      routeLocal?.trip_direction_map?.[
+        vehiclePosition.trip.tripId.toString()
+      ] ?? null,
     licensePlate: vehiclePosition.vehicle.licensePlate,
     arrivals: arrivalTimes.map((item) => {
       const transfers = stopIdsMap[item.stopId].transfers

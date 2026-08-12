@@ -112,6 +112,7 @@ vi.mock("../../actions/vehicleInfoAction.js", () => ({
     res.json({
       location: [49.841, 24.021],
       routeId: "route-123",
+      route: "Т30",
       bearing: 90,
       direction: 0,
       licensePlate: "BC-1234-AB",
@@ -456,10 +457,14 @@ describe("timetable MCP server", () => {
     const text = result.content.find((c) => c.type === "text")?.text;
     expect(text).toContain("BC-1234-AB");
     expect(text).toContain("2 upcoming");
+    // Short name, not the opaque GTFS routeId.
+    expect(text).toContain("route Т30");
 
     const sc = result.structuredContent;
     expect(sc.view).toBe("transit_realtime");
     expect(sc.ui_blocks[0].type).toBe("map");
+    expect(sc.data.route).toBe("Т30");
+    expect(sc.ui_blocks[0].data.vehicles[0].route).toBe("Т30");
     expect(sc.data.license_plate).toBe("BC-1234-AB");
     expect(sc.data.upcoming_stops).toHaveLength(2);
     expect(sc.data.upcoming_stops[0].code).toBe(707);

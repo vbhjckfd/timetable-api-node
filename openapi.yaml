@@ -621,6 +621,14 @@ components:
           maxItems: 2
         routeId:
           type: string
+        route:
+          type: string
+          nullable: true
+          example: "Т30"
+          description: >
+            Route short name as shown on the vehicle, usable as the :name
+            parameter in /routes/static/:name. Null when the route is not in
+            the local dataset.
         bearing:
           type: number
         speed:
@@ -630,6 +638,7 @@ components:
         direction:
           type: integer
           enum: [0, 1]
+          nullable: true
         licensePlate:
           type: string
           nullable: true

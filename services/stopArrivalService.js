@@ -44,7 +44,7 @@ const stopArrivalService = {
       getArrivalTimes(),
       getVehiclesLocations().catch((e) => {
         Sentry.captureException(e);
-        Sentry.metrics.count('stop_timetable.positions_unavailable', 1, { tags: { stop: String(stop.code) } });
+        Sentry.metrics.count('stop_timetable.positions_unavailable', 1, { attributes: { stop: String(stop.code) } });
         return [];
       }),
     ]);
@@ -145,14 +145,14 @@ const stopArrivalService = {
 
     const timetable = result.filter((i) => !!i);
 
-    Sentry.metrics.count('stop_timetable.request', 1, { tags: { stop: String(stop.code) } });
-    Sentry.metrics.distribution('stop_timetable.arrivals_count', timetable.length, { tags: { stop: String(stop.code) } });
+    Sentry.metrics.count('stop_timetable.request', 1, { attributes: { stop: String(stop.code) } });
+    Sentry.metrics.distribution('stop_timetable.arrivals_count', timetable.length, { attributes: { stop: String(stop.code) } });
     const arrivalsWithoutPosition = timetable.filter((i) => !i.location).length;
     if (arrivalsWithoutPosition > 0) {
-      Sentry.metrics.count('stop_timetable.arrival_without_position', arrivalsWithoutPosition, { tags: { stop: String(stop.code) } });
+      Sentry.metrics.count('stop_timetable.arrival_without_position', arrivalsWithoutPosition, { attributes: { stop: String(stop.code) } });
     }
     if (timetable.length === 0) {
-      Sentry.metrics.count('stop_timetable.empty', 1, { tags: { stop: String(stop.code) } });
+      Sentry.metrics.count('stop_timetable.empty', 1, { attributes: { stop: String(stop.code) } });
     }
 
     if (!skipPulse) emitPulseSignal(stop);

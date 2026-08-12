@@ -47,10 +47,10 @@ export default async (req, res, next) => {
   });
 
   const routeTag = routeLocal.short_name ?? String(routeLocal.external_id);
-  Sentry.metrics.count('route_dynamic.request', 1, { tags: { route: routeTag } });
-  Sentry.metrics.distribution('route_dynamic.vehicles_count', result.length, { tags: { route: routeTag } });
+  Sentry.metrics.count('route_dynamic.request', 1, { attributes: { route: routeTag } });
+  Sentry.metrics.distribution('route_dynamic.vehicles_count', result.length, { attributes: { route: routeTag } });
   if (result.length === 0) {
-    Sentry.metrics.count('route_dynamic.no_vehicles', 1, { tags: { route: routeTag } });
+    Sentry.metrics.count('route_dynamic.no_vehicles', 1, { attributes: { route: routeTag } });
   }
 
   res.set("Cache-Control", `public, s-maxage=10`).send(result);
