@@ -26,27 +26,52 @@ export default async (req, res, next) => {
 
   const mapInits = [];
 
-  // Stop sets per route (union of both directions), used for similarity below.
-  const stopSets = routesRaw.map(
-    (r) => new Set(Object.values(r.stops_by_shape).flat()),
+  // One pass over stops: `stopByCode` serves the per-row lookups below, and
+  // `stopGeo` is the same data shipped to the browser for the comparison maps.
+  // Sharing the source is what keeps client-side stop lists identical to what
+  // this file used to render.
+  const stopByCode = new Map(
+    db
+      .getCollection("stops")
+      .find({
+        code: {
+          $in: [
+            ...new Set(
+              routesRaw.flatMap((r) => Object.values(r.stops_by_shape).flat()),
+            ),
+          ],
+        },
+      })
+      .map((s) => [s.code, s]),
   );
+  // Coordinates are [lat, lng] throughout this codebase, despite the GeoJSON
+  // -looking `type: "Point"` on the stop docs. Leaflet wants them in that order.
+  const stopGeo = Object.fromEntries(
+    [...stopByCode].map(([code, s]) => [
+      code,
+      [s.location.coordinates[0], s.location.coordinates[1], s.name],
+    ]),
+  );
+  // Same expression as the similarity sets below, so the client-side
+  // intersection cannot drift from the percentages rendered here.
+  const routeStops = routesRaw.map((r) => Object.values(r.stops_by_shape));
+  const routeNames = routesRaw.map((r) => r.short_name);
+
+  // Stop sets per route (union of both directions), used for similarity below.
+  const stopSets = routeStops.map((dirs) => new Set(dirs.flat()));
 
   // Top-5 similar routes per route, by Jaccard similarity of shared stops.
-  // `shared` keeps this route's own stop order (dir 0 first) so the expandable
-  // list below reads along the route.
+  // Only the score is rendered server-side; the shared stop list itself is
+  // rebuilt in the browser by `sharedCodes` when a route is expanded.
   const similarRoutes = stopSets.map((set, i) => {
     const scores = [];
     for (let j = 0; j < stopSets.length; j++) {
       if (j === i || !stopSets[j].size) continue;
-      const shared = [];
-      for (const code of set) if (stopSets[j].has(code)) shared.push(code);
-      if (!shared.length) continue;
-      const union = set.size + stopSets[j].size - shared.length;
-      scores.push({
-        route: routesRaw[j],
-        pct: (shared.length / union) * 100,
-        shared,
-      });
+      let shared = 0;
+      for (const code of set) if (stopSets[j].has(code)) shared++;
+      if (!shared) continue;
+      const union = set.size + stopSets[j].size - shared;
+      scores.push({ j, pct: (shared / union) * 100 });
     }
     scores.sort((a, b) => b.pct - a.pct);
     return scores.slice(0, 5);
@@ -78,8 +103,10 @@ table {border-collapse: collapse;}
 table, th { text-align: left; }
 table tr {border-bottom: 1pt solid black;}
 table td {vertical-align: top;}
+table td:first-child { width: 360px; }
 a { text-decoration: none; }
 .route-map { width: 320px; height: 500px; }
+.route-map:fullscreen, .route-map:-webkit-full-screen { width: 100vw; height: 100vh; }
 td.map-cell { padding-bottom: 15px; }
 .dir-btns { margin-bottom: 4px; display: flex; gap: 4px; }
 .dir-btns button {
@@ -91,6 +118,26 @@ td.map-cell { padding-bottom: 15px; }
 .similar-routes ol { margin: 2px 0 0; padding-left: 18px; }
 .similar-routes ul { margin: 2px 0 4px; padding-left: 16px; }
 .similar-routes summary { cursor: pointer; }
+.cmp-map { width: 300px; height: 260px; margin: 4px 0; }
+.cmp-map:fullscreen, .cmp-map:-webkit-full-screen { width: 100vw; height: 100vh; }
+.cmp-legend {
+  background: rgba(255,255,255,.85); padding: 2px 5px; border-radius: 3px;
+  font: 11px/1.4 system-ui, sans-serif; color: #111;
+}
+.cmp-legend i {
+  display: inline-block; width: 10px; height: 10px;
+  margin-right: 4px; vertical-align: -1px;
+}
+.cmp-fullscreen-btn {
+  background: #fff; width: 28px; height: 28px; line-height: 28px;
+  text-align: center; cursor: pointer; font-size: 15px; border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.split-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: linear-gradient(90deg, #2563EB 50%, #DC2626 50%);
+  border: 1px solid #fff; box-shadow: 0 0 2px rgba(0,0,0,.5);
+}
 .ab-marker { background: none; border: none; }
 .ab-pin {
   width: 22px; height: 22px; line-height: 22px;
@@ -121,6 +168,161 @@ function showDirs(id, dirs) {
     b.classList.toggle('active', b.dataset.dirs === dirs.join(','));
   });
 }
+
+// --- Similar-routes comparison maps (kept separate from _maps/_layers above,
+// which showDirs assumes hold exactly two direction layers each) ---
+var _cmpMaps = {};
+var CMP_C = ['#2563EB', '#DC2626'];
+
+// Reproduces the server's similarity ordering exactly: walk route i's own
+// stops (dir 0 first, in the order Object.values(stops_by_shape) yields),
+// dedupe with a Set before checking membership, keep only codes route j also
+// has and that resolve to a known stop. Mirrors the union/shared logic used
+// to score similarRoutes server-side.
+function sharedCodes(i, j) {
+  var a = (_routeStops && _routeStops[i]) || [];
+  var b = (_routeStops && _routeStops[j]) || [];
+  var inB = new Set(), seen = new Set(), out = [];
+  for (var k = 0; k < b.length; k++) {
+    var db_ = b[k] || [];
+    for (var n = 0; n < db_.length; n++) inB.add(db_[n]);
+  }
+  for (k = 0; k < a.length; k++) {
+    var da = a[k] || [];
+    for (n = 0; n < da.length; n++) {
+      var c = da[n];
+      if (seen.has(c)) continue;
+      seen.add(c);
+      if (inB.has(c) && _stopGeo[c]) out.push(c);
+    }
+  }
+  return out;
+}
+
+function sharedList(codes) {
+  var ul = document.createElement('ul');
+  codes.forEach(function(c) {
+    var g = _stopGeo[c];
+    var li = document.createElement('li');
+    var a = document.createElement('a');
+    a.target = '_blank';
+    a.href = 'https://lad.lviv.ua/' + c;
+    a.textContent = c;
+    li.appendChild(document.createTextNode(g[2] + ' ('));
+    li.appendChild(a);
+    li.appendChild(document.createTextNode(')'));
+    ul.appendChild(li);
+  });
+  return ul;
+}
+
+function splitDotIcon() {
+  return L.divIcon({
+    className: 'split-dot',
+    html: '',
+    iconSize: [12, 12], iconAnchor: [6, 6],
+  });
+}
+
+function addFullscreenControl(m, div) {
+  var ctl = L.control({ position: 'topright' });
+  ctl.onAdd = function() {
+    var btn = L.DomUtil.create('div', 'cmp-fullscreen-btn');
+    btn.innerHTML = '⛶';
+    btn.title = 'На весь екран';
+    L.DomEvent.disableClickPropagation(btn);
+    L.DomEvent.on(btn, 'click', function() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else if (div.requestFullscreen) {
+        div.requestFullscreen();
+      }
+    });
+    return btn;
+  };
+  ctl.addTo(m);
+  div.addEventListener('fullscreenchange', function() {
+    setTimeout(function() { m.invalidateSize(); }, 50);
+  });
+}
+
+function cmpMap(div, key, i, j) {
+  if (_cmpMaps[key]) { _cmpMaps[key].invalidateSize(); return; }
+  var m = L.map(div, { zoomControl: false, attributionControl: false, preferCanvas: true });
+  // Valid view before any layer is added, so nothing can throw regardless of
+  // the container's layout state at this point (it just became visible).
+  m.setView([49.8397, 24.0297], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+  addFullscreenControl(m, div);
+
+  // Each stop is drawn once even though it may belong to both routes' stop
+  // lists (every shared stop does) — otherwise the split dot below would be
+  // painted twice, once per route, hiding the coloring underneath.
+  var shared = new Set(sharedCodes(i, j)), pts = [], stops = new Map();
+  [i, j].forEach(function(ri, n) {
+    (_routeStops[ri] || []).forEach(function(codes) {
+      var line = [];
+      (codes || []).forEach(function(c) {
+        var g = _stopGeo[c];
+        if (!g) return;
+        var ll = [g[0], g[1]];
+        line.push(ll); pts.push(ll);
+        if (!stops.has(c)) stops.set(c, { ll: ll, name: g[2] });
+      });
+      if (line.length > 1) L.polyline(line, { color: CMP_C[n], weight: n ? 2 : 3, opacity: 0.8 }).addTo(m);
+    });
+  });
+
+  stops.forEach(function(s, c) {
+    var tip = s.name + ' (' + c + ')';
+    if (shared.has(c)) {
+      L.marker(s.ll, { icon: splitDotIcon(), interactive: true }).bindTooltip(tip).addTo(m);
+    } else {
+      L.circleMarker(s.ll, {
+        radius: 3, color: '#999', weight: 1, fillColor: '#999', fillOpacity: 0.7,
+      }).bindTooltip(tip).addTo(m);
+    }
+  });
+
+  var lg = L.control({ position: 'bottomleft' });
+  lg.onAdd = function() {
+    var d = L.DomUtil.create('div', 'cmp-legend');
+    [i, j].forEach(function(ri, n) {
+      var row = L.DomUtil.create('div', '', d);
+      L.DomUtil.create('i', '', row).style.background = CMP_C[n];
+      row.appendChild(document.createTextNode(_routeNames[ri]));
+    });
+    L.DomEvent.disableClickPropagation(d);
+    return d;
+  };
+  lg.addTo(m);
+
+  _cmpMaps[key] = m;
+  requestAnimationFrame(function() {
+    m.invalidateSize();
+    if (pts.length) m.fitBounds(pts, { padding: [10, 10], maxZoom: 16 });
+  });
+}
+
+function cmpDrop(key) {
+  var m = _cmpMaps[key];
+  if (m) { m.remove(); delete _cmpMaps[key]; }
+}
+
+function simExpand(el, i, j) {
+  var key = i + '-' + j;
+  if (!el.open) { cmpDrop(key); return; }
+  if (!window._routeStops || !window._stopGeo) return;
+  var body = el.lastElementChild;
+  if (!el.dataset.built) {
+    el.dataset.built = '1';
+    var div = document.createElement('div');
+    div.className = 'cmp-map';
+    body.appendChild(div);
+    body.appendChild(sharedList(sharedCodes(i, j)));
+  }
+  cmpMap(body.firstElementChild, key, i, j);
+}
 </script>
 </head>
 <body>
@@ -128,10 +330,10 @@ ${contactBannerHtml("routes")}
 <table>
 `;
   for (let [i, r] of routesRaw.entries()) {
-    const stopsArr = db.getCollection("stops").find({
-      code: { $in: Object.values(r.stops_by_shape).flat() },
-    });
-    const allStops = Object.fromEntries(stopsArr.map((s) => [s.code, s]));
+    const allStops = {};
+    for (const code of stopSets[i]) {
+      if (stopByCode.has(code)) allStops[code] = stopByCode.get(code);
+    }
 
     let stopsByShape = [];
     for (const key of [0, 1]) {
@@ -173,6 +375,7 @@ ${contactBannerHtml("routes")}
         `(function(){` +
         `var m=L.map('${mapId}',{zoomControl:false,attributionControl:false});` +
         `L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);` +
+        `addFullscreenControl(m,document.getElementById('${mapId}'));` +
         `var s=${JSON.stringify([shapes[0] ?? null, shapes[1] ?? null])};` +
         `var c=['#2563EB','#DC2626'],pts=[],ls=[null,null];` +
         `var dash=${JSON.stringify([syntheticDirs.includes(0), syntheticDirs.includes(1)])};` +
@@ -192,18 +395,16 @@ ${contactBannerHtml("routes")}
         `</div>`
       : "";
 
+    // The shared-stop list itself is built client-side (see `sharedCodes` /
+    // `simExpand` in the head script) when a route is expanded, along with a
+    // comparison map — keeping this HTML free of the full stop lists saves
+    // hundreds of KB across all routes.
     const similarHtml = similarRoutes[i].length
       ? `<div class="similar-routes">Схожі:<ol>${similarRoutes[i]
-          .map((s) => {
-            const sharedStops = s.shared
-              .filter((code) => !!allStops[code])
-              .map(
-                (code) =>
-                  `<li>${escapeHtml(allStops[code].name)} (<a target="_blank" href="https://lad.lviv.ua/${code}">${code}</a>)</li>`,
-              )
-              .join("");
-            return `<li><details><summary>${escapeHtml(s.route.short_name)} (${s.pct.toFixed(0)}%)</summary><ul>${sharedStops}</ul></details></li>`;
-          })
+          .map(
+            (s) =>
+              `<li><details ontoggle="simExpand(this,${i},${s.j})"><summary>${escapeHtml(routeNames[s.j])} (${s.pct.toFixed(0)}%)</summary><div class="sim-body"></div></details></li>`,
+          )
           .join("")}</ol></div>`
       : "";
 
@@ -215,7 +416,23 @@ ${contactBannerHtml("routes")}
         <td class="map-cell">${mapControls}<div id="${mapId}" class="route-map"></div></td>
         </tr>`;
   }
-  result += `</table><script>${mapInits.join("\n")}<\/script>\n</body>\n</html>`;
+  // Data for the comparison maps, embedded once for all routes. Escaping `<`
+  // (and the two Unicode line separators, for older JS engines) is what keeps
+  // a stop or route name from ever breaking out of this inline <script>; do
+  // NOT run escapeHtml on this JSON, it would corrupt names that are only
+  // ever inserted into the DOM via textContent, never via innerHTML.
+  const jsonForScript = (v) =>
+    JSON.stringify(v)
+      .replace(/</g, "\\u003c")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+
+  result +=
+    `</table><script>` +
+    `var _stopGeo=${jsonForScript(stopGeo)},` +
+    `_routeStops=${jsonForScript(routeStops)},` +
+    `_routeNames=${jsonForScript(routeNames)};\n` +
+    `${mapInits.join("\n")}<\/script>\n</body>\n</html>`;
 
   res
     .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAgeSeconds}`)
