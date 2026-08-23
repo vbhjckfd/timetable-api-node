@@ -253,18 +253,23 @@ describe("stopArrivalService.getTimetableForStop", () => {
 });
 
 describe("stopArrivalService.getTimetableForStop — schedule fallback", () => {
-  // 10 minutes from now, as "HH:MM" in the same local timezone the departure
-  // maps are written in.
-  function localHHMM(offsetMinutes) {
+  // "HH:MM" in Europe/Kyiv, the zone the departure maps are written in and the
+  // one stopScheduleService reads them back in. Building these off the process
+  // clock passed on a Kyiv laptop and returned nothing on a UTC CI runner.
+  function kyivHHMM(offsetMinutes) {
     const at = new Date(Date.now() + offsetMinutes * 60 * 1000);
-    return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+    return at.toLocaleTimeString("en-GB", {
+      timeZone: "Europe/Kyiv",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   const scheduledRoute = {
     ...mockRoute,
-    stop_departure_time_map: { MG1001: [localHHMM(10)] },
-    stop_departure_time_map_workday: { MG1001: [localHHMM(10)] },
-    stop_departure_time_map_weekend: { MG1001: [localHHMM(10)] },
+    stop_departure_time_map: { MG1001: [kyivHHMM(10)] },
+    stop_departure_time_map_workday: { MG1001: [kyivHHMM(10)] },
+    stop_departure_time_map_weekend: { MG1001: [kyivHHMM(10)] },
   };
 
   const stopWithSchedule = {
