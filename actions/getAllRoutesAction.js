@@ -26,6 +26,32 @@ export default async (req, res, next) => {
 
   const mapInits = [];
 
+  // Stop sets per route (union of both directions), used for similarity below.
+  const stopSets = routesRaw.map(
+    (r) => new Set(Object.values(r.stops_by_shape).flat()),
+  );
+
+  // Top-5 similar routes per route, by Jaccard similarity of shared stops.
+  // `shared` keeps this route's own stop order (dir 0 first) so the expandable
+  // list below reads along the route.
+  const similarRoutes = stopSets.map((set, i) => {
+    const scores = [];
+    for (let j = 0; j < stopSets.length; j++) {
+      if (j === i || !stopSets[j].size) continue;
+      const shared = [];
+      for (const code of set) if (stopSets[j].has(code)) shared.push(code);
+      if (!shared.length) continue;
+      const union = set.size + stopSets[j].size - shared.length;
+      scores.push({
+        route: routesRaw[j],
+        pct: (shared.length / union) * 100,
+        shared,
+      });
+    }
+    scores.sort((a, b) => b.pct - a.pct);
+    return scores.slice(0, 5);
+  });
+
   const baseUrl = `${req.protocol}://${req.hostname}`;
   const canonical = `${baseUrl}/routes`;
   const title = "Маршрути громадського транспорту Львова";
@@ -61,6 +87,10 @@ td.map-cell { padding-bottom: 15px; }
   border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5;
 }
 .dir-btns button.active { background: #dbeafe; border-color: #2563eb; font-weight: bold; }
+.similar-routes { font-size: 11px; color: #666; margin-top: 6px; }
+.similar-routes ol { margin: 2px 0 0; padding-left: 18px; }
+.similar-routes ul { margin: 2px 0 4px; padding-left: 16px; }
+.similar-routes summary { cursor: pointer; }
 .ab-marker { background: none; border: none; }
 .ab-pin {
   width: 22px; height: 22px; line-height: 22px;
@@ -162,8 +192,23 @@ ${contactBannerHtml("routes")}
         `</div>`
       : "";
 
+    const similarHtml = similarRoutes[i].length
+      ? `<div class="similar-routes">Схожі:<ol>${similarRoutes[i]
+          .map((s) => {
+            const sharedStops = s.shared
+              .filter((code) => !!allStops[code])
+              .map(
+                (code) =>
+                  `<li>${escapeHtml(allStops[code].name)} (<a target="_blank" href="https://lad.lviv.ua/${code}">${code}</a>)</li>`,
+              )
+              .join("");
+            return `<li><details><summary>${escapeHtml(s.route.short_name)} (${s.pct.toFixed(0)}%)</summary><ul>${sharedStops}</ul></details></li>`;
+          })
+          .join("")}</ol></div>`
+      : "";
+
     result += `<tr>
-        <td><a target="_blank" href="https://lad.lviv.ua/route/${routeNameToUrlFriendly(r.short_name)}">${escapeHtml(r.short_name)}</a> (${r.external_id})</td>
+        <td><a target="_blank" href="https://lad.lviv.ua/route/${routeNameToUrlFriendly(r.short_name)}">${escapeHtml(r.short_name)}</a> (${r.external_id})${similarHtml}</td>
         <td>${escapeHtml(r.long_name)}</td>
         <td><ol>${stopsByShape[0]}</ol></td>
         <td><ol>${stopsByShape[1]}</ol></td>
