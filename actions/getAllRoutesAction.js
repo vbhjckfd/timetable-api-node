@@ -224,7 +224,7 @@ function splitDotIcon() {
   });
 }
 
-function addFullscreenControl(m, div) {
+function addFullscreenControl(m, div, key) {
   var ctl = L.control({ position: 'topright' });
   ctl.onAdd = function() {
     var btn = L.DomUtil.create('div', 'cmp-fullscreen-btn');
@@ -241,8 +241,16 @@ function addFullscreenControl(m, div) {
     return btn;
   };
   ctl.addTo(m);
+  // Comparison maps are destroyed and rebuilt on every reopen, but the div is
+  // reused — bind this listener once per div, ever, and resolve the live map
+  // through the registry so a rebuilt map is always the one invalidated.
+  if (div._fsBound) return;
+  div._fsBound = true;
   div.addEventListener('fullscreenchange', function() {
-    setTimeout(function() { m.invalidateSize(); }, 50);
+    setTimeout(function() {
+      var live = key ? _cmpMaps[key] : m;
+      if (live) live.invalidateSize();
+    }, 50);
   });
 }
 
@@ -253,7 +261,7 @@ function cmpMap(div, key, i, j) {
   // the container's layout state at this point (it just became visible).
   m.setView([49.8397, 24.0297], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
-  addFullscreenControl(m, div);
+  addFullscreenControl(m, div, key);
 
   // Each stop is drawn once even though it may belong to both routes' stop
   // lists (every shared stop does) — otherwise the split dot below would be
@@ -306,7 +314,12 @@ function cmpMap(div, key, i, j) {
 
 function cmpDrop(key) {
   var m = _cmpMaps[key];
-  if (m) { m.remove(); delete _cmpMaps[key]; }
+  if (!m) return;
+  // Don't tear the map out from under a still-fullscreen container — that
+  // strands the browser in fullscreen showing a dead element.
+  if (document.fullscreenElement === m.getContainer()) document.exitFullscreen();
+  m.remove();
+  delete _cmpMaps[key];
 }
 
 function simExpand(el, i, j) {
