@@ -18,6 +18,8 @@ import {
   cleanUpStopName,
   getTextWaitTime,
   getDirectionByTrip,
+  sortedShapeIds,
+  shapes_by_direction,
 } from "../../utils/appHelpers.js";
 
 describe("escapeHtml", () => {
@@ -177,5 +179,47 @@ describe("getDirectionByTrip", () => {
   it("returns index of shape in sorted shapes", () => {
     expect(getDirectionByTrip("trip-1", route)).toBe(0);
     expect(getDirectionByTrip("trip-2", route)).toBe(1);
+  });
+  it("returns null when the trip's shape has no geometry", () => {
+    expect(
+      getDirectionByTrip("trip-3", {
+        trip_shape_map: { "trip-3": "shape-missing" },
+        shapes: { "shape-a": {} },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("sortedShapeIds", () => {
+  it("orders numeric shape ids numerically, not lexicographically", () => {
+    expect(sortedShapeIds({ shapes: { 11850: [], 9999: [], 11849: [] } })).toEqual(
+      ["9999", "11849", "11850"],
+    );
+  });
+  it("falls back to string order for non-numeric ids", () => {
+    expect(sortedShapeIds({ shapes: { "shape-b": [], "shape-a": [] } })).toEqual([
+      "shape-a",
+      "shape-b",
+    ]);
+  });
+  it("tolerates a route with no shapes", () => {
+    expect(sortedShapeIds({})).toEqual([]);
+  });
+});
+
+describe("shapes_by_direction", () => {
+  // Regression: shape_direction_map used to hold the GTFS direction_id, which on
+  // 27 of 69 Lviv routes runs opposite to shape order. Each direction then drew
+  // the other direction's polyline next to its own stop list (route А15).
+  it("pairs each direction with the shape getDirectionByTrip assigns to it", () => {
+    const route = {
+      trip_shape_map: { "trip-a": "11849", "trip-b": "11850" },
+      shapes: { 11849: [[49.82, 24.08]], 11850: [[49.83, 23.99]] },
+      shape_direction_map: { 11849: 0, 11850: 1 },
+    };
+
+    const shapes = shapes_by_direction(route);
+    expect(shapes[getDirectionByTrip("trip-a", route)]).toBe(route.shapes[11849]);
+    expect(shapes[getDirectionByTrip("trip-b", route)]).toBe(route.shapes[11850]);
   });
 });

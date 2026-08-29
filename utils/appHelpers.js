@@ -219,13 +219,29 @@ export function cleanUpStopName(stopName) {
   return stopName.replace(/(\([\-\d]+\))/gi, "").trim();
 }
 
+/**
+ * Canonical order of a route's shapes. A direction index is a position in this
+ * list — that is the only definition of "direction" the API exposes, and both
+ * shape_direction_map and trip_direction_map are built from it.
+ */
+export function sortedShapeIds(route) {
+  return Object.keys(route.shapes ?? {}).sort((a, b) => {
+    const na = Number(a);
+    const nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+}
+
 export function getDirectionByTrip(tripId, routeModel) {
   if (!tripId || !routeModel.trip_shape_map[tripId]) {
     return null;
   }
 
-  const shapesSortedById = Object.keys(routeModel.shapes).sort((a, b) => a - b);
-  return shapesSortedById.indexOf(routeModel.trip_shape_map[tripId]);
+  const direction = sortedShapeIds(routeModel).indexOf(
+    routeModel.trip_shape_map[tripId],
+  );
+  return direction === -1 ? null : direction;
 }
 
 export function getTextWaitTime(busArrivalTime, from = new Date()) {

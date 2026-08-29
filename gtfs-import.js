@@ -34,6 +34,7 @@ import {
   getDirectionByTrip,
   getSmapleTrips,
   shapes_by_direction,
+  sortedShapeIds,
 } from "./utils/appHelpers.js";
 const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
@@ -111,7 +112,6 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     }, {});
 
     let tripShapeMap = {};
-    let shapeDirectionMap = {};
 
     let trips = [];
 
@@ -136,11 +136,23 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
     trips.forEach((t) => {
       tripShapeMap[t.trip_id] = t.shape_id;
-      shapeDirectionMap[t.shape_id] = t.direction_id;
     });
 
     routeModel.trip_shape_map = tripShapeMap;
-    routeModel.shape_direction_map = shapeDirectionMap;
+
+    // A direction is the position of the shape in canonical shape order — the
+    // same rule getDirectionByTrip() applies to trips (and therefore to
+    // stops_by_shape and to every realtime `direction` the API returns).
+    // GTFS direction_id must NOT be used here: on 27 of 69 Lviv routes it runs
+    // opposite to shape order, which paired each direction's stop list with the
+    // other direction's polyline (visible on loop routes such as А15, where the
+    // two directions follow genuinely different streets).
+    routeModel.shape_direction_map = Object.fromEntries(
+      sortedShapeIds(routeModel).map((shapeId, direction) => [
+        shapeId,
+        direction,
+      ]),
+    );
 
     routeModel.trip_direction_map = trips.reduce((acc, t) => {
       let direction = getDirectionByTrip(t.trip_id, routeModel);
@@ -490,6 +502,40 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
             if (endGap   > TERMINAL_THRESHOLD_M) parts.push(desc(endGap,   lLat, lLon, codes.at(-1)));
             issues.push(`dir${dir}: ${parts.join("; ")}`);
           }
+        }
+      }
+
+      // Endpoint checks alone cannot see a direction swap: on a loop route both
+      // directions share the same two terminals, so the wrong polyline still
+      // passes (it just gets `reversed` above) while its middle follows the
+      // other direction's streets. Compare how well each direction's stops fit
+      // its own shape versus the other one.
+      const fit = (shape, codes) => {
+        if (!shape?.length || !codes?.length) return null;
+        let sum = 0, n = 0;
+        for (const code of codes) {
+          const s = stopsCollection.findOne({ code });
+          if (!s) continue;
+          const [lat, lon] = s.location.coordinates;
+          let best = Infinity;
+          for (const p of shape) best = Math.min(best, distM(p[0], p[1], lat, lon));
+          sum += best;
+          n++;
+        }
+        return n ? sum / n : null;
+      };
+
+      const self = [0, 1].map((d) => fit(shapesByDir[d], route.stops_by_shape?.[String(d)]));
+      const cross = [0, 1].map((d) => fit(shapesByDir[1 - d], route.stops_by_shape?.[String(d)]));
+
+      for (const dir of [0, 1]) {
+        // Only flag when the other shape is a decisively better match, so
+        // out-and-back routes (where both shapes run the same streets and the
+        // two fits are near-identical) stay quiet.
+        if (self[dir] != null && cross[dir] != null && cross[dir] * 2 < self[dir]) {
+          issues.push(
+            `dir${dir}: shape swapped — stops sit ${Math.round(self[dir])}m from their own shape but ${Math.round(cross[dir])}m from dir${1 - dir}'s`,
+          );
         }
       }
     }
