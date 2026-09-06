@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 8080;
 import { openDb } from "gtfs";
 import { readFile } from "fs/promises";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import express from "express";
 import bodyParser from "body-parser";
 import localDb from "./connections/timetableSqliteDb.js";
@@ -70,6 +70,47 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json({ limit: "100kb" }));
 
+// `trust proxy` is true above, which makes req.ip the leftmost X-Forwarded-For
+// entry — a value the caller writes, so keying a limiter on it would let one
+// client mint a fresh bucket per request. Cloudflare sets CF-Connecting-IP at
+// the edge and overwrites whatever the client sent, so prefer that and fall
+// back to req.ip only for a request that did not arrive through the edge.
+// ipKeyGenerator collapses IPv6 to a /56, so a single allocation cannot spread
+// its hits across addresses either.
+const clientIpKey = (req) =>
+  ipKeyGenerator(req.headers["cf-connecting-ip"] ?? req.ip ?? "");
+
+// Limits are per client address and deliberately loose — a person browsing
+// stays two orders of magnitude under them. They exist to bound the
+// unattended callers: a scraper looping a fixed set of stop codes, or an app
+// under development replaying deploy loops, both of which otherwise run
+// against the origin with nothing to push back. Liveness paths are exempt so
+// a probe never trips a limit some abusive neighbour filled.
+const globalRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: clientIpKey,
+  skip: (req) => req.path === "/health" || req.path === "/ping",
+  message: { error: "Rate limit exceeded. Try again later." },
+});
+
+// /routes/dynamic/:name and /transport both fan out over the live vehicle
+// feed, which makes them the most expensive responses here and the pair a
+// single client can do the most damage with. Their bucket is drawn on top of
+// the global one, so this only ever narrows what that already allows.
+const liveDataRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: clientIpKey,
+  message: { error: "Rate limit exceeded. Try again later." },
+});
+
+app.use(globalRateLimiter);
+
 app.get("/stops/:code/timetable", validateStopCode, getStopTimetableAction);
 app.get("/stops/:code/static", validateStopCode, getStopStaticDataAction);
 app.get("/stops/:code", validateStopCode, getSingleStopAction);
@@ -79,11 +120,11 @@ app.get("/closest", getClosestStopsAction);
 
 app.get("/routes.json", getAllRoutesAction);
 app.get("/routes", getAllRoutesAction);
-app.get("/routes/dynamic/:name", routeInfoDynamicAction);
+app.get("/routes/dynamic/:name", liveDataRateLimiter, routeInfoDynamicAction);
 app.get("/routes/static/:name", routeInfoStaticAction);
 app.get("/vehicle/:vehicleId", vehicleInfoAction);
 app.get("/vehicle-by-plate/:plate", vehicleByPlateAction);
-app.get("/transport", closestTransportAction);
+app.get("/transport", liveDataRateLimiter, closestTransportAction);
 
 app.get("/sitemap.xml", sitemapAction);
 
@@ -244,6 +285,7 @@ const mcpRateLimiter = rateLimit({
   limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: clientIpKey,
   handler: (req, res) =>
     res.status(429).json({
       jsonrpc: "2.0",
@@ -343,6 +385,7 @@ const staticFileRateLimiter = rateLimit({
   limit: 120,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: clientIpKey,
 });
 
 app.get("/stop-overrides.js", staticFileRateLimiter, (req, res) => {
