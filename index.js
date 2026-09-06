@@ -12,7 +12,6 @@ import { readFile } from "fs/promises";
 import cors from "cors";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import express from "express";
-import bodyParser from "body-parser";
 import localDb from "./connections/timetableSqliteDb.js";
 
 import notFoundAction from "./actions/notFoundAction.js";
@@ -35,6 +34,7 @@ import {
   handleMcpPostRequest,
 } from "./mcp/timetableMcpServer.js";
 import healthAction from "./actions/healthAction.js";
+import errorHandler from "./utils/errorHandler.js";
 
 const app = express();
 
@@ -68,7 +68,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(bodyParser.json({ limit: "100kb" }));
+app.use(express.json({ limit: "100kb" }));
 
 // `trust proxy` is true above, which makes req.ip the leftmost X-Forwarded-For
 // entry — a value the caller writes, so keying a limiter on it would let one
@@ -85,14 +85,18 @@ const clientIpKey = (req) =>
 // fixed set of stop codes, or an app under development replaying deploy
 // loops, both of which otherwise run against the origin with nothing to push
 // back. Liveness paths are exempt so a probe never trips a limit some abusive
-// neighbour filled.
+// neighbour filled, and /mcp is exempt because it carries its own limiter
+// below: sharing this bucket meant the global one always emptied first (it
+// counts every path) and answered MCP clients with a body that is not
+// JSON-RPC.
 const globalRateLimiter = rateLimit({
   windowMs: 60_000,
   limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
-  skip: (req) => req.path === "/health" || req.path === "/ping",
+  skip: (req) =>
+    req.path === "/health" || req.path === "/ping" || req.path === "/mcp",
   message: { error: "Rate limit exceeded. Try again later." },
 });
 
@@ -313,6 +317,10 @@ app.post("/mcp", mcpRateLimiter, async (req, res) => {
 });
 
 app.all("/mcp", (req, res) => {
+  // RFC 9110: a 405 has to say which methods the resource does take. The
+  // transport is stateless, so there is no SSE stream for GET to open and
+  // no session for DELETE to end — POST is the whole surface.
+  res.set("Allow", "POST");
   res.status(405).json({
     jsonrpc: "2.0",
     error: {
@@ -341,6 +349,10 @@ app.get("/.well-known/oauth-protected-resource", (req, res) => {
 
 app.get("/.well-known/mcp/server-card.json", (req, res) => {
   const baseUrl = `${req.protocol}://${req.host}`;
+  // The card carries pkg.version, so a code push has to be able to purge it;
+  // without the "long" tag the DropCache step in cloudbuild.yaml could not
+  // reach it and clients kept a stale version for a day.
+  setStaticAssetCache(res);
   res.json(buildMcpServerCard(baseUrl));
 });
 
@@ -408,10 +420,7 @@ app.use(notFoundAction);
 
 Sentry.setupExpressErrorHandler(app);
 
-app.use(function (err, req, res, next) {
-  console.error(err.stack);
-  res.status(500).json({ error: "Internal server error" });
-});
+app.use(errorHandler);
 
 app.on("ready", () => {
   app.listen(PORT, () => {
