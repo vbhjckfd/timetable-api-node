@@ -80,15 +80,15 @@ app.use(bodyParser.json({ limit: "100kb" }));
 const clientIpKey = (req) =>
   ipKeyGenerator(req.headers["cf-connecting-ip"] ?? req.ip ?? "");
 
-// Limits are per client address and deliberately loose — a person browsing
-// stays two orders of magnitude under them. They exist to bound the
-// unattended callers: a scraper looping a fixed set of stop codes, or an app
-// under development replaying deploy loops, both of which otherwise run
-// against the origin with nothing to push back. Liveness paths are exempt so
-// a probe never trips a limit some abusive neighbour filled.
+// Limits are per client address and sit well above what a person browsing
+// generates. They exist to bound the unattended callers: a scraper looping a
+// fixed set of stop codes, or an app under development replaying deploy
+// loops, both of which otherwise run against the origin with nothing to push
+// back. Liveness paths are exempt so a probe never trips a limit some abusive
+// neighbour filled.
 const globalRateLimiter = rateLimit({
   windowMs: 60_000,
-  limit: 120,
+  limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
@@ -382,7 +382,7 @@ app.get("/favicon.ico", (req, res, next) => {
 // underneath sendFile into an amplifier.
 const staticFileRateLimiter = rateLimit({
   windowMs: 60_000,
-  limit: 120,
+  limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
