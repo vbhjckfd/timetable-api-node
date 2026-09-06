@@ -495,6 +495,26 @@ describe("timetable MCP server", () => {
     expect(serverCard.icon).toBe(serverCard.iconUrl);
   });
 
+  it("accepts requests that send params as an explicit null", async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: null,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.text();
+    expect(payload).toContain("get_stop_realtime");
+  });
+
   it("serves .well-known robots hint", async () => {
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     const robotsText = await robotsResponse.text();

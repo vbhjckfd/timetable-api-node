@@ -1439,6 +1439,26 @@ export function createTimetableMcpServer() {
   return server;
 }
 
+/**
+ * Some clients serialise an absent `params` as an explicit null. The JSON-RPC
+ * schema in the SDK only accepts an object there, so the whole request is
+ * rejected with "Parse error: Invalid JSON-RPC message" before it ever reaches
+ * a handler. Dropping the null is equivalent to the client having omitted the
+ * key, so accept it instead of failing the request.
+ */
+function dropNullParams(body) {
+  if (Array.isArray(body)) {
+    return body.map(dropNullParams);
+  }
+
+  if (body === null || typeof body !== "object" || body.params !== null) {
+    return body;
+  }
+
+  const { params, ...rest } = body;
+  return rest;
+}
+
 export async function handleMcpPostRequest(req, res) {
   const server = createTimetableMcpServer();
   const transport = new StreamableHTTPServerTransport({
@@ -1447,7 +1467,7 @@ export async function handleMcpPostRequest(req, res) {
 
   try {
     await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    await transport.handleRequest(req, res, dropNullParams(req.body));
   } finally {
     await transport.close();
     await server.close();
