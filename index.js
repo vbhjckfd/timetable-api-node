@@ -113,11 +113,32 @@ const liveDataRateLimiter = rateLimit({
   message: { error: "Rate limit exceeded. Try again later." },
 });
 
+// Where the unattended traffic actually lands. The stop endpoints are what a
+// scraper loops over, and it runs round the clock at a rate that sits under
+// the global 60/minute ceiling by design, so that bucket never catches it —
+// the giveaway is a request curve with no diurnal shape at all, roughly as
+// busy at 04:00 as at midday. Neither stop view polls (unlike the route page,
+// which refreshes every 10s), so a stop is one or two requests per
+// navigation: 20/minute is around ten stop views a minute from one address,
+// far above a person browsing and well under the observed scraping rate.
+// /stops/:code/static is left out deliberately — it is cheap, cached, and
+// loaded alongside a timetable, so counting it would halve the real budget.
+// Drawn on top of the global bucket, so like the live-data one it only ever
+// narrows what that already allows.
+const stopDataRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: clientIpKey,
+  message: { error: "Rate limit exceeded. Try again later." },
+});
+
 app.use(globalRateLimiter);
 
-app.get("/stops/:code/timetable", validateStopCode, getStopTimetableAction);
+app.get("/stops/:code/timetable", stopDataRateLimiter, validateStopCode, getStopTimetableAction);
 app.get("/stops/:code/static", validateStopCode, getStopStaticDataAction);
-app.get("/stops/:code", validateStopCode, getSingleStopAction);
+app.get("/stops/:code", stopDataRateLimiter, validateStopCode, getSingleStopAction);
 app.get("/stops.json", getAllStopsAction);
 app.get("/stops", getAllStopsAction);
 app.get("/closest", getClosestStopsAction);
