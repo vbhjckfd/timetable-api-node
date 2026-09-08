@@ -19,7 +19,9 @@ vi.mock("gtfs", () => ({
 
 vi.mock("@sentry/node", () => ({ metrics: sentryMetrics, captureException: sentryCaptureException }));
 
-import stopArrivalService from "../../services/stopArrivalService.js";
+import stopArrivalService, {
+  resetPulseMute,
+} from "../../services/stopArrivalService.js";
 import db from "../../connections/timetableSqliteDb.js";
 import {
   getArrivalTimes,
@@ -460,5 +462,87 @@ describe("stopArrivalService.getTimetableForStop — pulse signal", () => {
     await stopArrivalService.getTimetableForStop(testStop); // no location
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("stopArrivalService.getTimetableForStop — empty room mute", () => {
+  const stopWithLocation = {
+    ...testStop,
+    location: { coordinates: [49.845, 24.023] },
+  };
+
+  function setupEmptyMocks() {
+    db.getCollection.mockReturnValue({ find: vi.fn().mockReturnValue([]) });
+    getArrivalTimes.mockResolvedValue([]);
+    getVehiclesLocations.mockResolvedValue([]);
+    getTrips.mockResolvedValue([]);
+  }
+
+  function respondWithSubscribers(value) {
+    return {
+      headers: { get: (name) => (name === "X-Pulse-Subscribers" ? value : null) },
+    };
+  }
+
+  beforeEach(() => {
+    resetPulseMute();
+    vi.stubEnv("PULSE_WORKER_URL", "https://pulse.example.workers.dev");
+    vi.stubEnv("PULSE_SIGNAL_SECRET", "secret123");
+    setupEmptyMocks();
+  });
+
+  it("stops posting after a pulse reaches nobody", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respondWithSubscribers("0"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps posting while somebody is watching", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respondWithSubscribers("2"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("probes again once the mute window has passed", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respondWithSubscribers("0"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const realNow = Date.now;
+    Date.now = () => realNow() + 31_000;
+    try {
+      await stopArrivalService.getTimetableForStop(stopWithLocation);
+    } finally {
+      Date.now = realNow;
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not mute when the Worker reports no count at all", async () => {
+    // A 429 from the Worker's rate limiter carries no fan-out header. Muting on
+    // that would let a throttled minute silence the pulse for the next one.
+    const fetchMock = vi.fn().mockResolvedValue(respondWithSubscribers(null));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await stopArrivalService.getTimetableForStop(stopWithLocation);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

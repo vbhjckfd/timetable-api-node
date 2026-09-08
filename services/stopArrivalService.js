@@ -14,12 +14,29 @@ import { getScheduledArrivalsForStop } from "./stopScheduleService.js";
 
 import timetableDb from "../connections/timetableSqliteDb.js";
 
+// The Worker answers every /signal with X-Pulse-Subscribers: how many sockets
+// the pulse actually reached. Nobody watches the map for most of the day, and
+// this endpoint fires on every /stops/:code hit — so a scraper polling stops
+// was spending the Worker's whole free-tier request budget broadcasting into an
+// empty room. When a signal lands on zero subscribers, stop posting for a
+// while; the first post after the window is the probe that notices a viewer has
+// arrived. Worst case a new viewer waits out the window before pulses resume.
+const EMPTY_ROOM_MUTE_MS = 30_000;
+let pulseMutedUntil = 0;
+
+// Test seam: the mute is module state, so a test that leaves it set would
+// silently disarm the next one.
+export function resetPulseMute() {
+  pulseMutedUntil = 0;
+}
+
 function emitPulseSignal(stop) {
   const url = process.env.PULSE_WORKER_URL ?? '';
   const secret = process.env.PULSE_SIGNAL_SECRET ?? '';
   if (!url || !secret) return;
   const [lat, lng] = stop.location?.coordinates ?? [];
   if (typeof lat !== 'number' || typeof lng !== 'number') return;
+  if (Date.now() < pulseMutedUntil) return;
   fetch(`${url}/signal`, {
     method: 'POST',
     headers: {
@@ -28,7 +45,16 @@ function emitPulseSignal(stop) {
     },
     body: JSON.stringify({ lat, lng, code: stop.code ?? null }),
     signal: AbortSignal.timeout(3000),
-  }).catch(() => {});
+  })
+    .then((response) => {
+      // Absent on a 429 or an error response, and on anything that is not the
+      // room reporting its fan-out. No count is not the same as a count of
+      // zero, so leave the mute alone rather than guessing.
+      const reported = response?.headers?.get?.('X-Pulse-Subscribers');
+      if (reported === null || reported === undefined) return;
+      pulseMutedUntil = Number(reported) === 0 ? Date.now() + EMPTY_ROOM_MUTE_MS : 0;
+    })
+    .catch(() => {});
 }
 
 const stopArrivalService = {
