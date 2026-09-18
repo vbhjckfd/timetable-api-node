@@ -341,14 +341,14 @@ app.post("/mcp", mcpRateLimiter, async (req, res) => {
 // A browser opening /mcp gets a human-readable page. Everything else that
 // GETs it — above all a Streamable HTTP client probing for an SSE stream —
 // falls through to the 405 below, which that client knows how to handle.
-// Vary: Accept goes on both answers so the CDN never hands the cached page
-// to an MCP client.
+// Neither answer is cacheable: Cloudflare ignores Vary: Accept, so a cached
+// docs page would be handed to MCP clients probing the same URL. Vary stays
+// for any cache that does honour it.
 app.get("/mcp", mcpRateLimiter, async (req, res, next) => {
   res.vary("Accept");
+  res.set("Cache-Control", "no-store");
   if (!wantsHtmlDocs(req.get("Accept"))) return next();
   const baseUrl = `${req.protocol}://${req.host}`;
-  // Embeds pkg.version and the tool list, so a code push has to purge it.
-  setStaticAssetCache(res);
   res.type("html").send(await renderMcpDocsPage(baseUrl));
 });
 
