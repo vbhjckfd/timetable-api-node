@@ -52,7 +52,8 @@
     "import-slim": "node gtfs-import-slim.js",
     "start": "node -r dotenv/config -r newrelic --import newrelic/esm-loader.mjs index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "version": "node scripts/sync-manifest-versions.js && git add server.json openapi.yaml"
   },
   "author": "vbhjckfd@gmail.com",
   "license": "WTFPL",
