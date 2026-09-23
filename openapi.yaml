@@ -5,7 +5,7 @@ info:
     Real-time and static data for public transport in Lviv, Ukraine.
     Provides stop arrivals, vehicle positions, route schedules, and nearby
     transit lookups backed by GTFS-RT feeds from Microgiz.
-  version: 1.4.1
+  version: 1.5.0
   contact:
     url: https://lad.lviv.ua
 
