@@ -30,16 +30,18 @@ describe("renderMcpDocsPage", () => {
     const html = await renderMcpDocsPage("https://api.example.test/");
 
     for (const tool of [
+      "search_stops",
+      "get_stops_around_location",
       "get_stop_realtime",
+      "find_routes_between",
       "get_route_static",
       "get_route_realtime",
-      "get_stop_geometry",
-      "get_stops_around_location",
       "get_nearby_vehicles",
       "get_vehicle_info",
     ]) {
       expect(html).toContain(`id="${tool}"`);
     }
+    expect(html).not.toContain('id="get_stop_geometry"');
     expect(html).toContain("<code>radius_meters</code> <span class=\"muted\">optional</span>");
     expect(html).toContain("<code>transit-map-view</code>");
   });

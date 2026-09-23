@@ -40,6 +40,7 @@ export default async (req, res, next) => {
     .findOne({ external_id: vehiclePosition.trip.routeId });
 
   res.set("Cache-Control", `public, s-maxage=5`).send({
+    vehicleId: String(vehiclePosition.vehicle.id),
     location: [
       vehiclePosition.position.latitude,
       vehiclePosition.position.longitude,
@@ -55,7 +56,8 @@ export default async (req, res, next) => {
       routeLocal?.trip_direction_map?.[
         vehiclePosition.trip.tripId.toString()
       ] ?? null,
-    licensePlate: vehiclePosition.vehicle.licensePlate,
+    // The feed sends "" for vehicles without a plate on record.
+    licensePlate: vehiclePosition.vehicle.licensePlate || null,
     arrivals: arrivalTimes.map((item) => {
       const transfers = stopIdsMap[item.stopId].transfers
         .map((i) => {
@@ -72,6 +74,7 @@ export default async (req, res, next) => {
         });
       return {
         code: stopIdsMap[item.stopId].code,
+        name: stopIdsMap[item.stopId].name,
         arrival: item.arrival
           ? new Date(parseInt(`${item.arrival.time}000`)).toUTCString()
           : null,

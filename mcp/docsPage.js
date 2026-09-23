@@ -191,7 +191,7 @@ export async function renderMcpDocsPage(baseUrl) {
   <pre><code>npx @modelcontextprotocol/inspector --transport streamable-http --url ${escapeHtml(endpoint)}</code></pre>
 
   <h2>Tools</h2>
-  <p>All ${tools.length} tools are read-only. Each result is JSON with <code>view</code>, <code>data</code> (the raw payload) and <code>ui_blocks</code> (map and arrival-list rendering hints). Stop IDs are the numeric codes printed on stop signs; to turn an address into a stop ID, call <code>get_stops_around_location</code> first.</p>
+  <p>All ${tools.length} tools are read-only. Each result is JSON with <code>view</code>, <code>data</code> (the payload) and <code>ui_blocks</code> (map and arrival-list rendering hints that point into <code>data</code>). Stop IDs are the numeric codes printed on stop signs; to turn a stop name into an ID call <code>search_stops</code>, and for an address or coordinates call <code>get_stops_around_location</code>.</p>
   ${tools.map(renderTool).join("")}
 
   <h2>Prompts</h2>

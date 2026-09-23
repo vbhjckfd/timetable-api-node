@@ -125,91 +125,66 @@ Example **`tools/call`** body shape:
 }
 ```
 
-Successful tool responses return a **natural-language text summary** inside MCP `content` items (`type: "text"`) — e.g. *"Stop «Opera»: 3 arrivals. Next: T01 → «Rynok» in 2 min."* The full structured payload is in the `structuredContent` field (for schema-aware clients). Each `structuredContent` payload follows a strict UI contract:
+Successful tool responses return a **natural-language text summary** inside MCP `content` items (`type: "text"`) — e.g. *"Stop «Площа Ринок»: 6 arrivals. Next: Т02 → «Пасічна» in 3 min."* The full structured payload is in the `structuredContent` field (for schema-aware clients). Each `structuredContent` payload follows one contract:
 
 ```json
 {
   "view": "transit_realtime",
-  "data": { "...": "tool-specific source data" },
+  "data": { "...": "tool-specific payload" },
   "ui_blocks": [
-    { "type": "map", "data": { "...": "map renderer input" } },
-    { "type": "arrival_list", "data": { "...": "arrival list renderer input" } }
+    { "type": "map", "data": { "center": [49.84, 24.03], "zoom": 14, "layers": { "stops": "data.stop", "vehicles": "data.arrivals" } } },
+    { "type": "arrival_list", "data": { "source": "data.arrivals" } }
   ]
 }
 ```
 
-Consistency rule: each vehicle rendered on map must either have a matching ETA in list data or `eta_status: "unassigned"`.
+`ui_blocks` point into `data` instead of repeating it. A `map` block gives the centre and zoom, and `layers` maps `stops`, `vehicles` and `polylines` to a dot path in the result; every stop and vehicle there has `lat`/`lng`, vehicles also `bearing`. An `arrival_list` block names the arrivals array to render, already sorted by `arrival_minutes` (`null` = no ETA).
 
 </details>
 
 ### Exposed tools
 
-- `get_stop_realtime`
-- `get_route_static`
-- `get_route_realtime`
-- `get_stop_geometry`
-- `get_stops_around_location`
-- `get_nearby_vehicles`
-- `get_vehicle_info`
+All tools are read-only. Stop IDs are the numeric codes on stop signs, returned as strings (`"707"`). Route names are the short names on vehicles (`"Т30"`, `"А1"`); Latin `"T30"`/`"A01"` work too, and a bare number is read as an internal route ID. An unknown route or vehicle returns `isError: true` with a hint on what to pass instead.
+
+| Tool | Arguments | Returns |
+|------|-----------|---------|
+| `search_stops` | `query` (string, ≥ 2 chars), `limit` (1–25, default 10) | Stops whose Ukrainian or English name contains every query word (inflection-tolerant: `"опера"` finds «Театр опери та балету»), with `routes`. |
+| `get_stops_around_location` | `latitude`, `longitude`, `radius_meters` (50–3000, default 1000) | Stops near a point, nearest first, with `distance_meters` and `routes`. |
+| `get_stop_realtime` | `stop_id` | Live arrivals: `route`, `direction` (destination), `vehicle_type`, `arrival_minutes`, vehicle position. |
+| `find_routes_between` | `from_stop_id`, `to_stop_id` | Direct routes within a 300 m walk of each end, best first: `board_stop`, `alight_stop`, `destination`, `stops_count`, walk at each end. |
+| `get_route_static` | `route_name`, `include_shapes` (default false) | Name, type, colour, stop lists for both directions, first-stop timetable; polylines only on request. |
+| `get_route_realtime` | `route_name` | Vehicles on the route with `destination` and `next_stop` (`id`, `name`, ISO `arrival`). |
+| `get_nearby_vehicles` | `latitude`, `longitude`, `radius_meters` (100–1000, default 500), `route`, `limit` (1–50, default 15) | Live vehicles nearest first, with `destination` and `distance_meters`; `total` counts all in range. |
+| `get_vehicle_info` | `vehicle_id` | One vehicle: position, route, `destination`, plate, upcoming stops (`id`, `name`, ISO times) not yet passed. |
 
 <details>
-<summary><code>get_stop_realtime</code> — input &amp; example</summary>
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `stop_id` | positive integer or digits-only string | yes |
-
-**Example result** (shape only; values from upstream):
+<summary><code>get_stop_realtime</code> — example</summary>
 
 ```json
 {
   "view": "transit_realtime",
   "data": {
-    "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
+    "stop": { "id": "61", "name": "Площа Ринок", "lat": 49.84146, "lng": 24.03227 },
     "arrivals": [
       {
-        "route": "T30",
-        "direction": "Рясівська",
+        "route": "Т02",
+        "direction": "Пасічна",
         "vehicle_type": "tram",
-        "arrival_minutes": 4,
-        "vehicle_id": "tram_123",
-        "lat": 49.83,
-        "lng": 24.02,
-        "bearing": 120
+        "arrival_minutes": 3,
+        "vehicle_id": "2393",
+        "lat": 49.83461,
+        "lng": 24.01672,
+        "bearing": 60
       }
     ],
-    "updated_at": "2026-01-23T12:00:00Z"
+    "updated_at": "2026-09-23T09:01:21Z"
   },
   "ui_blocks": [
     {
       "type": "map",
-      "data": {
-        "center": [49.84, 24.03],
-        "zoom": 14,
-        "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
-        "vehicles": [
-          {
-            "id": "tram_123",
-            "route": "T30",
-            "lat": 49.83,
-            "lng": 24.02,
-            "bearing": 120,
-            "next_stop_id": "707",
-            "eta_minutes": 4,
-            "eta_status": "assigned"
-          }
-        ]
-      }
+      "data": { "center": [49.84146, 24.03227], "zoom": 14, "layers": { "stops": "data.stop", "vehicles": "data.arrivals" } }
     },
-    {
-      "type": "arrival_list",
-      "data": {
-        "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
-        "arrivals": []
-      }
-    }
+    { "type": "arrival_list", "data": { "source": "data.arrivals" } }
   ]
 }
 ```
@@ -217,264 +192,164 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
 </details>
 
 <details>
-<summary><code>get_route_static</code> — input &amp; example</summary>
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `route_name` | route short name (e.g. `"T30"`, `"32A"`) or numeric external ID | yes |
-
-**Example result** (shape only; stops truncated for brevity):
+<summary><code>search_stops</code> — example</summary>
 
 ```json
 {
   "view": "transit_realtime",
   "data": {
-    "route": {
-      "name": "T30",
-      "long_name": "Рясне-2 — Сихів",
-      "color": "#e81717",
-      "type": "tram"
-    },
+    "query": "rynok",
+    "stops": [
+      {
+        "id": "61",
+        "name": "Площа Ринок",
+        "lat": 49.84146,
+        "lng": 24.03227,
+        "eng_name": "Rynok square",
+        "routes": ["Т01", "Т02"]
+      }
+    ],
+    "updated_at": "2026-09-23T09:36:53Z"
+  },
+  "ui_blocks": [
+    { "type": "map", "data": { "center": [49.84146, 24.03227], "zoom": 14, "layers": { "stops": "data.stops" } } }
+  ]
+}
+```
+
+One stop name usually covers both sides of the street under different IDs; each is returned, and `routes` tells them apart. `get_stops_around_location` returns the same stop objects plus `distance_meters`.
+
+</details>
+
+<details>
+<summary><code>find_routes_between</code> — example</summary>
+
+Text summary: *"3 direct routes «Площа Ринок» → «Залізничний вокзал». Best: Т01 towards «Залізничний вокзал», 8 stops, board at «Руська» (137m walk)."*
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "from": { "id": "61", "name": "Площа Ринок", "stop_ids": ["10", "57", "58", "59", "61", "63", "855"] },
+    "to": { "id": "118", "name": "Залізничний вокзал", "stop_ids": ["117", "118", "188", "189", "190", "191"] },
+    "options": [
+      {
+        "route": "Т01",
+        "vehicle_type": "tram",
+        "direction": 0,
+        "destination": "Залізничний вокзал",
+        "board_stop": { "id": "58", "name": "Руська", "lat": 49.84186, "lng": 24.03408 },
+        "alight_stop": { "id": "118", "name": "Залізничний вокзал", "lat": 49.839, "lng": 23.99677 },
+        "stops_count": 8,
+        "walk_to_board_meters": 137,
+        "walk_from_alight_meters": 0
+      }
+    ],
+    "updated_at": "2026-09-23T09:36:53Z"
+  },
+  "ui_blocks": []
+}
+```
+
+Each end covers every stop within a 300 m walk (`stop_ids`): a line's two directions often stop on opposite sides of a street under different names, as here, where Т01 towards the station leaves from «Руська», not «Площа Ринок». Options are ranked by stops plus walking (150 m of walking weighs as one stop), one per route and direction. A direction's last stop counts as a place to get off, not to board. Only direct routes are listed; an empty `options` means a transfer is needed.
+
+</details>
+
+<details>
+<summary><code>get_route_static</code> — example</summary>
+
+```json
+{
+  "view": "transit_realtime",
+  "data": {
+    "route": { "name": "Т30", "long_name": "Університет - Городоцька - вул. Ряшівська", "color": "#EF88AA", "type": "trolleybus" },
     "stops": [
       [
         {
-          "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003,
+          "id": "101", "name": "Університет", "lat": 49.841, "lng": 24.003,
           "departures": ["05:30", "05:52"],
           "schedule": { "workday": ["05:30", "05:52", "06:10"], "weekend": ["07:00", "07:30"] }
         },
         { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [], "schedule": { "workday": [], "weekend": [] } }
       ],
       [
-        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [], "schedule": { "workday": [], "weekend": [] } },
-        { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003, "departures": [], "schedule": { "workday": [], "weekend": [] } }
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": ["06:00"], "schedule": { "workday": ["06:00"], "weekend": [] } }
       ]
     ],
-    "shapes": [
-      [[49.841, 24.003], [49.839, 24.012], [49.838, 24.021]],
-      [[49.838, 24.021], [49.839, 24.012], [49.841, 24.003]]
-    ],
-    "updated_at": "2026-01-23T12:00:00Z"
+    "updated_at": "2026-09-23T09:01:12Z"
   },
   "ui_blocks": [
-    {
-      "type": "map",
-      "data": {
-        "center": [49.841, 24.003],
-        "zoom": 13,
-        "polylines": [[[49.841, 24.003], [49.839, 24.012], [49.838, 24.021]]],
-        "stops": [
-          { "id": "101", "name": "Головний вокзал", "lat": 49.841, "lng": 24.003 },
-          { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021 }
-        ],
-        "vehicles": []
-      }
-    }
+    { "type": "map", "data": { "center": [49.841, 24.003], "zoom": 13, "layers": { "stops": "data.stops" } } }
   ]
 }
 ```
 
-`stops[0]` is direction 0 (outbound), `stops[1]` is direction 1 (return). `departures` and `schedule` are populated only for the **first stop of direction 0**; all other stops have empty arrays. `schedule.workday` contains Monday–Friday departure times; `schedule.weekend` contains Saturday–Sunday departure times. `departures` keeps today's schedule for backward compatibility. `shapes` follows the same two-element order. The map block uses direction-0 polyline and all unique stops as markers.
+`stops[0]` is direction 0 (outbound), `stops[1]` direction 1 (return). `departures` and `schedule` are populated for the **first stop of each direction**; other stops have empty arrays. `schedule.workday` is Monday–Friday, `schedule.weekend` Saturday–Sunday; `departures` keeps today's schedule for backward compatibility. With `include_shapes: true`, `data.shapes` holds one `[lat, lng]` polyline per direction and the map block adds `"polylines": "data.shapes"`.
 
 </details>
 
 <details>
-<summary><code>get_route_realtime</code> — input &amp; example</summary>
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `route_name` | route short name (e.g. `"T30"`, `"32A"`) or numeric external ID | yes |
-
-**Example result:**
+<summary><code>get_route_realtime</code> — example</summary>
 
 ```json
 {
   "view": "transit_realtime",
   "data": {
-    "route_name": "T30",
+    "route_name": "Т01",
+    "destinations": ["Залізничний вокзал", "Погулянка"],
     "vehicles": [
       {
-        "id": "tram_123",
+        "id": "5907",
         "direction": 0,
-        "lat": 49.838,
-        "lng": 24.021,
-        "bearing": 120,
+        "destination": "Залізничний вокзал",
+        "next_stop": { "id": "118", "name": "Залізничний вокзал", "arrival": "2026-09-23T09:35:00.000Z" },
+        "lat": 49.83947,
+        "lng": 23.99566,
+        "bearing": 126,
         "lowfloor": true
       }
     ],
-    "updated_at": "2026-01-23T12:00:00Z"
+    "updated_at": "2026-09-23T09:32:10Z"
   },
   "ui_blocks": [
-    {
-      "type": "map",
-      "data": {
-        "center": [49.838, 24.021],
-        "zoom": 13,
-        "vehicles": [
-          {
-            "id": "tram_123",
-            "direction": 0,
-            "lat": 49.838,
-            "lng": 24.021,
-            "bearing": 120,
-            "lowfloor": true
-          }
-        ]
-      }
-    }
+    { "type": "map", "data": { "center": [49.83947, 23.99566], "zoom": 13, "layers": { "vehicles": "data.vehicles" } } }
   ]
 }
 ```
 
-`direction` matches the index into `get_route_static`'s `stops` array (0 = outbound, 1 = return). `lowfloor: true` indicates a low-floor vehicle. Returns an empty `vehicles` array when no vehicles are currently active on the route.
+`route_name` is the canonical short name whatever form was passed. `direction` indexes `get_route_static`'s `stops` (0 = outbound, 1 = return) and `destinations`. `next_stop` is `null` when the feed has no trip update for the vehicle.
 
 </details>
 
 <details>
-<summary><code>get_stop_geometry</code> — input &amp; example</summary>
-
-**Arguments:**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `stop_id` | positive integer or digits-only string | yes |
-
-**Example result:**
+<summary><code>get_nearby_vehicles</code> — example</summary>
 
 ```json
 {
   "view": "transit_realtime",
   "data": {
-    "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
-    "routes": [
-      {
-        "route": "T30",
-        "polyline": [[49.84, 24.03], [49.83, 24.02]]
-      }
-    ],
-    "updated_at": "2026-01-23T12:00:00Z"
-  },
-  "ui_blocks": [
-    {
-      "type": "map",
-      "data": {
-        "center": [49.84, 24.03],
-        "zoom": 14,
-        "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
-        "routes": [{ "route": "T30", "polyline": [[49.84, 24.03], [49.83, 24.02]] }],
-        "vehicles": []
-      }
-    }
-  ]
-}
-```
-
-</details>
-
-<details>
-<summary><code>get_stops_around_location</code> — input &amp; example</summary>
-
-Returns stops near a map point (numeric **code**, name, coordinates, distance). Intended for hosts that render **`map`** UI blocks (for example ChatGPT): one block with **multiple stop markers** and the search center. Uses the same backend as **`GET /closest`** (see below).
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `latitude` | number, −90…90 | yes |
-| `longitude` | number, −180…180 | yes |
-| `radius_meters` | integer, 50…3000 | no (default **1000**) |
-
-**Example result** (shape only):
-
-```json
-{
-  "view": "transit_realtime",
-  "data": {
-    "center_lat": 49.84,
-    "center_lng": 24.03,
-    "radius_meters": 1000,
-    "stops": [
-      {
-        "id": "707",
-        "name": "Стадіон Сільмаш",
-        "lat": 49.841,
-        "lng": 24.031,
-        "distance_meters": 120
-      }
-    ],
-    "updated_at": "2026-01-23T12:00:00Z"
-  },
-  "ui_blocks": [
-    {
-      "type": "map",
-      "data": {
-        "center": [49.84, 24.03],
-        "zoom": 15,
-        "stops": [
-          {
-            "id": "707",
-            "name": "Стадіон Сільмаш",
-            "lat": 49.841,
-            "lng": 24.031,
-            "distance_meters": 120
-          }
-        ],
-        "vehicles": []
-      }
-    }
-  ]
-}
-```
-
-Map zoom is **15** for radius ≤ 1500 m and **14** for larger radii (up to 3000 m).
-
-</details>
-
-<details>
-<summary><code>get_nearby_vehicles</code> — input &amp; example</summary>
-
-Returns live positions for all transit vehicles within 1 km of given coordinates. Wraps the same backend as `GET /transport`.
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `latitude` | number, −90…90 | yes |
-| `longitude` | number, −180…180 | yes |
-
-**Example result** (shape only):
-
-```json
-{
-  "view": "transit_realtime",
-  "data": {
-    "center_lat": 49.84,
-    "center_lng": 24.03,
+    "center_lat": 49.8419,
+    "center_lng": 24.0316,
+    "radius_meters": 500,
+    "total": 18,
     "vehicles": [
       {
-        "id": "tram_123",
-        "route": "T01",
+        "id": "3422",
+        "route": "Т01",
         "vehicle_type": "tram",
-        "lat": 49.841,
-        "lng": 24.031,
-        "bearing": 90,
-        "lowfloor": true
+        "direction": 0,
+        "destination": "Залізничний вокзал",
+        "lat": 49.84154,
+        "lng": 24.03364,
+        "bearing": 258,
+        "lowfloor": false,
+        "distance_meters": 152
       }
     ],
-    "updated_at": "2026-01-23T12:00:00Z"
+    "updated_at": "2026-09-23T09:32:10Z"
   },
   "ui_blocks": [
-    {
-      "type": "map",
-      "data": {
-        "center": [49.84, 24.03],
-        "zoom": 14,
-        "vehicles": [{ "id": "tram_123", "route": "T01", "lat": 49.841, "lng": 24.031, "bearing": 90, "eta_status": "unassigned" }]
-      }
-    }
+    { "type": "map", "data": { "center": [49.8419, 24.0316], "zoom": 15, "layers": { "vehicles": "data.vehicles" } } }
   ]
 }
 ```
@@ -482,47 +357,36 @@ Returns live positions for all transit vehicles within 1 km of given coordinates
 </details>
 
 <details>
-<summary><code>get_vehicle_info</code> — input &amp; example</summary>
-
-Full details for one vehicle by its ID: position, route, license plate, direction, and upcoming stop arrival times. Vehicle IDs come from `get_route_realtime`, `get_nearby_vehicles`, or `get_stop_realtime`.
-
-**Arguments (JSON):**
-
-| Field | Type | Required |
-|-------|------|----------|
-| `vehicle_id` | string | yes |
-
-**Example result** (shape only):
+<summary><code>get_vehicle_info</code> — example</summary>
 
 ```json
 {
   "view": "transit_realtime",
   "data": {
-    "vehicle_id": "tram_123",
-    "route": "T30",
-    "license_plate": "BC-1234-AB",
-    "lat": 49.841,
-    "lng": 24.031,
-    "bearing": 90,
+    "vehicle_id": "5907",
+    "route": "Т01",
+    "license_plate": "1238",
+    "lat": 49.83947,
+    "lng": 23.99566,
+    "bearing": 126,
     "direction": 0,
+    "destination": "Залізничний вокзал",
     "upcoming_stops": [
-      { "code": 707, "arrival": "2026-01-23T12:05:00Z", "departure": null },
-      { "code": 708, "arrival": "2026-01-23T12:08:00Z", "departure": null }
+      { "id": "118", "name": "Залізничний вокзал", "arrival": null, "departure": "2026-09-23T09:35:00.000Z" },
+      { "id": "188", "name": "Приміський вокзал", "arrival": "2026-09-23T09:35:49.000Z", "departure": null }
     ],
-    "updated_at": "2026-01-23T12:00:00Z"
+    "updated_at": "2026-09-23T09:32:10Z"
   },
   "ui_blocks": [
-    {
-      "type": "map",
-      "data": { "center": [49.841, 24.031], "zoom": 15, "vehicles": [{ "id": "tram_123", "eta_status": "unassigned" }] }
-    }
+    { "type": "map", "data": { "center": [49.83947, 23.99566], "zoom": 15, "layers": { "vehicles": "data" } } }
   ]
 }
 ```
 
-`route` is the route short name, falling back to the opaque GTFS route ID only when the route is missing from the local data. Either value is accepted as `route_name` by `get_route_static` and `get_route_realtime`.
+`route` is the route short name, falling back to the opaque GTFS route ID only when the route is missing from the local data. Either value is accepted as `route_name` by `get_route_static` and `get_route_realtime`. `license_plate` is `null` when the feed has none.
 
 </details>
+
 
 ### Prompts
 
@@ -530,7 +394,7 @@ Reusable instruction templates for rendering workflows. Each takes one argument,
 
 | Prompt | Use case |
 |--------|----------|
-| `transit-map-view` | Map-first rendering of live vehicles for a stop; optionally merges `get_stop_geometry` polylines. |
+| `transit-map-view` | Map-first rendering of live vehicles for a stop. |
 | `transit-arrival-list` | Arrival list for a stop, sorted by ETA and grouped by route. |
 | `transit-hybrid-view` | Map block first, arrival-list block second, with ETA values kept consistent across both. |
 

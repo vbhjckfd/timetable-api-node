@@ -64,6 +64,7 @@ export default async (req, res, next) => {
         longitude: s.location.coordinates[1],
         latitude: s.location.coordinates[0],
         distance_meters: Math.round(s._dist),
+        routes: [...new Set((s.transfers ?? []).map((t) => t.route).filter(Boolean))].sort(),
       };
     }),
   );

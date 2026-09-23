@@ -92,11 +92,37 @@ describe("vehicleInfoAction", () => {
 
     expect(res.send).toHaveBeenCalledWith(
       expect.objectContaining({
+        vehicleId: "VH42",
         routeId: "EXT1",
         bearing: 180,
         licensePlate: "BC-4242",
         location: [49.845, 24.023],
       }),
     );
+    expect(res.send.mock.calls[0][0].arrivals[0]).toMatchObject({
+      code: 1001,
+      name: "Stop A",
+    });
+  });
+
+  it("reports a missing licence plate as null, not an empty string", async () => {
+    getVehiclesLocations.mockResolvedValue([
+      {
+        vehicle: {
+          ...mockVehicleEntity.vehicle,
+          vehicle: { id: "VH42", licensePlate: "" },
+        },
+      },
+    ]);
+    getArrivalTimes.mockResolvedValue([]);
+    db.getCollection.mockImplementation((name) => {
+      if (name === "stops") return { find: vi.fn().mockReturnValue([]) };
+      if (name === "routes") return { findOne: vi.fn().mockReturnValue(mockRoute) };
+    });
+
+    const res = makeRes();
+    await vehicleInfoAction({ params: { vehicleId: "VH42" } }, res, vi.fn());
+
+    expect(res.send.mock.calls[0][0].licensePlate).toBeNull();
   });
 });

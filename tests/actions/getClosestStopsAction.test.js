@@ -15,6 +15,7 @@ const nearStop = {
   code: 1,
   name: "Near Stop",
   location: { coordinates: [TARGET_LAT, TARGET_LON] }, // ~0m away
+  transfers: [{ route: "Т02" }, { route: "А01" }, { route: "Т02" }],
 };
 const farStop = {
   code: 2,
@@ -88,6 +89,7 @@ describe("getClosestStopsAction", () => {
         latitude: TARGET_LAT,
         longitude: TARGET_LON,
         distance_meters: 0,
+        routes: ["А01", "Т02"],
       },
     ]);
   });

@@ -451,6 +451,12 @@ components:
           type: integer
           description: Distance from the queried point in metres.
           example: 150
+        routes:
+          type: array
+          description: Short names of the routes serving the stop, sorted.
+          items:
+            type: string
+          example: ["Т01", "Т02"]
 
     StopSummary:
       type: object
@@ -607,6 +613,9 @@ components:
         code:
           type: integer
           description: Stop code.
+        name:
+          type: string
+          description: Stop name.
         arrival:
           type: string
           nullable: true
@@ -623,6 +632,9 @@ components:
     VehicleInfo:
       type: object
       properties:
+        vehicleId:
+          type: string
+          description: The vehicle ID that was looked up.
         location:
           type: array
           description: "[latitude, longitude]"
@@ -653,6 +665,7 @@ components:
         licensePlate:
           type: string
           nullable: true
+          description: Null when the feed has no plate on record.
         arrivals:
           type: array
           description: Remaining stops with predicted times.

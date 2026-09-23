@@ -70,15 +70,16 @@ All tools are read-only. Argument names are **exact** — pass them as shown.
 
 | Tool | Arguments | Purpose |
 |------|-----------|---------|
-| `get_stop_realtime` | `stop_id` (number or digit string) | Live arrivals + vehicle positions for a stop. |
-| `get_route_static` | `route_name` (string, e.g. `"T30"`) | Stop lists (both directions), departures, polylines. |
-| `get_route_realtime` | `route_name` (string) | Live positions of all vehicles on a route. |
-| `get_stop_geometry` | `stop_id` (number or digit string) | Stop marker + route polylines (no live data). |
-| `get_stops_around_location` | `latitude`, `longitude` (numbers), `radius_meters` (int 50–3000, optional) | Discover stops near a coordinate. |
-| `get_nearby_vehicles` | `latitude`, `longitude` (numbers) | Live vehicles within 1 km of a coordinate. |
-| `get_vehicle_info` | `vehicle_id` (string) | Position, route, plate, upcoming stops for one vehicle. |
+| `search_stops` | `query` (string), `limit` (int 1–25, optional) | Stop IDs by name — Ukrainian or English, partial, inflection-tolerant. |
+| `get_stops_around_location` | `latitude`, `longitude` (numbers), `radius_meters` (int 50–3000, optional) | Stop IDs near a coordinate, with serving routes. |
+| `get_stop_realtime` | `stop_id` (number or digit string) | Live arrivals at a stop: route, destination, minutes to arrival. |
+| `find_routes_between` | `from_stop_id`, `to_stop_id` | Direct routes from A to B: where to board and get off, walk at each end. |
+| `get_route_static` | `route_name` (string, e.g. `"T30"`), `include_shapes` (bool, optional) | Stop lists (both directions), first-stop timetable; polylines on request. |
+| `get_route_realtime` | `route_name` (string) | Live vehicles on a route with destination and next stop. |
+| `get_nearby_vehicles` | `latitude`, `longitude` (numbers), `radius_meters`, `route`, `limit` (optional) | Live vehicles near a coordinate, nearest first. |
+| `get_vehicle_info` | `vehicle_id` (string) | One vehicle: route, destination, plate, upcoming stops with names. |
 
-Every tool result is JSON with three keys — `view`, `data` (raw payload), and `ui_blocks` (ordered map/arrival-list rendering hints). Resolve a place name or address to a `stop_id` with `get_stops_around_location` before calling stop-based tools.
+Every tool result is JSON with three keys — `view`, `data` (the payload), and `ui_blocks` (ordered map/arrival-list rendering hints that point into `data`). Resolve a stop name with `search_stops`, or an address/coordinates with `get_stops_around_location`, before calling stop-based tools.
 
 ---
 
