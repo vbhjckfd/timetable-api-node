@@ -181,9 +181,11 @@ export async function renderMcpDocsPage(baseUrl) {
   <h2>Connect</h2>
   <h3>Claude Code</h3>
   <pre><code>claude mcp add --transport http lviv-timetable ${escapeHtml(endpoint)}</code></pre>
-  <h3>Claude Desktop, Cursor, and other clients with remote MCP support</h3>
+  <h3>Claude Desktop and claude.ai</h3>
+  <p>Settings → Connectors → Add custom connector, then paste <code>${escapeHtml(endpoint)}</code>. No authentication.</p>
+  <h3>Cursor and other clients with remote MCP support</h3>
   <pre><code>${escapeHtml(desktopConfig)}</code></pre>
-  <h3>stdio-only clients</h3>
+  <h3>stdio-only clients, including Claude Desktop's config file</h3>
   <pre><code>${escapeHtml(stdioConfig)}</code></pre>
   <h3>MCP Inspector</h3>
   <pre><code>npx @modelcontextprotocol/inspector --transport streamable-http --url ${escapeHtml(endpoint)}</code></pre>

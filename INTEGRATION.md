@@ -11,9 +11,19 @@ No API key or authentication required.
 
 ## MCP (Model Context Protocol)
 
-### Claude Desktop / Claude Code
+### Claude Code
 
-Add to `~/.claude/claude_desktop_config.json` (or `claude.ai/code` MCP settings):
+```bash
+claude mcp add --transport http lviv-timetable https://api.lad.lviv.ua/mcp
+```
+
+### Claude Desktop / claude.ai
+
+Open **Settings → Connectors → Add custom connector** and paste `https://api.lad.lviv.ua/mcp`. No authentication is needed.
+
+`claude_desktop_config.json` only takes stdio servers (`command`/`args`), not a `url` — to go through the config file instead, use the stdio entry below.
+
+### Cursor / Windsurf / other clients with remote MCP support
 
 ```json
 {
@@ -25,7 +35,7 @@ Add to `~/.claude/claude_desktop_config.json` (or `claude.ai/code` MCP settings)
 }
 ```
 
-### Cursor / Windsurf / any stdio MCP client
+### stdio-only clients (including Claude Desktop's config file)
 
 ```bash
 npx timetable-api-node
@@ -44,7 +54,7 @@ Or pin the config:
 }
 ```
 
-The `npx` entry is a zero-dependency stdio proxy — it forwards requests to the live API with no local setup.
+The `npx` entry is a thin stdio proxy — it forwards every request to the live API, so there is no database or config to set up. npx still installs the package's npm dependencies on first run, so expect a short download.
 
 ### MCP Inspector (testing)
 

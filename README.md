@@ -102,7 +102,16 @@ graph LR;
 <details>
 <summary><strong>Postman / curl: call a tool on production</strong></summary>
 
-`POST https://api.lad.lviv.ua/mcp` with `Content-Type: application/json`. The Streamable HTTP transport may require additional headers your MCP client sets automatically; for a quick manual test, follow the same sequence your MCP SDK uses (session `initialize`, then `tools/call`). Example **`tools/call`** body shape:
+`POST https://api.lad.lviv.ua/mcp` with `Content-Type: application/json` **and** `Accept: application/json, text/event-stream` — the Streamable HTTP transport rejects a request that does not accept both. The server is stateless: there is no session, so `tools/call` works on its own without an `initialize` first. The response arrives as a single SSE `event: message` frame carrying the JSON-RPC result.
+
+```bash
+curl -s https://api.lad.lviv.ua/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_stop_realtime","arguments":{"stop_id":101}}}'
+```
+
+Example **`tools/call`** body shape:
 
 ```json
 {
@@ -176,11 +185,30 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
   "ui_blocks": [
     {
       "type": "map",
-      "data": { "center": [49.84, 24.03], "vehicles": [] }
+      "data": {
+        "center": [49.84, 24.03],
+        "zoom": 14,
+        "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
+        "vehicles": [
+          {
+            "id": "tram_123",
+            "route": "T30",
+            "lat": 49.83,
+            "lng": 24.02,
+            "bearing": 120,
+            "next_stop_id": "707",
+            "eta_minutes": 4,
+            "eta_status": "assigned"
+          }
+        ]
+      }
     },
     {
       "type": "arrival_list",
-      "data": { "arrivals": [] }
+      "data": {
+        "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
+        "arrivals": []
+      }
     }
   ]
 }
@@ -326,9 +354,21 @@ Consistency rule: each vehicle rendered on map must either have a matching ETA i
         "route": "T30",
         "polyline": [[49.84, 24.03], [49.83, 24.02]]
       }
-    ]
+    ],
+    "updated_at": "2026-01-23T12:00:00Z"
   },
-  "ui_blocks": [{ "type": "map", "data": { "routes": [] } }]
+  "ui_blocks": [
+    {
+      "type": "map",
+      "data": {
+        "center": [49.84, 24.03],
+        "zoom": 14,
+        "stop": { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.84, "lng": 24.03 },
+        "routes": [{ "route": "T30", "polyline": [[49.84, 24.03], [49.83, 24.02]] }],
+        "vehicles": []
+      }
+    }
+  ]
 }
 ```
 
@@ -459,7 +499,7 @@ Full details for one vehicle by its ID: position, route, license plate, directio
   "view": "transit_realtime",
   "data": {
     "vehicle_id": "tram_123",
-    "route": "route-ext-1",
+    "route": "T30",
     "license_plate": "BC-1234-AB",
     "lat": 49.841,
     "lng": 24.031,
@@ -480,8 +520,19 @@ Full details for one vehicle by its ID: position, route, license plate, directio
 }
 ```
 
+`route` is the route short name, falling back to the opaque GTFS route ID only when the route is missing from the local data. Either value is accepted as `route_name` by `get_route_static` and `get_route_realtime`.
+
 </details>
 
+### Prompts
+
+Reusable instruction templates for rendering workflows. Each takes one argument, `stop_id` (positive integer or digits-only string).
+
+| Prompt | Use case |
+|--------|----------|
+| `transit-map-view` | Map-first rendering of live vehicles for a stop; optionally merges `get_stop_geometry` polylines. |
+| `transit-arrival-list` | Arrival list for a stop, sorted by ETA and grouped by route. |
+| `transit-hybrid-view` | Map block first, arrival-list block second, with ETA values kept consistent across both. |
 
 ### Resources and resource templates
 
