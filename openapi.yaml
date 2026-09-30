@@ -666,6 +666,9 @@ components:
           type: string
           nullable: true
           description: Null when the feed has no plate on record.
+        lowfloor:
+          type: boolean
+          description: True if the vehicle is low-floor (accessible).
         arrivals:
           type: array
           description: Remaining stops with predicted times.
