@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as metrics from "../utils/metrics.js";
 import * as z from "zod/v4";
 import pkg from "../package.json" with { type: "json" };
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -805,7 +805,7 @@ const zLatitude = (what) =>
 const zLongitude = (what) =>
   z.number().min(-180).max(180).describe(`Decimal longitude of the ${what}, WGS84 (e.g. 24.031 for central Lviv).`);
 
-const countToolCall = (tool) => Sentry.metrics.count("mcp.tool_call", 1, { attributes: { tool } });
+const countToolCall = (tool) => metrics.count("mcp.tool_call", 1, { tool });
 
 /** Runs `fetch` unless a live cache entry exists; only successful results are cached. */
 async function cachedTool(toolName, cacheArgs, fetch) {

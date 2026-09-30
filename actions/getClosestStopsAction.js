@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as metrics from "../utils/metrics.js";
 import { distanceMeters } from "../utils/appHelpers.js";
 import db from "../connections/timetableSqliteDb.js";
 
@@ -43,8 +43,8 @@ export default async (req, res, next) => {
     .filter((s) => s._dist < radiusMeters)
     .sort((a, b) => a._dist - b._dist);
 
-  Sentry.metrics.distribution('closest_stops.radius_meters', radiusMeters);
-  Sentry.metrics.distribution('closest_stops.results_count', results.length);
+  metrics.distribution('closest_stops.radius_meters', radiusMeters);
+  metrics.distribution('closest_stops.results_count', results.length);
 
   let cacheLine = `public, max-age=0, s-maxage=${cacheAgeSeconds}, stale-while-revalidate=15`;
   if (!results.length) {

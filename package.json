@@ -33,7 +33,6 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@sentry/node": "^11.0.0",
     "cors": "^2.8.5",
     "dotenv": "^18.0",
     "express": "^5.2.1",

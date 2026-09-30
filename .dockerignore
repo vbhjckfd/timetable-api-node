@@ -34,6 +34,15 @@ README.md
 # Claude Code
 .claude
 
+# Tests and repo tooling
+tests
+.github
+.cursor
+Makefile
+cleanup-policy.json
+cleanup-revisions.sh
+**/.DS_Store
+
 # Misc
 .nvmrc
 last-modified.txt

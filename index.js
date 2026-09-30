@@ -1,7 +1,5 @@
-import "./instrument.js";
 import "dotenv/config";
 
-import * as Sentry from "@sentry/node";
 import pkg from "./package.json" with { type: "json" };
 import path from "path";
 const __dirname = import.meta.dirname;
@@ -453,8 +451,6 @@ app.get("/server.json", (req, res) => {
 });
 
 app.use(notFoundAction);
-
-Sentry.setupExpressErrorHandler(app);
 
 app.use(errorHandler);
 

@@ -31,12 +31,8 @@ nvm use && make test
 
 ## Monitoring
 
-Two optional integrations, both off unless their environment variable is set:
-
-| Variable | Effect |
-| --- | --- |
-| `SENTRY_DSN` | Error reporting via `instrument.js` |
-| `NEW_RELIC_LICENSE_KEY` | New Relic APM via `newrelic.cjs` |
+New Relic APM, off unless `NEW_RELIC_LICENSE_KEY` is set. It also carries
+errors and the custom metrics recorded through `utils/metrics.js`.
 
 New Relic runs as a preloaded agent, so `npm start` carries the flags:
 

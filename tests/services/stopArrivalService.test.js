@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const sentryMetrics = vi.hoisted(() => ({ count: vi.fn(), distribution: vi.fn() }));
-const sentryCaptureException = vi.hoisted(() => vi.fn());
+const metrics = vi.hoisted(() => ({ count: vi.fn(), distribution: vi.fn(), captureException: vi.fn() }));
 
 vi.mock("../../connections/timetableSqliteDb.js", () => ({
   default: { getCollection: vi.fn() },
@@ -17,7 +16,7 @@ vi.mock("gtfs", () => ({
   getCalendars: vi.fn().mockResolvedValue([{ service_id: "SVC1" }]),
 }));
 
-vi.mock("@sentry/node", () => ({ metrics: sentryMetrics, captureException: sentryCaptureException }));
+vi.mock("../../utils/metrics.js", () => metrics);
 
 import stopArrivalService, {
   resetPulseMute,
@@ -193,9 +192,9 @@ describe("stopArrivalService.getTimetableForStop", () => {
     expect(result).toHaveLength(1);
     expect(result[0].vehicle_id).toBe("VH1");
     expect(result[0].location).toBeUndefined();
-    expect(sentryCaptureException).toHaveBeenCalled();
-    expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.positions_unavailable', 1, { attributes: { stop: "1001" } },
+    expect(metrics.captureException).toHaveBeenCalled();
+    expect(metrics.count).toHaveBeenCalledWith(
+      'stop_timetable.positions_unavailable', 1, { stop: "1001" },
     );
   });
 
@@ -333,9 +332,9 @@ describe("stopArrivalService.getTimetableForStop — schedule fallback", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].scheduled).toBe(true);
-    expect(sentryCaptureException).toHaveBeenCalled();
-    expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.arrivals_unavailable', 1, { attributes: { stop: "1001" } },
+    expect(metrics.captureException).toHaveBeenCalled();
+    expect(metrics.count).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_unavailable', 1, { stop: "1001" },
     );
   });
 
@@ -349,19 +348,19 @@ describe("stopArrivalService.getTimetableForStop — schedule fallback", () => {
 
     await stopArrivalService.getTimetableForStop(stopWithSchedule);
 
-    expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.empty', 1, { attributes: { stop: "1001" } },
+    expect(metrics.count).toHaveBeenCalledWith(
+      'stop_timetable.empty', 1, { stop: "1001" },
     );
-    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
-      'stop_timetable.arrivals_count', 0, { attributes: { stop: "1001" } },
+    expect(metrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_count', 0, { stop: "1001" },
     );
-    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
-      'stop_timetable.schedule_fallback', 1, { attributes: { stop: "1001" } },
+    expect(metrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.schedule_fallback', 1, { stop: "1001" },
     );
   });
 });
 
-describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
+describe("stopArrivalService.getTimetableForStop — metrics", () => {
   function freshArrivalEntity() {
     return {
       tripUpdate: {
@@ -384,13 +383,13 @@ describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
     setupMocks(true);
     await stopArrivalService.getTimetableForStop(testStop);
 
-    expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.request', 1, { attributes: { stop: "1001" } },
+    expect(metrics.count).toHaveBeenCalledWith(
+      'stop_timetable.request', 1, { stop: "1001" },
     );
-    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
-      'stop_timetable.arrivals_count', 1, { attributes: { stop: "1001" } },
+    expect(metrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_count', 1, { stop: "1001" },
     );
-    expect(sentryMetrics.count).not.toHaveBeenCalledWith(
+    expect(metrics.count).not.toHaveBeenCalledWith(
       'stop_timetable.empty', expect.anything(), expect.anything(),
     );
   });
@@ -399,11 +398,11 @@ describe("stopArrivalService.getTimetableForStop — Sentry metrics", () => {
     setupMocks(false);
     await stopArrivalService.getTimetableForStop(testStop);
 
-    expect(sentryMetrics.count).toHaveBeenCalledWith(
-      'stop_timetable.empty', 1, { attributes: { stop: "1001" } },
+    expect(metrics.count).toHaveBeenCalledWith(
+      'stop_timetable.empty', 1, { stop: "1001" },
     );
-    expect(sentryMetrics.distribution).toHaveBeenCalledWith(
-      'stop_timetable.arrivals_count', 0, { attributes: { stop: "1001" } },
+    expect(metrics.distribution).toHaveBeenCalledWith(
+      'stop_timetable.arrivals_count', 0, { stop: "1001" },
     );
   });
 });

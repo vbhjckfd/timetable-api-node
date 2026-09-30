@@ -21,7 +21,7 @@ RUN echo "$CACHEBUST"
 
 RUN apk --no-cache add curl && curl --silent --head "https://track.ua-gis.com/gtfs/lviv/static.zip" | grep 'Last-Modified:' | cut -c 16- > ./last-modified.txt
 
-RUN node ./gtfs-import.js
+RUN node ./gtfs-import.js && node ./scripts/slim-gtfs-db.js
 
 FROM node:26-alpine
 
@@ -29,7 +29,10 @@ FROM node:26-alpine
 # UTC while the build stage was on Kyiv time. Anything reading a local wall
 # clock — the schedule fallback, getTodayServiceIds' day-of-week — was then
 # three hours off in summer.
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 ENV TZ=Europe/Kyiv
 
 WORKDIR /usr/src/app
@@ -37,11 +40,13 @@ WORKDIR /usr/src/app
 COPY . ./
 COPY --from=build_image /usr/src/app/node_modules ./node_modules
 COPY --from=build_image /usr/src/app/database/Timetable ./database/Timetable
+COPY --from=build_image /usr/src/app/database/gtfs ./database/gtfs
 COPY --from=build_image /usr/src/app/last-modified.txt ./last-modified.txt
-
-RUN node ./gtfs-import-slim.js
 
 HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 CMD wget -q --spider http://localhost:8080/health
 
 # Run the web service on container startup.
-CMD [ "npm", "start" ]
+# Same flags as `npm start`, without an npm process sitting in front of node
+# (extra RSS, and it gets SIGTERM instead of the app). Keep in sync with
+# package.json "start".
+CMD [ "node", "-r", "dotenv/config", "-r", "newrelic", "--import", "newrelic/esm-loader.mjs", "index.js" ]

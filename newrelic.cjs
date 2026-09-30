@@ -7,8 +7,8 @@
  * .cjs even though the rest of the project is ESM ("type": "module").
  *
  * No secrets live here: the license key comes from NEW_RELIC_LICENSE_KEY.
- * Without that variable the agent stays off, the same way Sentry stays off
- * without SENTRY_DSN (see instrument.js).
+ * Without that variable the agent stays off, and utils/metrics.js calls
+ * become no-ops.
  */
 exports.config = {
   agent_enabled: Boolean(process.env.NEW_RELIC_LICENSE_KEY),

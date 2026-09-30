@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as metrics from "../utils/metrics.js";
 import { getTrips } from "gtfs";
 import {
   formatRouteName,
@@ -74,13 +74,13 @@ const stopArrivalService = {
     // fallback below carries the response.
     const [closestVehiclesRaw, vehiclesLocationsRaw] = await Promise.all([
       getArrivalTimes().catch((e) => {
-        Sentry.captureException(e);
-        Sentry.metrics.count('stop_timetable.arrivals_unavailable', 1, { attributes: { stop: String(stop.code) } });
+        metrics.captureException(e);
+        metrics.count('stop_timetable.arrivals_unavailable', 1, { stop: String(stop.code) });
         return [];
       }),
       getVehiclesLocations().catch((e) => {
-        Sentry.captureException(e);
-        Sentry.metrics.count('stop_timetable.positions_unavailable', 1, { attributes: { stop: String(stop.code) } });
+        metrics.captureException(e);
+        metrics.count('stop_timetable.positions_unavailable', 1, { stop: String(stop.code) });
         return [];
       }),
     ]);
@@ -200,15 +200,15 @@ const stopArrivalService = {
     // arrivals_count stays the *live* count so the schedule fallback cannot
     // paper over a feed-side regression in the dashboards; schedule_fallback
     // is what the rider was served instead.
-    Sentry.metrics.count('stop_timetable.request', 1, { attributes: { stop: String(stop.code) } });
-    Sentry.metrics.distribution('stop_timetable.arrivals_count', liveTimetable.length, { attributes: { stop: String(stop.code) } });
+    metrics.count('stop_timetable.request', 1, { stop: String(stop.code) });
+    metrics.distribution('stop_timetable.arrivals_count', liveTimetable.length, { stop: String(stop.code) });
     const arrivalsWithoutPosition = liveTimetable.filter((i) => !i.location).length;
     if (arrivalsWithoutPosition > 0) {
-      Sentry.metrics.count('stop_timetable.arrival_without_position', arrivalsWithoutPosition, { attributes: { stop: String(stop.code) } });
+      metrics.count('stop_timetable.arrival_without_position', arrivalsWithoutPosition, { stop: String(stop.code) });
     }
     if (liveTimetable.length === 0) {
-      Sentry.metrics.count('stop_timetable.empty', 1, { attributes: { stop: String(stop.code) } });
-      Sentry.metrics.distribution('stop_timetable.schedule_fallback', timetable.length, { attributes: { stop: String(stop.code) } });
+      metrics.count('stop_timetable.empty', 1, { stop: String(stop.code) });
+      metrics.distribution('stop_timetable.schedule_fallback', timetable.length, { stop: String(stop.code) });
     }
 
     if (!skipPulse) emitPulseSignal(stop);
