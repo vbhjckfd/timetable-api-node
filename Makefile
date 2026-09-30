@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 NVM_USE := source ~/.nvm/nvm.sh && nvm use --silent
 
-.PHONY: start import import-slim test build deploy publish clear-short-cache clear-long-cache clear-all-cache cleanup-revisions
+.PHONY: start import import-slim test build deploy publish clear-short-cache clear-long-cache clear-all-cache cleanup-revisions smoke
 
 PROJECT_ID ?= timetable-252615
 IMAGE ?= gcr.io/$(PROJECT_ID)/timetable-api-node-sqlite
@@ -56,3 +56,15 @@ clear-all-cache:
 
 cleanup-revisions:
 	./cleanup-revisions.sh
+
+# Basic smoke tests against production. Arrays may be empty at night, so only
+# shape is checked: HTTP 200, JSON array, and each item carries its key field.
+SMOKE_URL ?= https://api.lad.lviv.ua
+
+smoke:
+	@curl -fsS "$(SMOKE_URL)/stops/60/timetable" \
+		| jq -e 'type == "array" and all(.[]; has("route") and has("arrival_time"))' >/dev/null \
+		&& echo "OK  /stops/60/timetable" || { echo "FAIL /stops/60/timetable"; exit 1; }
+	@curl -fsS "$(SMOKE_URL)/routes/dynamic/A46" \
+		| jq -e 'type == "array" and all(.[]; has("id") and has("location"))' >/dev/null \
+		&& echo "OK  /routes/dynamic/A46" || { echo "FAIL /routes/dynamic/A46"; exit 1; }
