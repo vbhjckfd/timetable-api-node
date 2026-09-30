@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node";
 import db from "../connections/timetableSqliteDb.js";
-import { formatRouteName } from "../utils/appHelpers.js";
+import { formatRouteName, isLowFloor } from "../utils/appHelpers.js";
 import {
   getVehiclesLocations,
   getArrivalTimes,
@@ -13,11 +13,11 @@ export default async (req, res, next) => {
     getArrivalTimes(),
   ]);
 
-  let vehiclePosition = vehiclePositionRaw.find(
+  const vehicleEntity = vehiclePositionRaw.find(
     (entity) => entity.vehicle.vehicle.id == req.params.vehicleId,
   );
-  if (!vehiclePosition) return res.sendStatus(404);
-  vehiclePosition = vehiclePosition.vehicle;
+  if (!vehicleEntity) return res.sendStatus(404);
+  const vehiclePosition = vehicleEntity.vehicle;
 
   let arrivalTimes = arrivalTimeItemsRaw
     .filter((e) => e.tripUpdate.vehicle.id == req.params.vehicleId)
@@ -58,6 +58,9 @@ export default async (req, res, next) => {
       ] ?? null,
     // The feed sends "" for vehicles without a plate on record.
     licensePlate: vehiclePosition.vehicle.licensePlate || null,
+    // Same rule as /routes/dynamic and /transport, so the vehicle page can
+    // mark its marker without a second request.
+    lowfloor: routeLocal ? isLowFloor(null, vehicleEntity, routeLocal) : false,
     arrivals: arrivalTimes.map((item) => {
       const transfers = stopIdsMap[item.stopId].transfers
         .map((i) => {

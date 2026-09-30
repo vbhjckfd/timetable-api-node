@@ -125,4 +125,34 @@ describe("vehicleInfoAction", () => {
 
     expect(res.send.mock.calls[0][0].licensePlate).toBeNull();
   });
+
+  it("marks a low-floor vehicle with the same rule as the route feed", async () => {
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getArrivalTimes.mockResolvedValue([]);
+    db.getCollection.mockImplementation((name) => {
+      if (name === "stops") return { find: vi.fn().mockReturnValue([]) };
+      // А52 is on the all-low-floor bus list in isLowFloor.
+      if (name === "routes")
+        return { findOne: vi.fn().mockReturnValue({ ...mockRoute, short_name: "А52" }) };
+    });
+
+    const res = makeRes();
+    await vehicleInfoAction({ params: { vehicleId: "VH42" } }, res, vi.fn());
+
+    expect(res.send.mock.calls[0][0].lowfloor).toBe(true);
+  });
+
+  it("reports lowfloor false when the route is not in the local dataset", async () => {
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getArrivalTimes.mockResolvedValue([]);
+    db.getCollection.mockImplementation((name) => {
+      if (name === "stops") return { find: vi.fn().mockReturnValue([]) };
+      if (name === "routes") return { findOne: vi.fn().mockReturnValue(null) };
+    });
+
+    const res = makeRes();
+    await vehicleInfoAction({ params: { vehicleId: "VH42" } }, res, vi.fn());
+
+    expect(res.send.mock.calls[0][0].lowfloor).toBe(false);
+  });
 });
