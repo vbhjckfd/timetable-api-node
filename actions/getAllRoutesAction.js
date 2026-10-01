@@ -98,6 +98,7 @@ export default async (req, res, next) => {
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/protomaps-leaflet@5.1.0/dist/protomaps-leaflet.js"></script>
 <style>
 table {border-collapse: collapse;}
 table, th { text-align: left; }
@@ -224,6 +225,21 @@ function splitDotIcon() {
   });
 }
 
+// Same vector basemap as lad.lviv.ua (light flavor); plain OSM raster if
+// protomaps-leaflet failed to load.
+function addBasemap(m) {
+  if (window.protomapsL) {
+    try {
+      protomapsL.leafletLayer({
+        url: 'https://tiles.lad.lviv.ua/lviv-basemap-20260828.pmtiles',
+        flavor: 'light', lang: 'uk', maxDataZoom: 15,
+      }).addTo(m);
+      return;
+    } catch (e) { console.warn('basemap: protomaps layer failed, falling back to OSM', e); }
+  }
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(m);
+}
+
 function addFullscreenControl(m, div) {
   var ctl = L.control({ position: 'topright' });
   ctl.onAdd = function() {
@@ -252,7 +268,7 @@ function cmpMap(div, key, i, j) {
   // Valid view before any layer is added, so nothing can throw regardless of
   // the container's layout state at this point (it just became visible).
   m.setView([49.8397, 24.0297], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+  addBasemap(m);
   addFullscreenControl(m, div);
 
   // Each stop is drawn once even though it may belong to both routes' stop
@@ -374,7 +390,7 @@ ${contactBannerHtml("routes")}
       mapInits.push(
         `(function(){` +
         `var m=L.map('${mapId}',{zoomControl:false,attributionControl:false});` +
-        `L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);` +
+        `addBasemap(m);` +
         `addFullscreenControl(m,document.getElementById('${mapId}'));` +
         `var s=${JSON.stringify([shapes[0] ?? null, shapes[1] ?? null])};` +
         `var c=['#2563EB','#DC2626'],pts=[],ls=[null,null];` +
