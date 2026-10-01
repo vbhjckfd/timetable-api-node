@@ -108,7 +108,7 @@ Block types:
 ## Data caveats
 
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
-- \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`schedule.weekend\`) are only populated for the first stop of each direction.
+- \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`saturday\`/\`sunday\`) are only populated for the first stop of each direction. Saturday and Sunday timetables can differ; \`schedule.weekend\` merges both days and is kept only for backward compatibility.
 - \`direction\` is the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return); \`destination\` is the name of that direction's last stop.
 - \`find_routes_between\` covers direct routes only; an empty result means a transfer is needed.
 `;
@@ -201,7 +201,12 @@ const OUTPUT_SCHEMAS = {
     }),
     stops: z.array(z.array(zStopObj.extend({
       departures: z.array(z.string()),
-      schedule: z.object({ workday: z.array(z.string()), weekend: z.array(z.string()) }).optional(),
+      schedule: z.object({
+        workday: z.array(z.string()),
+        saturday: z.array(z.string()),
+        sunday: z.array(z.string()),
+        weekend: z.array(z.string()),
+      }).optional(),
     }))),
     shapes: z.array(z.array(z.array(z.number()))).optional(),
     updated_at: z.string(),
@@ -953,7 +958,7 @@ function registerTools(server) {
     {
       title: "Get Route Static",
       description:
-        "Returns static route data: name, long name, vehicle type, colour, the ordered stop list for both directions, and the timetable of departures from the first stop (workday and weekend). " +
+        "Returns static route data: name, long name, vehicle type, colour, the ordered stop list for both directions, and the timetable of departures from the first stop (workday, Saturday and Sunday). " +
         "Use when the user asks which stops a route serves, where it goes, or its scheduled departure times. " +
         "Set `include_shapes` only when you will draw the route on a map — the polylines are large and carry nothing a text answer needs. " +
         "Do NOT use this for live vehicle positions — use `get_route_realtime` instead. " +
@@ -994,6 +999,8 @@ function registerTools(server) {
               schedule: s.schedule
                 ? {
                     workday: Array.isArray(s.schedule.workday) ? s.schedule.workday : [],
+                    saturday: Array.isArray(s.schedule.saturday) ? s.schedule.saturday : [],
+                    sunday: Array.isArray(s.schedule.sunday) ? s.schedule.sunday : [],
                     weekend: Array.isArray(s.schedule.weekend) ? s.schedule.weekend : [],
                   }
                 : undefined,

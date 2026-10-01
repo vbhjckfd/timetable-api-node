@@ -62,6 +62,21 @@ export async function getWorkdayServiceIds() {
   );
 }
 
+export async function getSaturdayServiceIds() {
+  return (await getCalendars({ saturday: 1 }, ["service_id"])).map(
+    (i) => i.service_id,
+  );
+}
+
+export async function getSundayServiceIds() {
+  return (await getCalendars({ sunday: 1 }, ["service_id"])).map(
+    (i) => i.service_id,
+  );
+}
+
+// Saturday and Sunday combined. Some routes run different Saturday and Sunday
+// timetables (service 32/160 Sat-only, 64/192 Sun-only, 63/191 Mon–Sat), so
+// this union can interleave two different days — prefer the per-day helpers.
 export async function getWeekendServiceIds() {
   const [sat, sun] = await Promise.all([
     getCalendars({ saturday: 1 }, ["service_id"]),

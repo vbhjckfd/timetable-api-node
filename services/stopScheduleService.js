@@ -46,19 +46,21 @@ function resolveDepartureTime(hhmm, reference, zonedReference) {
   return new Date(reference.getTime() + (wallTarget - zonedReference));
 }
 
-// The import writes three maps: a combined one plus workday/weekend splits.
-// Prefer the split that matches the day being asked about; the combined map is
-// the fallback for routes imported before the split existed.
-function departuresForStop(route, microgizId, isWeekend) {
-  const preferred = isWeekend
-    ? route.stop_departure_time_map_weekend
-    : route.stop_departure_time_map_workday;
+// The import writes a combined map plus per-day-type splits. Saturday and
+// Sunday can differ (e.g. А06 runs a Sat-only and a Sun-only service), so pick
+// the exact day; the weekend union and then the combined map are fallbacks for
+// routes imported before those splits existed.
+function departuresForStop(route, microgizId, weekday) {
+  const preferred =
+    weekday === 6
+      ? [route.stop_departure_time_map_saturday, route.stop_departure_time_map_weekend]
+      : weekday === 0
+        ? [route.stop_departure_time_map_sunday, route.stop_departure_time_map_weekend]
+        : [route.stop_departure_time_map_workday];
 
-  return (
-    preferred?.[microgizId] ??
-    route.stop_departure_time_map?.[microgizId] ??
-    []
-  );
+  const dayMap = preferred.find(Boolean);
+  if (dayMap) return dayMap[microgizId] ?? [];
+  return route.stop_departure_time_map?.[microgizId] ?? [];
 }
 
 /**
@@ -87,7 +89,7 @@ export function getScheduledArrivalsForStop(
   if (!stop?.microgiz_id || !Array.isArray(stop.transfers)) return [];
 
   const zonedNow = asZoned(now, timeZone);
-  const isWeekend = [0, 6].includes(zonedNow.getDay());
+  const weekday = zonedNow.getDay();
   const until = new Date(now.getTime() + windowMinutes * 60 * 1000);
 
   const entries = [];
@@ -98,7 +100,7 @@ export function getScheduledArrivalsForStop(
 
     const { _id, id, ...routeInfo } = transfer;
 
-    const upcoming = departuresForStop(route, stop.microgiz_id, isWeekend)
+    const upcoming = departuresForStop(route, stop.microgiz_id, weekday)
       .map((hhmm) => resolveDepartureTime(hhmm, now, zonedNow))
       .filter((at) => at && at > now && at <= until)
       .sort((a, b) => a - b)

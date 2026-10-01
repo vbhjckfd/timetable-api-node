@@ -11,6 +11,8 @@ import {
   getTodayServiceIds,
   getWorkdayServiceIds,
   getWeekendServiceIds,
+  getSaturdayServiceIds,
+  getSundayServiceIds,
 } from "./utils/appHelpers.js";
 
 import PublicGoogleSheetsParser from "public-google-sheets-parser";
@@ -274,9 +276,16 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     stopsModels.filter(Boolean).map((s) => [s.microgiz_id, s]),
   );
 
-  const [workdayServiceIds, weekendServiceIds] = await Promise.all([
+  const [
+    workdayServiceIds,
+    weekendServiceIds,
+    saturdayServiceIds,
+    sundayServiceIds,
+  ] = await Promise.all([
     getWorkdayServiceIds(),
     getWeekendServiceIds(),
+    getSaturdayServiceIds(),
+    getSundayServiceIds(),
   ]);
 
   async function buildDepartureTimeMap(routeId, serviceIds) {
@@ -365,9 +374,13 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       [
         routeModel.stop_departure_time_map_workday,
         routeModel.stop_departure_time_map_weekend,
+        routeModel.stop_departure_time_map_saturday,
+        routeModel.stop_departure_time_map_sunday,
       ] = await Promise.all([
         buildDepartureTimeMap(routeModel.external_id, workdayServiceIds),
         buildDepartureTimeMap(routeModel.external_id, weekendServiceIds),
+        buildDepartureTimeMap(routeModel.external_id, saturdayServiceIds),
+        buildDepartureTimeMap(routeModel.external_id, sundayServiceIds),
       ]);
 
       routesCollection.update(routeModel);

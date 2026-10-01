@@ -3,6 +3,7 @@ import {
   getRouteColor,
   getRouteType,
 } from "../utils/appHelpers.js";
+import { stopScheduleByDayType } from "../utils/stopScheduleByDayType.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
@@ -44,18 +45,9 @@ export default async (req, res, next) => {
     const departures = terminusStop
       ? routeLocal.stop_departure_time_map[terminusStop.microgiz_id] ?? []
       : [];
-    const schedule = {
-      workday: terminusStop
-        ? routeLocal.stop_departure_time_map_workday?.[
-            terminusStop.microgiz_id
-          ] ?? []
-        : [],
-      weekend: terminusStop
-        ? routeLocal.stop_departure_time_map_weekend?.[
-            terminusStop.microgiz_id
-          ] ?? []
-        : [],
-    };
+    const schedule = terminusStop
+      ? stopScheduleByDayType(routeLocal, terminusStop.microgiz_id)
+      : { workday: [], saturday: [], sunday: [], weekend: [] };
 
     stopsByShape[key] = {
       direction: key,

@@ -4,6 +4,7 @@ import {
   getRouteColor,
   getRouteType,
 } from "../utils/appHelpers.js";
+import { stopScheduleByDayType } from "../utils/stopScheduleByDayType.js";
 import db from "../connections/timetableSqliteDb.js";
 
 export default async (req, res, next) => {
@@ -44,15 +45,10 @@ export default async (req, res, next) => {
             return a["vehicle_type"] == "bus" ? 1 : -1;
           });
         let departures = [];
-        let schedule = { workday: [], weekend: [] };
+        let schedule = { workday: [], saturday: [], sunday: [], weekend: [] };
         if (0 == index) {
           departures = routeLocal.stop_departure_time_map[s.microgiz_id] ?? [];
-          schedule = {
-            workday:
-              routeLocal.stop_departure_time_map_workday?.[s.microgiz_id] ?? [],
-            weekend:
-              routeLocal.stop_departure_time_map_weekend?.[s.microgiz_id] ?? [],
-          };
+          schedule = stopScheduleByDayType(routeLocal, s.microgiz_id);
         }
 
         return {

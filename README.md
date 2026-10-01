@@ -264,12 +264,12 @@ Each end covers every stop within a 300 m walk (`stop_ids`): a line's two direct
         {
           "id": "101", "name": "Університет", "lat": 49.841, "lng": 24.003,
           "departures": ["05:30", "05:52"],
-          "schedule": { "workday": ["05:30", "05:52", "06:10"], "weekend": ["07:00", "07:30"] }
+          "schedule": { "workday": ["05:30", "05:52", "06:10"], "saturday": ["07:00", "07:30"], "sunday": ["07:00"], "weekend": ["07:00", "07:30"] }
         },
-        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [], "schedule": { "workday": [], "weekend": [] } }
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": [], "schedule": { "workday": [], "saturday": [], "sunday": [], "weekend": [] } }
       ],
       [
-        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": ["06:00"], "schedule": { "workday": ["06:00"], "weekend": [] } }
+        { "id": "707", "name": "Стадіон Сільмаш", "lat": 49.838, "lng": 24.021, "departures": ["06:00"], "schedule": { "workday": ["06:00"], "saturday": [], "sunday": [], "weekend": [] } }
       ]
     ],
     "updated_at": "2026-09-23T09:01:12Z"
@@ -280,7 +280,7 @@ Each end covers every stop within a 300 m walk (`stop_ids`): a line's two direct
 }
 ```
 
-`stops[0]` is direction 0 (outbound), `stops[1]` direction 1 (return). `departures` and `schedule` are populated for the **first stop of each direction**; other stops have empty arrays. `schedule.workday` is Monday–Friday, `schedule.weekend` Saturday–Sunday; `departures` keeps today's schedule for backward compatibility. With `include_shapes: true`, `data.shapes` holds one `[lat, lng]` polyline per direction and the map block adds `"polylines": "data.shapes"`.
+`stops[0]` is direction 0 (outbound), `stops[1]` direction 1 (return). `departures` and `schedule` are populated for the **first stop of each direction**; other stops have empty arrays. `schedule.workday` is Monday–Friday, `schedule.saturday` / `schedule.sunday` the two weekend days (they can differ); `schedule.weekend` merges both and is kept for backward compatibility; `departures` keeps today's schedule for backward compatibility. With `include_shapes: true`, `data.shapes` holds one `[lat, lng]` polyline per direction and the map block adds `"polylines": "data.shapes"`.
 
 </details>
 
@@ -489,7 +489,7 @@ Route shape, stop list, and metadata. Long-cached (30 days).
 - **Response:** `{ id, color, type, route_short_name, route_long_name, stops: [[dir0…], [dir1…]], shapes }`.
 - Each stop object: `{ code, name, loc, transfers, departures, schedule }`.
   - `departures` — today's departure times (HH:MM), populated only for direction 0 first stop. Kept for backward compatibility.
-  - `schedule` — `{ workday: string[], weekend: string[] }` departure times by day type, populated only for direction 0 first stop.
+  - `schedule` — `{ workday: string[], saturday: string[], sunday: string[], weekend: string[] }` departure times by day type (`weekend` = Saturday ∪ Sunday, deprecated), populated only for direction 0 first stop.
 
 #### `GET /routes/dynamic/:name`
 

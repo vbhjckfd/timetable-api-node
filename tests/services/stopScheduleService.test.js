@@ -81,6 +81,24 @@ describe("getScheduledArrivalsForStop", () => {
     expect(new Date(result[0].arrival_time).getUTCMinutes()).toBe(15);
   });
 
+  it("picks the Saturday or Sunday map over the merged weekend one", () => {
+    const split = {
+      ROUTE1: {
+        external_id: "ROUTE1",
+        stop_departure_time_map_weekend: { 4755: ["12:10", "12:20"] },
+        stop_departure_time_map_saturday: { 4755: ["12:10"] },
+        stop_departure_time_map_sunday: { 4755: ["12:20"] },
+      },
+    };
+    const sunday = new Date(Date.UTC(2026, 7, 16, 12, 0, 0));
+
+    const onSaturday = getScheduledArrivalsForStop(stop, split, { now: weekend, ...utc });
+    const onSunday = getScheduledArrivalsForStop(stop, split, { now: sunday, ...utc });
+
+    expect(onSaturday.map((i) => new Date(i.arrival_time).getUTCMinutes())).toEqual([10]);
+    expect(onSunday.map((i) => new Date(i.arrival_time).getUTCMinutes())).toEqual([20]);
+  });
+
   it("caps how many departures a single route contributes", () => {
     const busy = {
       ROUTE1: {

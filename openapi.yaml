@@ -500,15 +500,36 @@ components:
             type: string
             pattern: '^[0-2]\d:[0-5]\d$'
           example: ["05:30", "05:52", "06:10"]
+        saturday:
+          type: array
+          description: Departure times (HH:MM) on Saturday service.
+          items:
+            type: string
+            pattern: '^[0-2]\d:[0-5]\d$'
+          example: ["06:05", "07:05", "07:40"]
+        sunday:
+          type: array
+          description: >
+            Departure times (HH:MM) on Sunday service. Can differ from Saturday.
+          items:
+            type: string
+            pattern: '^[0-2]\d:[0-5]\d$'
+          example: ["07:05", "08:30", "10:00"]
         weekend:
           type: array
-          description: Departure times (HH:MM) on Saturday–Sunday service.
+          deprecated: true
+          description: >
+            Saturday and Sunday departures merged into one list. When the two
+            days run different timetables this interleaves them — use
+            `saturday` and `sunday` instead.
           items:
             type: string
             pattern: '^[0-2]\d:[0-5]\d$'
           example: ["07:00", "07:30", "08:00"]
       required:
         - workday
+        - saturday
+        - sunday
         - weekend
 
     RouteStop:
