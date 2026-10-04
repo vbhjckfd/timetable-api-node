@@ -14,6 +14,7 @@ import {
   routeNameToUrlFriendly,
   getRouteType,
   getRouteColor,
+  secondsUntilImportDone,
   formatRouteName,
   cleanUpStopName,
   getTextWaitTime,
@@ -225,5 +226,21 @@ describe("shapes_by_direction", () => {
     const shapes = shapes_by_direction(route);
     expect(shapes[getDirectionByTrip("trip-a", route)]).toBe(route.shapes[11849]);
     expect(shapes[getDirectionByTrip("trip-b", route)]).toBe(route.shapes[11850]);
+  });
+});
+
+describe("secondsUntilImportDone", () => {
+  it("counts to today's 01:15 UTC when it is still ahead", () => {
+    // 00:30 UTC: today's import is 45 min away.
+    expect(secondsUntilImportDone(new Date("2026-10-04T00:30:00Z"))).toBe(45 * 60);
+  });
+
+  it("counts to tomorrow's 01:15 UTC once today's has passed", () => {
+    expect(secondsUntilImportDone(new Date("2026-10-04T01:15:00Z"))).toBe(24 * 3600);
+  });
+
+  it("is not thrown a day late by the local date running ahead of UTC", () => {
+    // 22:30 UTC on the 3rd is 01:30 on the 4th in Kyiv.
+    expect(secondsUntilImportDone(new Date("2026-10-03T22:30:00Z"))).toBe(2 * 3600 + 45 * 60);
   });
 });

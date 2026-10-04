@@ -20,15 +20,24 @@ export function distanceMeters(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-function nextImportDate() {
-  const now = new Date();
-  return new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + 1, 1, 15, 0),
+// The daily import finishes at 01:15 UTC. Built from UTC fields throughout:
+// mixing the local date (Europe/Kyiv in the image) into Date.UTC skipped a
+// day between local midnight and 01:15 UTC, and always added one even when
+// today's import was still ahead.
+function nextImportDate(now = new Date()) {
+  const today = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    1,
+    15,
+    0,
   );
+  return new Date(today > now.getTime() ? today : today + 24 * 3600 * 1000);
 }
 
-export function secondsUntilImportDone() {
-  return Math.round((nextImportDate() - new Date()) / 1000);
+export function secondsUntilImportDone(now = new Date()) {
+  return Math.round((nextImportDate(now) - now) / 1000);
 }
 
 export async function getTodayServiceIds() {

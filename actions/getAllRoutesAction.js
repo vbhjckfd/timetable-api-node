@@ -19,6 +19,10 @@ export default async (req, res, next) => {
     .simplesort("short_name")
     .data();
 
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAgeSeconds}`)
+    .set("Cache-Tag", "short");
+
   if (req.path.endsWith(".json")) {
     // Return all data in JSON format
     return res.json(routesRaw);
@@ -450,8 +454,5 @@ ${contactBannerHtml("routes")}
     `_routeNames=${jsonForScript(routeNames)};\n` +
     `${mapInits.join("\n")}<\/script>\n</body>\n</html>`;
 
-  res
-    .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAgeSeconds}`)
-    .set("Cache-Tag", "short")
-    .send(result);
+  res.send(result);
 };
