@@ -75,6 +75,36 @@ describe("vehicleInfoAction", () => {
     expect(res.sendStatus).toHaveBeenCalledWith(404);
   });
 
+  it("still answers with the position when the arrivals feed fails", async () => {
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getArrivalTimes.mockRejectedValue(new Error("trip_updates down"));
+    db.getCollection.mockImplementation((name) => {
+      if (name === "stops") return { find: vi.fn().mockReturnValue([]) };
+      if (name === "routes") return { findOne: vi.fn().mockReturnValue(mockRoute) };
+    });
+
+    const res = makeRes();
+    await vehicleInfoAction({ params: { vehicleId: "VH42" } }, res, vi.fn());
+
+    expect(res.send).toHaveBeenCalledWith(
+      expect.objectContaining({ vehicleId: "VH42", location: [49.845, 24.023], arrivals: [] }),
+    );
+  });
+
+  it("ignores trip updates without a vehicle descriptor", async () => {
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getArrivalTimes.mockResolvedValue([{ tripUpdate: { vehicle: null, stopTimeUpdate: [] } }, mockArrivalEntity]);
+    db.getCollection.mockImplementation((name) => {
+      if (name === "stops") return { find: vi.fn().mockReturnValue([mockStop]) };
+      if (name === "routes") return { findOne: vi.fn().mockReturnValue(mockRoute) };
+    });
+
+    const res = makeRes();
+    await vehicleInfoAction({ params: { vehicleId: "VH42" } }, res, vi.fn());
+
+    expect(res.send.mock.calls[0][0].arrivals).toHaveLength(1);
+  });
+
   it("returns vehicle data when vehicle is found", async () => {
     getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
     getArrivalTimes.mockResolvedValue([mockArrivalEntity]);

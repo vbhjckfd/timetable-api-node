@@ -16,7 +16,9 @@ export default async (req, res, next) => {
 
   if (!routeLocal) return res.sendStatus(404);
 
-  if (routeLocal.shapes.size < 2) return res.sendStatus(500);
+  // `shapes` is a plain object keyed by shape_id; it has no `.size`, so the
+  // old `shapes.size < 2` compared undefined and never fired.
+  if (Object.keys(routeLocal.shapes ?? {}).length < 2) return res.sendStatus(500);
 
   const stopsArr = db.getCollection("stops").find({
     code: { $in: Object.values(routeLocal.stops_by_shape).flat() },

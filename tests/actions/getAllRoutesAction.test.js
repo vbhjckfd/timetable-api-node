@@ -59,6 +59,18 @@ describe("getAllRoutesAction", () => {
     );
     expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
+
+  it("sets the same cache headers on /routes.json", async () => {
+    const { req, res, next } = makeReqRes({ path: "/routes.json" });
+    await getAllRoutesAction(req, res, next);
+
+    expect(res.json).toHaveBeenCalled();
+    expect(res.set).toHaveBeenCalledWith(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=2592000",
+    );
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
+  });
 });
 
 // Port of the client-side `sharedCodes` in the <head> script (getAllRoutesAction.js).

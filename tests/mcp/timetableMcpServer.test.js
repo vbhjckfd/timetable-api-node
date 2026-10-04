@@ -173,6 +173,7 @@ import pkg from "../../package.json" with { type: "json" };
 import {
   buildMcpServerCard,
   handleMcpPostRequest,
+  parseArrivalMinutes,
 } from "../../mcp/timetableMcpServer.js";
 
 let server;
@@ -678,5 +679,15 @@ describe("timetable MCP server", () => {
     expect(robotsText).toContain(
       `# mcp-server: ${baseUrl}/.well-known/mcp/server-card.json`,
     );
+  });
+});
+
+describe("parseArrivalMinutes", () => {
+  it("reads the under-a-minute label as 0, not 1", () => {
+    expect(parseArrivalMinutes({ time_left: "< 1хв" })).toBe(0);
+  });
+
+  it("reads a plain minute label", () => {
+    expect(parseArrivalMinutes({ time_left: "7хв" })).toBe(7);
   });
 });

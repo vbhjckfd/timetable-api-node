@@ -33,7 +33,7 @@ const mockRoute = {
   external_id: "EXT1",
   short_name: "T1",
   long_name: "Tram One",
-  shapes: { size: 2 },
+  shapes: { S1: [[49.845, 24.023]], S2: [[49.846, 24.024]] },
   stops_by_shape: {
     0: ["1001", "1002"],
     1: ["1002", "1001"],
@@ -71,7 +71,7 @@ describe("routeFinalStopScheduleAction", () => {
   });
 
   it("returns 500 when route has fewer than 2 shapes", async () => {
-    const routeWithOneShape = { ...mockRoute, shapes: { size: 1 } };
+    const routeWithOneShape = { ...mockRoute, shapes: { S1: [[49.845, 24.023]] } };
     db.getCollection.mockReturnValue({
       findOne: vi.fn().mockReturnValue(routeWithOneShape),
       find: vi.fn().mockReturnValue([]),
