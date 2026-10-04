@@ -87,19 +87,19 @@ const stopArrivalService = {
 
     const routesByRouteId = Object.fromEntries(allRoutesRaw.map((r) => [r.external_id, r]));
 
+    // Build new objects rather than overwriting tripUpdate.stopTimeUpdate: the
+    // feed's entities are kept by microgizService as its stale fallback and
+    // shared with the vehicle lookups, so collapsing the array in place left
+    // the next reader of that cached feed an object where it expects a list.
     const closestVehicles = closestVehiclesRaw
-      .filter((entity) => {
-        return entity.tripUpdate.stopTimeUpdate
-          .map((stu) => stu.stopId)
-          .includes(stop.microgiz_id);
-      })
-      .map((i) => i.tripUpdate)
-      .map((i) => {
-        i.stopTimeUpdate = i.stopTimeUpdate
-          .filter((st) => st.stopId == stop.microgiz_id)
-          .shift();
-        return i;
-      })
+      .map((entity) => entity.tripUpdate)
+      .filter((tu) => Array.isArray(tu?.stopTimeUpdate))
+      .map((tu) => ({
+        trip: tu.trip,
+        vehicle: tu.vehicle,
+        stopTimeUpdate: tu.stopTimeUpdate.find((st) => st.stopId == stop.microgiz_id),
+      }))
+      .filter((i) => i.stopTimeUpdate)
       // A stop_time_update can name our stop and carry no time at all: that is
       // the NO_DATA sentinel gtfs-eta appends to fence off the stops past its
       // prediction horizon (a stop deliberately without times). Reading .time
@@ -113,7 +113,7 @@ const stopArrivalService = {
           time: parseInt(`${time.time}000`),
           route_id: i.trip.routeId,
           trip_id: i.trip.tripId,
-          vehicle: i.vehicle.id,
+          vehicle: i.vehicle?.id,
         };
       })
       .filter((i) => Number.isFinite(i.time) && new Date(i.time) >= now)

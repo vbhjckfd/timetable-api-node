@@ -545,3 +545,50 @@ describe("stopArrivalService.getTimetableForStop — empty room mute", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("stopArrivalService feed entities", () => {
+  it("leaves the feed's stopTimeUpdate arrays intact for the next reader", async () => {
+    // microgizService hands the same entities back as its stale fallback, so a
+    // second request reading a feed the first one rewrote must still work.
+    db.getCollection.mockReturnValue({ find: vi.fn().mockReturnValue([mockRoute]) });
+    const entity = {
+      tripUpdate: {
+        stopTimeUpdate: [
+          { stopId: "OTHER", arrival: { time: futureTimeSec - 60 } },
+          { stopId: "MG1001", arrival: { time: futureTimeSec } },
+        ],
+        trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+        vehicle: { id: "VH1" },
+      },
+    };
+    getArrivalTimes.mockResolvedValue([entity]);
+    getVehiclesLocations.mockResolvedValue([mockVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const first = await stopArrivalService.getTimetableForStop(testStop, { skipPulse: true });
+    expect(Array.isArray(entity.tripUpdate.stopTimeUpdate)).toBe(true);
+    expect(entity.tripUpdate.stopTimeUpdate).toHaveLength(2);
+
+    const second = await stopArrivalService.getTimetableForStop(testStop, { skipPulse: true });
+    expect(second).toHaveLength(1);
+    expect(second[0].arrival_time).toBe(first[0].arrival_time);
+  });
+
+  it("skips trip updates that carry no vehicle descriptor instead of throwing", async () => {
+    db.getCollection.mockReturnValue({ find: vi.fn().mockReturnValue([mockRoute]) });
+    getArrivalTimes.mockResolvedValue([
+      {
+        tripUpdate: {
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          trip: { routeId: "ROUTE1", tripId: "TRIP1" },
+          vehicle: null,
+        },
+      },
+    ]);
+    getVehiclesLocations.mockResolvedValue([]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const result = await stopArrivalService.getTimetableForStop(testStop, { skipPulse: true });
+    expect(result).toHaveLength(1);
+  });
+});

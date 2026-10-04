@@ -8,9 +8,15 @@ import {
 
 export default async (req, res, next) => {
   metrics.count('vehicle_lookup.by_id', 1);
+  // Upcoming stops come from trip_updates and are secondary to the position:
+  // a failed arrivals feed degrades to no stops instead of failing the lookup
+  // of a vehicle the position feed does know about.
   const [vehiclePositionRaw, arrivalTimeItemsRaw] = await Promise.all([
     getVehiclesLocations(),
-    getArrivalTimes(),
+    getArrivalTimes().catch((e) => {
+      metrics.captureException(e);
+      return [];
+    }),
   ]);
 
   const vehicleEntity = vehiclePositionRaw.find(
@@ -20,8 +26,8 @@ export default async (req, res, next) => {
   const vehiclePosition = vehicleEntity.vehicle;
 
   let arrivalTimes = arrivalTimeItemsRaw
-    .filter((e) => e.tripUpdate.vehicle.id == req.params.vehicleId)
-    .flatMap((e) => e.tripUpdate.stopTimeUpdate)
+    .filter((e) => e.tripUpdate?.vehicle?.id == req.params.vehicleId)
+    .flatMap((e) => e.tripUpdate.stopTimeUpdate ?? [])
     .sort((a, b) => a.stopSequence - b.stopSequence);
 
   const stopIds = arrivalTimes.map((i) => i.stopId);

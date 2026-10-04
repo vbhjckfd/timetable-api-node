@@ -127,6 +127,10 @@ describe("getRouteColor", () => {
   it("returns default color for bus route", () => {
     expect(getRouteColor("А01")).toBe("#0E4F95");
   });
+  it("falls back to the default color for a tram/trolleybus line missing from the map", () => {
+    expect(getRouteColor("Тр26")).toBe("#0E4F95");
+    expect(getRouteColor("Т10")).toBe("#0E4F95");
+  });
 });
 
 describe("formatRouteName", () => {

@@ -363,11 +363,14 @@ function normalizeBearing(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseArrivalMinutes(entry) {
+export function parseArrivalMinutes(entry) {
   if (Number.isFinite(entry.arrival_minutes)) {
     return Math.max(0, Math.round(entry.arrival_minutes));
   }
   if (typeof entry.time_left === "string") {
+    // getTextWaitTime renders anything under a minute as "< 1хв": that is 0,
+    // not the 1 its only digit would read as.
+    if (entry.time_left.trim().startsWith("<")) return 0;
     const minutesMatch = entry.time_left.match(/\d+/);
     if (minutesMatch) {
       return Number.parseInt(minutesMatch[0], 10);

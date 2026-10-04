@@ -335,8 +335,10 @@ export function getRouteColor(routeName) {
         "01": "E42D24",
       };
 
-      const rawNumber = routeName.match(/\d+/g).join("");
-      return "#" + colorMap[rawNumber.toString()];
+      // A tram/trolleybus line missing from the map used to come out as
+      // "#undefined"; it falls through to the default colour instead.
+      const rawNumber = (routeName.match(/\d+/g) ?? []).join("");
+      if (colorMap[rawNumber]) return "#" + colorMap[rawNumber];
       break;
     case "Н":
       return "#000000";
