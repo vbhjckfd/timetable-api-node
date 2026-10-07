@@ -23,6 +23,44 @@ Open **Settings → Connectors → Add custom connector** and paste `https://api
 
 `claude_desktop_config.json` only takes stdio servers (`command`/`args`), not a `url` — to go through the config file instead, use the stdio entry below.
 
+### ChatGPT
+
+Paid plans (Plus, Pro, Business, Enterprise, Edu), on the web:
+
+1. **Settings → Apps & Connectors → Advanced settings** → turn on **Developer mode**.
+2. Back in **Apps & Connectors**, click **Create** (Business/Enterprise/Edu: an admin can also publish it to the whole workspace).
+3. Name it (e.g. "Lviv transport"), set the MCP server URL to `https://api.lad.lviv.ua/mcp`, and authentication to **No authentication**.
+4. In a chat, enable the connector from the **+** menu and ask, e.g. "When is the next tram at stop 707?"
+
+ChatGPT shows the text and data of each result; whether it draws the `map` / `arrival_list` blocks is up to its UI. Menu names move between ChatGPT releases — if they differ, look for *Developer mode* and *custom connector / app*.
+
+### OpenAI Responses API
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+response = client.responses.create(
+    model="your-model",
+    tools=[{
+        "type": "mcp",
+        "server_label": "lviv_transport",
+        "server_url": "https://api.lad.lviv.ua/mcp",
+        "require_approval": "never",  # every tool is read-only
+    }],
+    input="How do I get from Рясне-1 to Сихівська?",
+)
+print(response.output_text)
+```
+
+### Gemini
+
+- **Gemini Enterprise** — an admin opens the Gemini Enterprise app in the Google Cloud console, goes to **Data stores → Add data store → MCP server** (custom MCP), and enters `https://api.lad.lviv.ua/mcp` with no authentication. Users then pick it as a source in chat.
+- **Gemini app (consumer)** — adding a remote MCP server by URL is part of Gemini Spark (Google AI Ultra plan): add a custom connector and paste `https://api.lad.lviv.ua/mcp`.
+- **Antigravity CLI and other Gemini-based agents** — register it as a remote (HTTP / streamable HTTP) MCP server with URL `https://api.lad.lviv.ua/mcp`; no headers or key needed.
+
+As with ChatGPT, these menus are new and still moving; the constant is the URL and "no authentication".
+
 ### Cursor / Windsurf / other clients with remote MCP support
 
 ```json
