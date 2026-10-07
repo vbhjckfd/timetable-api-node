@@ -618,6 +618,11 @@ describe("timetable MCP server", () => {
     expect(missing.isError).toBe(true);
     expect(missing.content[0].text).toContain("Stop 9999 not found");
     expect(sc.data.transfer_options).toEqual([]);
+    expect(sc.data.map_stops.map((m) => [m.id, m.role])).toEqual([
+      ["708", "board"],
+      ["101", "alight"],
+    ]);
+    expect(sc.ui_blocks[0].data.layers).toEqual({ stops: "data.map_stops" });
 
     const viaTransfer = await client.callTool({
       name: "find_routes_between",
@@ -633,6 +638,15 @@ describe("timetable MCP server", () => {
       ["А05", "20", "5555"],
     ]);
     expect(t.transfer_walk_meters).toBe(30);
+    expect(viaTransfer.structuredContent.data.map_stops.map((m) => [m.id, m.role])).toEqual([
+      ["707", "board"],
+      ["11", "transfer_alight"],
+      ["20", "transfer_board"],
+      ["5555", "alight"],
+    ]);
+    expect(viaTransfer.structuredContent.ui_blocks).toEqual([
+      { type: "map", data: { center: [49.84, 24.02], zoom: 14, layers: { stops: "data.map_stops" } } },
+    ]);
 
     await client.close();
   });
