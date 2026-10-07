@@ -73,7 +73,7 @@ All tools are read-only. Argument names are **exact** — pass them as shown.
 | `search_stops` | `query` (string), `limit` (int 1–25, optional) | Stop IDs by name — Ukrainian or English, partial, inflection-tolerant. |
 | `get_stops_around_location` | `latitude`, `longitude` (numbers), `radius_meters` (int 50–3000, optional) | Stop IDs near a coordinate, with serving routes. |
 | `get_stop_realtime` | `stop_id` (number or digit string) | Live arrivals at a stop: route, destination, minutes to arrival. |
-| `find_routes_between` | `from_stop_id`, `to_stop_id` | Direct routes from A to B: where to board and get off, walk at each end. |
+| `find_routes_between` | `from_stop_id`, `to_stop_id` | Routes from A to B, direct or with one interchange in a nearby-stop cluster: where to board, transfer and get off. |
 | `get_route_static` | `route_name` (string, e.g. `"T30"`), `include_shapes` (bool, optional) | Stop lists (both directions), first-stop timetable; polylines on request. |
 | `get_route_realtime` | `route_name` (string) | Live vehicles on a route with destination and next stop. |
 | `get_nearby_vehicles` | `latitude`, `longitude` (numbers), `radius_meters`, `route`, `limit` (optional) | Live vehicles near a coordinate, nearest first. |

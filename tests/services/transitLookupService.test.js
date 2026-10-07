@@ -14,6 +14,7 @@ import {
   destinationsFor,
   findRoutesBetween,
   listRouteNames,
+  TRANSFER_RADIUS_METERS,
   nextStopsForVehicles,
   resolveRoute,
   searchStops,
@@ -43,6 +44,10 @@ const STOPS = [
   stop(15, "Автовокзал", 49.80, 24.00),
   stop(16, "Залізничний вокзал", 49.8398, 23.9945),
   stop(17, "Руська", 49.8446, 24.0275),
+  // Across the street from «Підвальна» (~30 m): an interchange cluster.
+  stop(20, "Друкарська", 49.8430, 24.0352),
+  stop(21, "Личаківська", 49.8350, 24.0600),
+  stop(22, "Сихів", 49.7900, 24.0600),
 ];
 
 const ROUTES = [
@@ -54,6 +59,8 @@ const ROUTES = [
   { external_id: "3", short_name: "А03", stops_by_shape: { 0: [11, 707], 1: [707, 11] } },
   // Т09 serves 707's area only from «Руська» (~130 m), and reaches 12 fast.
   { external_id: "9", short_name: "Т09", stops_by_shape: { 0: [17, 12], 1: [12, 17] } },
+  // А05 never comes near 707: reaching 22 takes a transfer at the 11/20 cluster.
+  { external_id: "5", short_name: "А05", stops_by_shape: { 0: [20, 21, 22], 1: [22, 21, 20] } },
 ];
 
 function collection(rows) {
@@ -126,7 +133,7 @@ describe("resolveRoute", () => {
 
 describe("listRouteNames", () => {
   it("returns every route's display name, sorted", () => {
-    expect(listRouteNames()).toEqual(["А03", "Т01", "Т02", "Т09"]);
+    expect(listRouteNames()).toEqual(["А03", "А05", "Т01", "Т02", "Т09"]);
   });
 });
 
@@ -169,6 +176,35 @@ describe("findRoutesBetween", () => {
 
   it("reports the missing stop", () => {
     expect(findRoutesBetween(707, 404).missing).toBe(404);
+  });
+
+  it("offers one interchange within a stop cluster when there is no direct route", () => {
+    const result = findRoutesBetween(707, 22);
+
+    expect(result.options).toEqual([]);
+    const best = result.transfer_options[0];
+    // А03 is one stop to «Підвальна», Т01 two: the cheaper first leg wins.
+    expect(best.legs.map((l) => [l.route, l.board_stop.code, l.alight_stop.code, l.stops_count])).toEqual([
+      ["А03", 707, 11, 1],
+      ["А05", 20, 22, 2],
+    ]);
+    expect(best.legs[1]).toMatchObject({ direction: 0, destination: "Сихів" });
+    expect(best.transfer_walk_meters).toBeGreaterThan(0);
+    expect(best.transfer_walk_meters).toBeLessThanOrEqual(TRANSFER_RADIUS_METERS);
+    expect(best).toMatchObject({ stops_count: 3, walk_to_board_meters: 0, walk_from_alight_meters: 0 });
+    expect(result.transfer_options.map((t) => t.legs.map((l) => l.route))).toContainEqual(["Т01", "А05"]);
+    // Never more than one interchange.
+    for (const option of result.transfer_options) expect(option.legs).toHaveLength(2);
+  });
+
+  it("does not list transfers that a direct route beats", () => {
+    expect(findRoutesBetween(707, 12).transfer_options).toEqual([]);
+  });
+
+  it("does not transfer outside the walking cluster", () => {
+    // 21 is ~1.9 km from anything on the 707 lines; only the 11/20 cluster connects them.
+    const pairs = findRoutesBetween(707, 22).transfer_options.map((t) => [t.legs[0].alight_stop.code, t.legs[1].board_stop.code]);
+    for (const [alight, board] of pairs) expect([[11, 20]]).toContainEqual([alight, board]);
   });
 });
 

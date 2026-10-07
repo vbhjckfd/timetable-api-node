@@ -194,8 +194,20 @@ export async function nextStopsForVehicles(vehicleIds, now = Date.now()) {
  */
 export const WALK_RADIUS_METERS = 300;
 
+/**
+ * An interchange is a stop cluster, not a single stop: getting off one line
+ * and walking across the square to another counts, as long as the walk stays
+ * within this radius.
+ */
+export const TRANSFER_RADIUS_METERS = 300;
+
 /** Ranking weight: this much walking costs as much as riding one more stop. */
 const WALK_METERS_PER_STOP = 150;
+
+/** Ranking weight of the interchange itself (waiting for the second vehicle), in stops. */
+const TRANSFER_PENALTY_STOPS = 5;
+
+const MAX_TRANSFER_OPTIONS = 5;
 
 function stopsWithinWalk(code) {
   const origin = stops().findOne({ code });
@@ -211,9 +223,132 @@ function stopsWithinWalk(code) {
 }
 
 /**
- * Direct routes only: a route qualifies when, in one direction, a stop near
- * the origin comes before a stop near the destination. Per route and
- * direction the cheapest board/alight pair wins, walking included. The last
+ * Stops within `radius` of a stop, itself included, via a grid of
+ * radius-sized cells so each lookup only measures the 3×3 cells around it.
+ */
+function clusterIndex(allStops, radius) {
+  const cellLat = radius / 111_320;
+  const meanLat = allStops.reduce((sum, s) => sum + s.location.coordinates[0], 0) / (allStops.length || 1);
+  const cellLng = cellLat / Math.max(Math.cos((meanLat * Math.PI) / 180), 0.01);
+  const cellOf = (lat, lng) => [Math.floor(lat / cellLat), Math.floor(lng / cellLng)];
+
+  const cells = new Map();
+  const byCode = new Map();
+  for (const s of allStops) {
+    const [lat, lng] = s.location.coordinates;
+    const key = cellOf(lat, lng).join(":");
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push(s);
+    byCode.set(s.code, s);
+  }
+
+  return (code) => {
+    const origin = byCode.get(code);
+    if (!origin) return [];
+    const [lat, lng] = origin.location.coordinates;
+    const [cy, cx] = cellOf(lat, lng);
+    const result = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (const s of cells.get(`${cy + dy}:${cx + dx}`) ?? []) {
+          const [sLat, sLng] = s.location.coordinates;
+          const walk = s.code === code ? 0 : Math.round(distanceMeters(lat, lng, sLat, sLng));
+          if (walk <= radius) result.push({ stop: s, walk });
+        }
+      }
+    }
+    return result;
+  };
+}
+
+/** Every route direction as an ordered stop list. */
+function routeDirections() {
+  const result = [];
+  for (const route of routes().find({})) {
+    for (const key of ["0", "1"]) {
+      const seq = route.stops_by_shape?.[key] ?? [];
+      if (seq.length > 1) result.push({ route, key, seq, id: `${route.external_id}:${key}` });
+    }
+  }
+  return result;
+}
+
+const walkCost = (meters) => meters / WALK_METERS_PER_STOP;
+
+function keepCheapest(map, stopCode, leg) {
+  if (!map.has(stopCode)) map.set(stopCode, new Map());
+  const legs = map.get(stopCode);
+  const current = legs.get(leg.dir.id);
+  if (!current || leg.cost < current.cost) legs.set(leg.dir.id, leg);
+}
+
+/**
+ * First legs: for every stop reachable without a transfer from a stop near
+ * the origin, the cheapest ride there per route direction. The last stop of a
+ * direction is never a boarding point.
+ */
+function legsFromOrigin(dirs, nearby) {
+  const reach = new Map();
+  for (const dir of dirs) {
+    let board = null;
+    for (let i = 0; i < dir.seq.length; i++) {
+      if (board) {
+        const stops_count = i - board.index;
+        keepCheapest(reach, dir.seq[i], {
+          dir,
+          board,
+          alight: { index: i, code: dir.seq[i], walk: 0 },
+          stops_count,
+          cost: stops_count + walkCost(board.walk),
+        });
+      }
+      const candidate = nearby.get(dir.seq[i]);
+      if (
+        candidate &&
+        i < dir.seq.length - 1 &&
+        (!board || walkCost(candidate.walk) - i < walkCost(board.walk) - board.index)
+      ) {
+        board = { index: i, code: dir.seq[i], walk: candidate.walk };
+      }
+    }
+  }
+  return reach;
+}
+
+/** Second legs: for every stop, the cheapest ride from it to a stop near the destination, per route direction. */
+function legsToDestination(dirs, nearby) {
+  const reach = new Map();
+  for (const dir of dirs) {
+    let alight = null;
+    for (let i = dir.seq.length - 1; i >= 0; i--) {
+      if (alight) {
+        const stops_count = alight.index - i;
+        keepCheapest(reach, dir.seq[i], {
+          dir,
+          board: { index: i, code: dir.seq[i], walk: 0 },
+          alight,
+          stops_count,
+          cost: stops_count + walkCost(alight.walk),
+        });
+      }
+      const candidate = nearby.get(dir.seq[i]);
+      if (candidate && (!alight || walkCost(candidate.walk) + i < walkCost(alight.walk) + alight.index)) {
+        alight = { index: i, code: dir.seq[i], walk: candidate.walk };
+      }
+    }
+  }
+  return reach;
+}
+
+/**
+ * Direct routes, plus routes with exactly one interchange. A direct route
+ * qualifies when, in one direction, a stop near the origin comes before a
+ * stop near the destination; per route and direction the cheapest
+ * board/alight pair wins, walking included. A transfer option rides one line
+ * to some stop, walks at most TRANSFER_RADIUS_METERS within that stop's
+ * cluster, and rides a different line on. A line that already goes there
+ * directly never appears as either leg of a transfer, and transfers are only
+ * listed when no direct option exists or they beat the best one. The last
  * stop of a direction is where riders get off, so it never counts as a place
  * to board (same rule as routesThroughStop).
  */
@@ -221,53 +356,109 @@ export function findRoutesBetween(fromCode, toCode) {
   const from = stopsWithinWalk(fromCode);
   const to = stopsWithinWalk(toCode);
   if (!from || !to) {
-    return { from: null, to: null, options: [], missing: !from ? fromCode : toCode };
+    return { from: null, to: null, options: [], transfer_options: [], missing: !from ? fromCode : toCode };
   }
 
-  const cost = (o) => o.stops_count + (o.walk_to_board_meters + o.walk_from_alight_meters) / WALK_METERS_PER_STOP;
+  const dirs = routeDirections();
+  const stopsByCode = new Map(stops().find({}).map((s) => [s.code, s]));
+  const stopOut = (code) => stopSummary(stopsByCode.get(code));
+
+  const cost = (o) => o.stops_count + walkCost(o.walk_to_board_meters + o.walk_from_alight_meters);
 
   const options = [];
-  for (const route of routes().find({})) {
-    for (const key of ["0", "1"]) {
-      const seq = route.stops_by_shape?.[key] ?? [];
-      let best = null;
-      for (let i = 0; i < seq.length - 1; i++) {
-        const board = from.nearby.get(seq[i]);
-        if (!board) continue;
-        for (let j = i + 1; j < seq.length; j++) {
-          const alight = to.nearby.get(seq[j]);
-          if (!alight) continue;
-          const option = {
-            stops_count: j - i,
-            walk_to_board_meters: board.walk,
-            walk_from_alight_meters: alight.walk,
-            board,
-            alight,
-          };
-          if (!best || cost(option) < cost(best)) best = option;
-        }
+  const directIds = new Set();
+  for (const dir of dirs) {
+    const { seq } = dir;
+    let best = null;
+    for (let i = 0; i < seq.length - 1; i++) {
+      const board = from.nearby.get(seq[i]);
+      if (!board) continue;
+      for (let j = i + 1; j < seq.length; j++) {
+        const alight = to.nearby.get(seq[j]);
+        if (!alight) continue;
+        const option = {
+          stops_count: j - i,
+          walk_to_board_meters: board.walk,
+          walk_from_alight_meters: alight.walk,
+          board,
+          alight,
+        };
+        if (!best || cost(option) < cost(best)) best = option;
       }
-      if (!best) continue;
-      options.push({
-        route: formatRouteName(route.short_name),
-        vehicle_type: getRouteType(route.short_name),
-        direction: Number(key),
-        destination: routeTerminusName(route, key),
-        board_stop: stopSummary(best.board.stop),
-        alight_stop: stopSummary(best.alight.stop),
-        stops_count: best.stops_count,
-        walk_to_board_meters: best.walk_to_board_meters,
-        walk_from_alight_meters: best.walk_from_alight_meters,
-      });
     }
+    if (!best) continue;
+    directIds.add(dir.id);
+    options.push({
+      route: formatRouteName(dir.route.short_name),
+      vehicle_type: getRouteType(dir.route.short_name),
+      direction: Number(dir.key),
+      destination: routeTerminusName(dir.route, dir.key),
+      board_stop: stopSummary(best.board.stop),
+      alight_stop: stopSummary(best.alight.stop),
+      stops_count: best.stops_count,
+      walk_to_board_meters: best.walk_to_board_meters,
+      walk_from_alight_meters: best.walk_from_alight_meters,
+    });
   }
 
   options.sort((a, b) => cost(a) - cost(b) || a.route.localeCompare(b.route));
+
+  // --- One interchange ---
+  const indirect = dirs.filter((d) => !directIds.has(d.id));
+  const firstLegs = legsFromOrigin(indirect, from.nearby);
+  const secondLegs = legsToDestination(indirect, to.nearby);
+  const cluster = clusterIndex([...stopsByCode.values()], TRANSFER_RADIUS_METERS);
+
+  const bestByPair = new Map();
+  for (const [alightCode, legs1] of firstLegs) {
+    for (const { stop, walk } of cluster(alightCode)) {
+      const legs2 = secondLegs.get(stop.code);
+      if (!legs2) continue;
+      for (const leg1 of legs1.values()) {
+        for (const leg2 of legs2.values()) {
+          if (leg1.dir.route.external_id === leg2.dir.route.external_id) continue;
+          const total = leg1.cost + leg2.cost + walkCost(walk) + TRANSFER_PENALTY_STOPS;
+          const pair = `${leg1.dir.id}>${leg2.dir.id}`;
+          const current = bestByPair.get(pair);
+          if (!current || total < current.total) bestByPair.set(pair, { leg1, leg2, walk, total });
+        }
+      }
+    }
+  }
+
+  const legOut = ({ dir, board, alight, stops_count }) => ({
+    route: formatRouteName(dir.route.short_name),
+    vehicle_type: getRouteType(dir.route.short_name),
+    direction: Number(dir.key),
+    destination: routeTerminusName(dir.route, dir.key),
+    board_stop: stopOut(board.code),
+    alight_stop: stopOut(alight.code),
+    stops_count,
+  });
+
+  const bestDirect = options.length ? cost(options[0]) : Infinity;
+  const transfer_options = [...bestByPair.values()]
+    .filter((t) => t.total < bestDirect)
+    .sort(
+      (a, b) =>
+        a.total - b.total ||
+        `${a.leg1.dir.route.short_name}${a.leg2.dir.route.short_name}`.localeCompare(
+          `${b.leg1.dir.route.short_name}${b.leg2.dir.route.short_name}`,
+        ),
+    )
+    .slice(0, MAX_TRANSFER_OPTIONS)
+    .map(({ leg1, leg2, walk }) => ({
+      legs: [legOut(leg1), legOut(leg2)],
+      transfer_walk_meters: walk,
+      stops_count: leg1.stops_count + leg2.stops_count,
+      walk_to_board_meters: leg1.board.walk,
+      walk_from_alight_meters: leg2.alight.walk,
+    }));
 
   const endpoint = ({ origin, nearby }) => ({
     code: origin.code,
     name: origin.name,
     codes: [...nearby.keys()].sort((a, b) => a - b),
   });
-  return { from: endpoint(from), to: endpoint(to), options };
+  return { from: endpoint(from), to: endpoint(to), options, transfer_options };
 }

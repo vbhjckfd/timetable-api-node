@@ -150,6 +150,28 @@ vi.mock("../../services/transitLookupService.js", () => ({
   findRoutesBetween: vi.fn((from, to) => {
     if (from === 9999 || to === 9999) return { from: null, to: null, options: [], missing: 9999 };
     const stop = (code, name) => ({ code, name, eng_name: null, lat: 49.84, lng: 24.02, routes: [] });
+    if (to === 5555) {
+      const leg = (route, board, alight, destination, stops_count) => ({
+        route, vehicle_type: "bus", direction: 0, destination, board_stop: board, alight_stop: alight, stops_count,
+      });
+      return {
+        from: { code: from, name: "Опера", codes: [from] },
+        to: { code: to, name: "Сихів", codes: [to] },
+        options: [],
+        transfer_options: [
+          {
+            legs: [
+              leg("А03", stop(707, "Опера"), stop(11, "Підвальна"), "Личаків", 1),
+              leg("А05", stop(20, "Друкарська"), stop(to, "Сихів"), "Сихів", 2),
+            ],
+            transfer_walk_meters: 30,
+            stops_count: 3,
+            walk_to_board_meters: 0,
+            walk_from_alight_meters: 0,
+          },
+        ],
+      };
+    }
     return {
       from: { code: from, name: "Опера", codes: [from, 708] },
       to: { code: to, name: "Вокзал", codes: [to] },
@@ -595,6 +617,22 @@ describe("timetable MCP server", () => {
     });
     expect(missing.isError).toBe(true);
     expect(missing.content[0].text).toContain("Stop 9999 not found");
+    expect(sc.data.transfer_options).toEqual([]);
+
+    const viaTransfer = await client.callTool({
+      name: "find_routes_between",
+      arguments: { from_stop_id: 707, to_stop_id: 5555 },
+    });
+    expect(viaTransfer.isError).toBeFalsy();
+    expect(viaTransfer.content[0].text).toBe(
+      "No direct route «Опера» → «Сихів»; 1 option with one transfer. Best: А03 from «Опера» to «Підвальна», walk 30m to «Друкарська», then А05 towards «Сихів» (3 stops in total).",
+    );
+    const t = viaTransfer.structuredContent.data.transfer_options[0];
+    expect(t.legs.map((l) => [l.route, l.board_stop.id, l.alight_stop.id])).toEqual([
+      ["А03", "707", "11"],
+      ["А05", "20", "5555"],
+    ]);
+    expect(t.transfer_walk_meters).toBe(30);
 
     await client.close();
   });

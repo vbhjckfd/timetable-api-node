@@ -147,7 +147,7 @@ All tools are read-only. Stop IDs are the numeric codes on stop signs, returned 
 | `search_stops` | `query` (string, ≥ 2 chars), `limit` (1–25, default 10) | Stops whose Ukrainian or English name contains every query word (inflection-tolerant: `"опера"` finds «Театр опери та балету»), with `routes`. |
 | `get_stops_around_location` | `latitude`, `longitude`, `radius_meters` (50–3000, default 1000) | Stops near a point, nearest first, with `distance_meters` and `routes`. |
 | `get_stop_realtime` | `stop_id` | Live arrivals: `route`, `direction` (destination), `vehicle_type`, `arrival_minutes`, vehicle position. |
-| `find_routes_between` | `from_stop_id`, `to_stop_id` | Direct routes within a 300 m walk of each end, best first: `board_stop`, `alight_stop`, `destination`, `stops_count`, walk at each end. |
+| `find_routes_between` | `from_stop_id`, `to_stop_id` | Routes within a 300 m walk of each end, best first: direct `options` (`board_stop`, `alight_stop`, `destination`, `stops_count`, walk at each end) and `transfer_options` with exactly one interchange inside a 300 m stop cluster. |
 | `get_route_static` | `route_name`, `include_shapes` (default false) | Name, type, colour, stop lists for both directions, first-stop timetable; polylines only on request. |
 | `get_route_realtime` | `route_name` | Vehicles on the route with `destination` and `next_stop` (`id`, `name`, ISO `arrival`). |
 | `get_nearby_vehicles` | `latitude`, `longitude`, `radius_meters` (100–1000, default 500), `route`, `limit` (1–50, default 15) | Live vehicles nearest first, with `destination` and `distance_meters`; `total` counts all in range. |
@@ -241,13 +241,16 @@ Text summary: *"3 direct routes «Площа Ринок» → «Залізнич
         "walk_from_alight_meters": 0
       }
     ],
+    "transfer_options": [],
     "updated_at": "2026-09-23T09:36:53Z"
   },
   "ui_blocks": []
 }
 ```
 
-Each end covers every stop within a 300 m walk (`stop_ids`): a line's two directions often stop on opposite sides of a street under different names, as here, where Т01 towards the station leaves from «Руська», not «Площа Ринок». Options are ranked by stops plus walking (150 m of walking weighs as one stop), one per route and direction. A direction's last stop counts as a place to get off, not to board. Only direct routes are listed; an empty `options` means a transfer is needed.
+Each end covers every stop within a 300 m walk (`stop_ids`): a line's two directions often stop on opposite sides of a street under different names, as here, where Т01 towards the station leaves from «Руська», not «Площа Ринок». Options are ranked by stops plus walking (150 m of walking weighs as one stop), one per route and direction. A direction's last stop counts as a place to get off, not to board.
+
+`transfer_options` hold trips with exactly one interchange, never more. Each has two `legs` (same fields as a direct option, minus the walks) and `transfer_walk_meters`: the interchange may be the same stop (0) or any stop within 300 m of where the first leg ends, so a cluster of stops around a square or junction works as one interchange. A line that already reaches the destination directly is never used as either leg, and a transfer costs as much as 5 extra stops in the ranking. Transfer options are listed (up to 5) when there is no direct route, or when they beat the best direct one. Both lists empty means the trip needs two or more transfers.
 
 </details>
 
@@ -390,7 +393,7 @@ Reusable instruction templates. `stop_id` is a positive integer or digits-only s
 
 | Prompt | Arguments | Use case |
 |--------|-----------|----------|
-| `plan-trip` | `from`, `to` | Direct routes between two named places (or stop IDs), with live departures from the boarding stop. |
+| `plan-trip` | `from`, `to` | Routes between two named places (or stop IDs), direct or with one transfer, with live departures from the boarding stop. |
 | `route-status` | `route_name` | Where a route's vehicles are right now, by direction. `route_name` supports completion. |
 | `transit-map-view` | `stop_id` | Map-first rendering of live vehicles for a stop. |
 | `transit-arrival-list` | `stop_id` | Arrival list for a stop, sorted by ETA and grouped by route. |
