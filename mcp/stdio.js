@@ -16,6 +16,7 @@ import {
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  CompleteRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
 const upstreamUrl = new URL(
@@ -37,14 +38,25 @@ async function main() {
     upstream.listPrompts(),
   ]);
 
+  // Pass the upstream identity and instructions through: the instructions
+  // carry the tool-selection guidance, and without them a stdio client gets
+  // the bare tool list only.
+  const upstreamInfo = upstream.getServerVersion() ?? {};
+  const upstreamCapabilities = upstream.getServerCapabilities() ?? {};
   const server = new Server(
-    { name: "com.lad.lviv/timetable-api", version: pkg.version },
+    {
+      ...upstreamInfo,
+      name: upstreamInfo.name ?? "com.lad.lviv/timetable-api",
+      version: pkg.version,
+    },
     {
       capabilities: {
         ...(tools.length && { tools: {} }),
         ...(resources.length || resourceTemplates.length ? { resources: {} } : {}),
         ...(prompts.length && { prompts: {} }),
+        ...(upstreamCapabilities.completions && { completions: {} }),
       },
+      instructions: upstream.getInstructions(),
     },
   );
 
@@ -62,6 +74,11 @@ async function main() {
   server.setRequestHandler(GetPromptRequestSchema, async (req) =>
     upstream.getPrompt(req.params),
   );
+  if (upstreamCapabilities.completions) {
+    server.setRequestHandler(CompleteRequestSchema, async (req) =>
+      upstream.complete(req.params),
+    );
+  }
 
   await server.connect(new StdioServerTransport());
 }

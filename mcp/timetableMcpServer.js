@@ -2,8 +2,9 @@ import * as metrics from "../utils/metrics.js";
 import * as z from "zod/v4";
 import pkg from "../package.json" with { type: "json" };
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { McpError, PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import getSingleStopAction from "../actions/getSingleStopAction.js";
 import getClosestStopsAction from "../actions/getClosestStopsAction.js";
@@ -14,6 +15,7 @@ import routeDynamicInfoAction from "../actions/routeDynamicInfoAction.js";
 import {
   destinationsFor,
   findRoutesBetween,
+  listRouteNames,
   nextStopsForVehicles,
   PASSED_GRACE_MS,
   resolveRoute,
@@ -617,6 +619,8 @@ const toolError = (text) => ({ isError: true, content: [{ type: "text", text }] 
 const NOT_FOUND_HINTS = {
   route: (name) =>
     `Route «${name}» not found. Use the short name shown on the vehicle, with its type prefix: "Т30" or "T30" (tram/trolleybus), "А1" or "A01" (bus), "Н2" (night bus). A bare number is read as an internal route ID.`,
+  stop: (code) =>
+    `Stop ${code} not found. Stop IDs are the numeric codes on stop signage; look them up with search_stops (by name) or get_stops_around_location (by coordinates).`,
   vehicle: (id) =>
     `Vehicle «${id}» is not reporting a position right now — it may have finished its trip. Get current vehicle IDs from get_route_realtime or get_nearby_vehicles.`,
 };
@@ -659,7 +663,7 @@ ${TRANSIT_ASSISTANT_GUIDANCE}
 ## How to work with this server
 
 - Prefer **tools** for live structured data.
-- Use **prompts** (\`transit-map-view\`, \`transit-arrival-list\`, \`transit-hybrid-view\`) for ready-made rendering workflows.
+- Use **prompts** (\`plan-trip\`, \`route-status\`, \`transit-map-view\`, \`transit-arrival-list\`, \`transit-hybrid-view\`) for ready-made workflows.
 - Use **resources** (\`timetable://about\`, \`timetable://reference/tools\`, \`timetable://reference/prompts\`) for reference without calling tools.
 - Use **resource templates** (\`timetable://stop/{code}\`, \`timetable://route/{name}\`) to read static stop or route info directly.
 `,
@@ -689,8 +693,41 @@ Prompts are reusable instruction templates. Pass the listed **arguments** when i
 | \`transit-map-view\` | \`stop_id\` | Map-first rendering for live vehicles near a stop. |
 | \`transit-arrival-list\` | \`stop_id\` | Arrival list sorted by ETA, grouped by route when needed. |
 | \`transit-hybrid-view\` | \`stop_id\` | Map (top) + arrival list (bottom) with ETA consistency checks. |
+| \`plan-trip\` | \`from\`, \`to\` | Direct routes between two named places, with live departures from the boarding stop. |
+| \`route-status\` | \`route_name\` | Where a route's vehicles are right now and how many run each way. |
 `,
 };
+
+/** JSON-RPC code MCP assigns to "resource not found". */
+const RESOURCE_NOT_FOUND = -32002;
+
+const resourceNotFound = (uri, what) =>
+  new McpError(RESOURCE_NOT_FOUND, `${what} not found`, { uri: uri.href });
+
+/** Latin look-alikes riders type for the Cyrillic route prefixes. */
+const LATIN_TO_CYRILLIC = { A: "А", T: "Т", H: "Н" };
+
+const foldRouteInput = (value) =>
+  String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[ATH]/g, (c) => LATIN_TO_CYRILLIC[c]);
+
+/**
+ * Route names starting with what was typed, Latin or Cyrillic prefix alike,
+ * with or without the leading zero ("a1" → "А01", "т3" → "Т30"). Capped at
+ * the 100 values a completion result may carry.
+ */
+export function completeRouteName(value) {
+  const typed = foldRouteInput(value);
+  const unpadded = (name) => name.replace(/^(\D+)0+(?=\d)/u, "$1");
+  return listRouteNames()
+    .filter((name) => {
+      const upper = name.toUpperCase();
+      return upper.startsWith(typed) || unpadded(upper).startsWith(typed);
+    })
+    .slice(0, 100);
+}
 
 function registerResources(server) {
   server.registerResource(
@@ -744,15 +781,12 @@ function registerResources(server) {
       mimeType: "application/json",
     },
     async (uri, { code }) => {
+      if (!/^\d+$/.test(String(code))) throw resourceNotFound(uri, `Stop ${code}`);
       const result = await runAction(getSingleStopAction, {
-        stopCode: parseInt(String(code), 10),
+        stopCode: Number.parseInt(String(code), 10),
         query: { skipTimetableData: "true" },
       });
-      if (result.statusCode >= 400) {
-        return {
-          contents: [{ uri: uri.href, text: `Stop ${code} not found`, mimeType: "text/plain" }],
-        };
-      }
+      if (result.statusCode >= 400) throw resourceNotFound(uri, `Stop ${code}`);
       const b = result.body ?? {};
       return {
         contents: [{
@@ -774,6 +808,7 @@ function registerResources(server) {
     "route-template",
     new ResourceTemplate("timetable://route/{name}", {
       list: undefined,
+      complete: { name: completeRouteName },
     }),
     {
       title: "Route static info",
@@ -784,17 +819,13 @@ function registerResources(server) {
       const result = await runAction(routeInfoStaticAction, {
         params: { name: String(name) },
       });
-      if (result.statusCode >= 400) {
-        return {
-          contents: [{ uri: uri.href, text: `Route ${name} not found`, mimeType: "text/plain" }],
-        };
-      }
+      if (result.statusCode >= 400) throw resourceNotFound(uri, `Route ${name}`);
       const b = result.body ?? {};
       return {
         contents: [{
           uri: uri.href,
           text: JSON.stringify({
-            name: b.route_short_name ?? null,
+            name: b.route_short_name ? formatRouteName(b.route_short_name) : null,
             long_name: b.route_long_name ?? null,
             color: b.color ?? null,
             type: b.type ?? null,
@@ -861,7 +892,7 @@ function registerTools(server) {
           query: { skipTimetableData: "false" },
         });
         if (actionResult.statusCode >= 400) {
-          return formatToolResult("get_stop_realtime", actionResult);
+          return formatToolResult("get_stop_realtime", actionResult, NOT_FOUND_HINTS.stop(stopCode));
         }
 
         const body = actionResult.body ?? {};
@@ -895,7 +926,9 @@ function registerTools(server) {
     async ({ query, limit }) => {
       countToolCall("search_stops");
       const max = limit ?? 10;
-      return cachedTool("search_stops", { query: query.toLowerCase(), limit: max }, async () =>
+      // Keyed on the query as typed: the result echoes it back, so a lowercased
+      // key would hand «опера» the summary cached for «Опера».
+      return cachedTool("search_stops", { query, limit: max }, async () =>
         ok("search_stops", {
           query,
           stops: searchStops(query, max).map((s) => ({
@@ -933,7 +966,7 @@ function registerTools(server) {
       return cachedTool("find_routes_between", { from, to }, async () => {
         const result = findRoutesBetween(from, to);
         if (result.missing != null) {
-          return toolError(`Stop ${result.missing} not found. Look up stop IDs with search_stops or get_stops_around_location.`);
+          return toolError(NOT_FOUND_HINTS.stop(result.missing));
         }
         const endpoint = (e) => ({ id: String(e.code), name: e.name ?? null, stop_ids: e.codes.map(String) });
         return ok("find_routes_between", {
@@ -1183,7 +1216,8 @@ function registerTools(server) {
           return formatToolResult("get_nearby_vehicles", actionResult);
         }
 
-        const wantedRoute = route ? resolveRoute(route)?.name ?? route : null;
+        const resolvedRoute = route ? resolveRoute(route) : null;
+        const wantedRoute = route ? resolvedRoute?.name ?? route : null;
         const inRange = (Array.isArray(actionResult.body) ? actionResult.body : [])
           .map((v) => {
             const lat = normalizeCoordinate(Array.isArray(v.location) ? v.location[0] : v.lat);
@@ -1194,6 +1228,12 @@ function registerTools(server) {
           .filter(({ distance }) => distance == null || distance <= radius)
           .filter(({ v }) => !wantedRoute || v.route === wantedRoute)
           .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+
+        // An empty answer for a misspelt route reads as "nothing nearby"; say
+        // the route is unknown instead.
+        if (route && !resolvedRoute && !inRange.length) {
+          return toolError(NOT_FOUND_HINTS.route(route));
+        }
 
         const shown = inRange.slice(0, max);
         const destinations = destinationsFor(
@@ -1397,6 +1437,65 @@ function registerPrompts(server) {
   );
 }
 
+const userPrompt = (description, lines) => ({
+  description,
+  messages: [{ role: "user", content: { type: "text", text: lines.join("\n") } }],
+});
+
+function registerWorkflowPrompts(server) {
+  server.registerPrompt(
+    "plan-trip",
+    {
+      title: "Plan a Trip",
+      description: "Find direct routes between two places in Lviv and the next live departures.",
+      argsSchema: {
+        from: z.string().min(1).describe("Where the trip starts: stop name, landmark, or numeric stop ID."),
+        to: z.string().min(1).describe("Where the trip ends: stop name, landmark, or numeric stop ID."),
+      },
+    },
+    ({ from, to }) =>
+      userPrompt("Trip planning across search_stops, find_routes_between and get_stop_realtime.", [
+        `How do I get from «${from}» to «${to}» by public transport in Lviv?`,
+        "",
+        "Tool workflow:",
+        "1) Resolve each end to a stop ID: use it as is when it is a number, otherwise call `search_stops`. When several different places match, ask which one is meant instead of guessing.",
+        "2) Call `find_routes_between` with the two stop IDs.",
+        "3) If `options` is empty, say a transfer is needed and stop there.",
+        "4) Otherwise call `get_stop_realtime` on the best option's `board_stop.id` and keep the arrivals of that option's route heading to its `destination`.",
+        "",
+        "Answer:",
+        "- Lead with the best option: route, where to board (and the walk to it), where to get off, number of stops.",
+        "- Give the next live departures of that route from the boarding stop; if none are reported, say so.",
+        "- List up to two alternatives in one line each.",
+        "- Reply in the language the user wrote in.",
+      ]),
+  );
+
+  server.registerPrompt(
+    "route-status",
+    {
+      title: "Route Status",
+      description: "Where the vehicles of one route are right now.",
+      argsSchema: {
+        route_name: completable(zRouteName(), completeRouteName),
+      },
+    },
+    ({ route_name }) =>
+      userPrompt("Live overview of one route via get_route_realtime.", [
+        `What is happening on route ${route_name} in Lviv right now?`,
+        "",
+        "Tool workflow:",
+        `1) Call \`get_route_realtime\` with \`route_name=${route_name}\`.`,
+        "",
+        "Answer:",
+        "- How many vehicles are running, split by `destination`.",
+        "- For each direction, the next stop of each vehicle with its estimated arrival time.",
+        "- Mention low-floor vehicles when `lowfloor` is true.",
+        "- If no vehicles are running, say the route has no live vehicles right now.",
+      ]),
+  );
+}
+
 export function createTimetableMcpServer() {
   const server = new McpServer(
     mcpServerImplementation(),
@@ -1411,6 +1510,7 @@ export function createTimetableMcpServer() {
   registerTools(server);
   registerResources(server);
   registerPrompts(server);
+  registerWorkflowPrompts(server);
   return server;
 }
 

@@ -110,6 +110,16 @@ export function resolveRoute(name) {
   };
 }
 
+/**
+ * Display names of every route ("Т30", "А01", "Н2"), sorted, for MCP argument
+ * completion. Routes only change with a GTFS import, so callers may keep it.
+ */
+export function listRouteNames() {
+  return [...new Set(routes().find({}).map((r) => formatRouteName(r.short_name)))].sort((a, b) =>
+    a.localeCompare(b, "uk", { numeric: true }),
+  );
+}
+
 /** Terminus name per `${routeId}:${direction}` for a batch of live vehicles. */
 export function destinationsFor(pairs) {
   const byId = new Map();

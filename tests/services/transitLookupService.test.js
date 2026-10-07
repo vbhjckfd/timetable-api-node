@@ -13,6 +13,7 @@ import { getArrivalTimes } from "../../services/microgizService.js";
 import {
   destinationsFor,
   findRoutesBetween,
+  listRouteNames,
   nextStopsForVehicles,
   resolveRoute,
   searchStops,
@@ -120,6 +121,12 @@ describe("resolveRoute", () => {
   it("treats a bare number as an external ID", () => {
     expect(resolveRoute("2")?.name).toBe("Т02");
     expect(resolveRoute("99")).toBeNull();
+  });
+});
+
+describe("listRouteNames", () => {
+  it("returns every route's display name, sorted", () => {
+    expect(listRouteNames()).toEqual(["А03", "Т01", "Т02", "Т09"]);
   });
 });
 

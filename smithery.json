@@ -45,11 +45,20 @@
       }
     },
     {
-      "name": "Get Stop Geometry",
-      "description": "Static map context for a stop: stop marker and route polylines",
-      "tool": "get_stop_geometry",
+      "name": "Search Stops",
+      "description": "Find stop IDs by name (Ukrainian or English)",
+      "tool": "search_stops",
       "input": {
-        "stop_id": 707
+        "query": "Опера"
+      }
+    },
+    {
+      "name": "Find Routes Between Stops",
+      "description": "Direct routes from one stop to another, with where to board and get off",
+      "tool": "find_routes_between",
+      "input": {
+        "from_stop_id": 707,
+        "to_stop_id": 101
       }
     }
   ],
