@@ -242,15 +242,23 @@ Text summary: *"3 direct routes «Площа Ринок» → «Залізнич
       }
     ],
     "transfer_options": [],
+    "map_stops": [
+      { "id": "58", "name": "Руська", "lat": 49.84186, "lng": 24.03408, "role": "board" },
+      { "id": "118", "name": "Залізничний вокзал", "lat": 49.839, "lng": 23.99677, "role": "alight" }
+    ],
     "updated_at": "2026-09-23T09:36:53Z"
   },
-  "ui_blocks": []
+  "ui_blocks": [
+    { "type": "map", "data": { "center": [49.84043, 24.01543], "zoom": 13, "layers": { "stops": "data.map_stops" } } }
+  ]
 }
 ```
 
 Each end covers every stop within a 300 m walk (`stop_ids`): a line's two directions often stop on opposite sides of a street under different names, as here, where Т01 towards the station leaves from «Руська», not «Площа Ринок». Options are ranked by stops plus walking (150 m of walking weighs as one stop), one per route and direction. A direction's last stop counts as a place to get off, not to board.
 
 `transfer_options` hold trips with exactly one interchange, never more. Each has two `legs` (same fields as a direct option, minus the walks) and `transfer_walk_meters`: the interchange may be the same stop (0) or any stop within 300 m of where the first leg ends, so a cluster of stops around a square or junction works as one interchange. A line that already reaches the destination directly is never used as either leg, and a transfer costs as much as 5 extra stops in the ranking. Transfer options are listed (up to 5) when there is no direct route, or when they beat the best direct one. Both lists empty means the trip needs two or more transfers.
+
+`map_stops` is the best trip's stops in riding order (a transfer option when one is listed, since those only appear when they beat every direct one), each with a `role`: `board`, `transfer` (same-stop interchange) or `transfer_alight` + `transfer_board` (walking interchange), and `alight`. The `map` block plots them, centred between the two ends.
 
 </details>
 

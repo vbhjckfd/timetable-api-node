@@ -263,6 +263,7 @@ const OUTPUT_SCHEMAS = {
       walk_to_board_meters: z.number().int(),
       walk_from_alight_meters: z.number().int(),
     })),
+    map_stops: z.array(zStopObj.extend({ role: z.enum(["board", "transfer", "transfer_alight", "transfer_board", "alight"]) })),
     updated_at: z.string(),
   })),
   get_nearby_vehicles: transitResult(z.object({
@@ -537,6 +538,18 @@ function buildUiBlocks(toolName, data) {
     case "search_stops": {
       const first = data.stops?.[0];
       return data.stops?.length ? [mapBlock([first.lat, first.lng], 14, { stops: "data.stops" })] : [];
+    }
+    case "find_routes_between": {
+      const points = (data.map_stops ?? []).filter((s) => s.lat != null && s.lng != null);
+      if (!points.length) return [];
+      const first = points[0];
+      const last = points.at(-1);
+      const span = distanceMeters(first.lat, first.lng, last.lat, last.lng);
+      return [
+        mapBlock([(first.lat + last.lat) / 2, (first.lng + last.lng) / 2], span < 2000 ? 14 : span < 5000 ? 13 : 12, {
+          stops: "data.map_stops",
+        }),
+      ];
     }
     case "get_nearby_vehicles":
       return [mapBlock([data.center_lat, data.center_lng], 15, { vehicles: "data.vehicles" })];
@@ -882,6 +895,27 @@ const toIsoOrNull = (value) => {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 };
 
+/**
+ * Stops of the best trip, in riding order, for the map block. Transfers are
+ * only listed when they beat every direct option, so a transfer option, when
+ * present, is the best trip.
+ */
+function bestTripStops(direct, transfer) {
+  const at = (stop, role) => ({ ...toStopObj(stop), role });
+  if (transfer) {
+    const [first, second] = transfer.legs;
+    const sameStop = first.alight_stop.code === second.board_stop.code;
+    return [
+      at(first.board_stop, "board"),
+      ...(sameStop
+        ? [at(first.alight_stop, "transfer")]
+        : [at(first.alight_stop, "transfer_alight"), at(second.board_stop, "transfer_board")]),
+      at(second.alight_stop, "alight"),
+    ];
+  }
+  return direct ? [at(direct.board_stop, "board"), at(direct.alight_stop, "alight")] : [];
+}
+
 const toStopObj = (s) => ({
   id: String(s.code),
   name: s.name ?? null,
@@ -968,6 +1002,7 @@ function registerTools(server) {
       description:
         "Lists the routes from one place to another: which stop to board, where to get off, the direction's destination, stops in between, and the walk at each end — best first, walking counted. " +
         "`options` are direct routes. `transfer_options` have exactly one interchange (never more): ride `legs[0]`, walk `transfer_walk_meters` (within a 300 m stop cluster, 0 when it is the same stop) to `legs[1].board_stop`, ride `legs[1]`. They are listed when there is no direct route or when they beat the best direct one. " +
+        "`map_stops` holds the best trip's stops in riding order, each with a `role` (board, transfer — or transfer_alight + transfer_board when the interchange is a walk — and alight). " +
         "Use when the user asks how to get from A to B, or which bus/tram goes from one place to another. " +
         "Each end covers every stop within a 300 m walk of the one given, since a line's two directions often stop on opposite sides of a street under different names; `board_stop` says where to actually wait. " +
         "Both lists empty means the trip needs two or more transfers. " +
@@ -998,6 +1033,7 @@ function registerTools(server) {
           alight_stop: toStopObj(o.alight_stop),
           stops_count: o.stops_count,
         });
+        const transferOptions = result.transfer_options ?? [];
         return ok("find_routes_between", {
           from: endpoint(result.from),
           to: endpoint(result.to),
@@ -1006,13 +1042,14 @@ function registerTools(server) {
             walk_to_board_meters: o.walk_to_board_meters,
             walk_from_alight_meters: o.walk_from_alight_meters,
           })),
-          transfer_options: (result.transfer_options ?? []).map((t) => ({
+          transfer_options: transferOptions.map((t) => ({
             legs: t.legs.map(leg),
             transfer_walk_meters: t.transfer_walk_meters,
             stops_count: t.stops_count,
             walk_to_board_meters: t.walk_to_board_meters,
             walk_from_alight_meters: t.walk_from_alight_meters,
           })),
+          map_stops: bestTripStops(result.options[0], transferOptions[0]),
           updated_at: new Date().toISOString(),
         });
       });
