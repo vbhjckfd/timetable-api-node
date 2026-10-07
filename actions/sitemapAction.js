@@ -6,6 +6,9 @@ import {
 
 const BASE_URL = "https://lad.lviv.ua";
 
+// Indexable static frontend pages; noindex ones (/favorites, /pulse) stay out.
+const STATIC_PATHS = ["/connect", "/changelog", "/privacy"];
+
 export default (req, res) => {
   const cacheAgeSeconds = 30 * 24 * 3600;
   const stops = db
@@ -39,9 +42,14 @@ export default (req, res) => {
     )
     .join("\n");
 
+  const staticUrls = STATIC_PATHS.map(
+    (path) => `  <url><loc>${BASE_URL}${path}</loc></url>`,
+  ).join("\n");
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${BASE_URL}/</loc></url>
+${staticUrls}
 ${stopUrls}
 ${routeUrls}
 ${scheduleUrls}

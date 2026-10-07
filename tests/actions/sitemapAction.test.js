@@ -55,6 +55,17 @@ describe("sitemapAction", () => {
     expect(xml).toContain("</urlset>");
   });
 
+  it("includes indexable static pages and skips noindex ones", () => {
+    const { req, res } = makeReqRes();
+    sitemapAction(req, res);
+    const xml = res.send.mock.calls[0][0];
+    for (const path of ["/connect", "/changelog", "/privacy"]) {
+      expect(xml).toContain(`<loc>https://lad.lviv.ua${path}</loc>`);
+    }
+    expect(xml).not.toContain("/favorites");
+    expect(xml).not.toContain("/pulse");
+  });
+
   it("includes a URL for each stop", () => {
     const { req, res } = makeReqRes();
     sitemapAction(req, res);
