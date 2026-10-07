@@ -339,6 +339,14 @@ describe("timetable MCP server", () => {
     expect(promptText).toContain("get_stop_realtime");
     expect(promptText).toContain("first block `map`, second block `arrival_list`");
 
+    // Stop prompts answer the user, not a JSON-only renderer.
+    for (const name of ["transit-map-view", "transit-arrival-list", "transit-hybrid-view"]) {
+      const prompt = await client.getPrompt({ name, arguments: { stop_id: "707" } });
+      const text = prompt.messages[0].content.text;
+      expect(text, name).not.toContain("strict JSON");
+      expect(text, name).toContain("language the user wrote in");
+    }
+
     await client.close();
   });
 
