@@ -386,13 +386,15 @@ Each end covers every stop within a 300 m walk (`stop_ids`): a line's two direct
 
 ### Prompts
 
-Reusable instruction templates for rendering workflows. Each takes one argument, `stop_id` (positive integer or digits-only string).
+Reusable instruction templates. `stop_id` is a positive integer or digits-only string.
 
-| Prompt | Use case |
-|--------|----------|
-| `transit-map-view` | Map-first rendering of live vehicles for a stop. |
-| `transit-arrival-list` | Arrival list for a stop, sorted by ETA and grouped by route. |
-| `transit-hybrid-view` | Map block first, arrival-list block second, with ETA values kept consistent across both. |
+| Prompt | Arguments | Use case |
+|--------|-----------|----------|
+| `plan-trip` | `from`, `to` | Direct routes between two named places (or stop IDs), with live departures from the boarding stop. |
+| `route-status` | `route_name` | Where a route's vehicles are right now, by direction. `route_name` supports completion. |
+| `transit-map-view` | `stop_id` | Map-first rendering of live vehicles for a stop. |
+| `transit-arrival-list` | `stop_id` | Arrival list for a stop, sorted by ETA and grouped by route. |
+| `transit-hybrid-view` | `stop_id` | Map block first, arrival-list block second, with ETA values kept consistent across both. |
 
 ### Resources and resource templates
 
@@ -405,6 +407,8 @@ In addition to tools, the server exposes MCP **resources** for reference data th
 | `timetable://reference/prompts` | Prompt templates catalog (Markdown) |
 | `timetable://stop/{code}` | Static info for a stop by numeric code — name, coordinates, serving routes (JSON) |
 | `timetable://route/{name}` | Static metadata for a route by short name — color, type, stop counts (JSON) |
+
+`{name}` in `timetable://route/{name}` supports `completion/complete` ("t3" → "Т30", "a1" → "А01"). Unknown stops or routes fail with JSON-RPC error `-32002` (resource not found).
 
 ### Security model
 

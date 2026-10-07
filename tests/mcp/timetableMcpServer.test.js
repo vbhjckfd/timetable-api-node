@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 vi.mock("../../actions/getSingleStopAction.js", () => ({
   default: async (req, res) => {
+    if (req.stopCode === 404404) return res.status(404).send(`Bad argument, stop with code ${req.stopCode} not found`);
     const includeTimetable = req.query.skipTimetableData === "false";
     res.json({
       code: req.stopCode,
@@ -157,6 +158,7 @@ vi.mock("../../services/transitLookupService.js", () => ({
       ],
     };
   }),
+  listRouteNames: vi.fn(() => ["А01", "А03", "Н2", "Т01", "Т30"]),
   resolveRoute: vi.fn((name) =>
     name === "T30" ? { external_id: "EXT30", name: "Т30", destinations: ["Рясне", "Сихів"] } : null,
   ),
@@ -679,6 +681,74 @@ describe("timetable MCP server", () => {
     expect(robotsText).toContain(
       `# mcp-server: ${baseUrl}/.well-known/mcp/server-card.json`,
     );
+  });
+});
+
+describe("MCP additions", () => {
+  it("get_stop_realtime answers an unknown stop with a lookup hint", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 404404 } });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Stop 404404 not found");
+    expect(result.content[0].text).toContain("search_stops");
+    await client.close();
+  });
+
+  it("get_nearby_vehicles reports an unknown route instead of an empty list", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "get_nearby_vehicles",
+      arguments: { latitude: 49.843, longitude: 24.025, route: "X999" },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Route «X999» not found");
+    await client.close();
+  });
+
+  it("search_stops echoes the query as typed even when another casing is cached", async () => {
+    const client = await connectClient();
+    await client.callTool({ name: "search_stops", arguments: { query: "Opera" } });
+    const result = await client.callTool({ name: "search_stops", arguments: { query: "OPERA" } });
+    expect(result.structuredContent.data.query).toBe("OPERA");
+    await client.close();
+  });
+
+  it("route resource template completes route names from Latin or Cyrillic input", async () => {
+    const client = await connectClient();
+    const complete = (value) =>
+      client.complete({
+        ref: { type: "ref/resource", uri: "timetable://route/{name}" },
+        argument: { name: "name", value },
+      });
+    expect((await complete("t3")).completion.values).toEqual(["Т30"]);
+    expect((await complete("a1")).completion.values).toEqual(["А01"]);
+    expect((await complete("А")).completion.values).toEqual(["А01", "А03"]);
+    await client.close();
+  });
+
+  it("resource templates fail with resource-not-found for unknown ids", async () => {
+    const client = await connectClient();
+    await expect(client.readResource({ uri: "timetable://stop/abc" })).rejects.toMatchObject({ code: -32002 });
+    await expect(client.readResource({ uri: "timetable://route/NOPE" })).rejects.toMatchObject({ code: -32002 });
+    await client.close();
+  });
+
+  it("exposes plan-trip and route-status workflow prompts", async () => {
+    const client = await connectClient();
+    const trip = await client.getPrompt({ name: "plan-trip", arguments: { from: "Опера", to: "Вокзал" } });
+    const tripText = trip.messages[0].content.text;
+    expect(tripText).toContain("«Опера»");
+    expect(tripText).toContain("find_routes_between");
+
+    const status = await client.getPrompt({ name: "route-status", arguments: { route_name: "Т30" } });
+    expect(status.messages[0].content.text).toContain("route_name=Т30");
+
+    const completion = await client.complete({
+      ref: { type: "ref/prompt", name: "route-status" },
+      argument: { name: "route_name", value: "н" },
+    });
+    expect(completion.completion.values).toEqual(["Н2"]);
+    await client.close();
   });
 });
 
