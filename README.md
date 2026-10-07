@@ -258,7 +258,7 @@ Each end covers every stop within a 300 m walk (`stop_ids`): a line's two direct
 
 `transfer_options` hold trips with exactly one interchange, never more. Each has two `legs` (same fields as a direct option, minus the walks) and `transfer_walk_meters`: the interchange may be the same stop (0) or any stop within 300 m of where the first leg ends, so a cluster of stops around a square or junction works as one interchange. A line that already reaches the destination directly is never used as either leg, and a transfer costs as much as 5 extra stops in the ranking. Transfer options are listed (up to 5) when there is no direct route, or when they beat the best direct one. Both lists empty means the trip needs two or more transfers.
 
-`map_stops` is the best trip's stops in riding order (a transfer option when one is listed, since those only appear when they beat every direct one), each with a `role`: `board`, `transfer` (same-stop interchange) or `transfer_alight` + `transfer_board` (walking interchange), and `alight`. The `map` block plots them, centred between the two ends.
+`map_stops` is the best trip's stops in riding order (a transfer option when one is listed, since those only appear when they beat every direct one), each with a `role`: `board`, `transfer` (same-stop interchange) or `transfer_alight` + `transfer_board` (walking interchange), and `alight`. The `map` block plots them, centred on the box around all of them (interchange included) with zoom 14–11 by its size.
 
 </details>
 

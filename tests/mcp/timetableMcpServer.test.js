@@ -149,7 +149,7 @@ vi.mock("../../services/transitLookupService.js", () => ({
   ),
   findRoutesBetween: vi.fn((from, to) => {
     if (from === 9999 || to === 9999) return { from: null, to: null, options: [], missing: 9999 };
-    const stop = (code, name) => ({ code, name, eng_name: null, lat: 49.84, lng: 24.02, routes: [] });
+    const stop = (code, name, lat = 49.84, lng = 24.02) => ({ code, name, eng_name: null, lat, lng, routes: [] });
     if (to === 5555) {
       const leg = (route, board, alight, destination, stops_count) => ({
         route, vehicle_type: "bus", direction: 0, destination, board_stop: board, alight_stop: alight, stops_count,
@@ -161,8 +161,9 @@ vi.mock("../../services/transitLookupService.js", () => ({
         transfer_options: [
           {
             legs: [
-              leg("А03", stop(707, "Опера"), stop(11, "Підвальна"), "Личаків", 1),
-              leg("А05", stop(20, "Друкарська"), stop(to, "Сихів"), "Сихів", 2),
+              // The interchange lies east of both ends, off the line between them.
+              leg("А03", stop(707, "Опера", 49.87, 23.95), stop(11, "Підвальна", 49.84, 24.035), "Личаків", 1),
+              leg("А05", stop(20, "Друкарська", 49.8402, 24.0352), stop(to, "Сихів", 49.807, 23.999), "Сихів", 2),
             ],
             transfer_walk_meters: 30,
             stops_count: 3,
@@ -645,7 +646,8 @@ describe("timetable MCP server", () => {
       ["5555", "alight"],
     ]);
     expect(viaTransfer.structuredContent.ui_blocks).toEqual([
-      { type: "map", data: { center: [49.84, 24.02], zoom: 14, layers: { stops: "data.map_stops" } } },
+      // Centre of the box around all four stops; the ends' midpoint would be 23.9745.
+      { type: "map", data: { center: [49.8385, 23.9926], zoom: 12, layers: { stops: "data.map_stops" } } },
     ]);
 
     await client.close();

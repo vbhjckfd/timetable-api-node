@@ -542,14 +542,15 @@ function buildUiBlocks(toolName, data) {
     case "find_routes_between": {
       const points = (data.map_stops ?? []).filter((s) => s.lat != null && s.lng != null);
       if (!points.length) return [];
-      const first = points[0];
-      const last = points.at(-1);
-      const span = distanceMeters(first.lat, first.lng, last.lat, last.lng);
-      return [
-        mapBlock([(first.lat + last.lat) / 2, (first.lng + last.lng) / 2], span < 2000 ? 14 : span < 5000 ? 13 : 12, {
-          stops: "data.map_stops",
-        }),
-      ];
+      // Fit every stop of the trip, not just its ends: an interchange can lie
+      // well off the line between them.
+      const lats = points.map((p) => p.lat);
+      const lngs = points.map((p) => p.lng);
+      const [south, north] = [Math.min(...lats), Math.max(...lats)];
+      const [west, east] = [Math.min(...lngs), Math.max(...lngs)];
+      const span = distanceMeters(south, west, north, east);
+      const zoom = span < 2000 ? 14 : span < 5000 ? 13 : span < 12000 ? 12 : 11;
+      return [mapBlock([(south + north) / 2, (west + east) / 2], zoom, { stops: "data.map_stops" })];
     }
     case "get_nearby_vehicles":
       return [mapBlock([data.center_lat, data.center_lng], 15, { vehicles: "data.vehicles" })];
