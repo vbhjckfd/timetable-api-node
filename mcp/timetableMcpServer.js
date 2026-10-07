@@ -83,7 +83,7 @@ const TRANSIT_ASSISTANT_GUIDANCE = `\
 - User names a stop ("Опера", "Rynok", "Головний вокзал") → \`search_stops\` to get its stop ID
 - User gives an address or coordinates → \`get_stops_around_location\` to get nearby stop IDs
 - User asks about arrivals or "when is the next bus/tram at stop X" → \`get_stop_realtime\`
-- User asks how to get from A to B → resolve both stops, then \`find_routes_between\`; then \`get_stop_realtime\` on the boarding stop for live times
+- User asks how to get from A to B → resolve both stops, then \`find_routes_between\` (direct routes, or one interchange); then \`get_stop_realtime\` on the boarding stop for live times
 - User asks "where is route X right now" or how many vehicles run on it → \`get_route_realtime\`
 - User asks which stops a route serves, where it goes, or its timetable → \`get_route_static\` (\`include_shapes: true\` only for drawing a map)
 - User asks "what vehicles are near me" → \`get_nearby_vehicles\` (filter with \`route\` when relevant)
@@ -112,7 +112,7 @@ Block types:
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
 - \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`saturday\`/\`sunday\`) are only populated for the first stop of each direction. Saturday and Sunday timetables can differ; \`schedule.weekend\` merges both days and is kept only for backward compatibility.
 - \`direction\` is the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return); \`destination\` is the name of that direction's last stop.
-- \`find_routes_between\` covers direct routes only; an empty result means a transfer is needed.
+- \`find_routes_between\` allows at most one interchange, made within a walkable stop cluster (≤ 300 m). Empty \`options\` and \`transfer_options\` mean the trip needs two or more transfers.
 `;
 
 const MCP_SERVER_INSTRUCTIONS = `\
@@ -158,6 +158,15 @@ const zArrivalObj = z.object({
 });
 const zNextStop = z.object({ id: z.string(), name: z.string().nullable(), arrival: z.string() }).nullable();
 const zCenter = z.tuple([zCoord, zCoord]);
+const zTripLeg = z.object({
+  route: z.string(),
+  vehicle_type: z.string(),
+  direction: z.number().int(),
+  destination: z.string().nullable(),
+  board_stop: zStopObj,
+  alight_stop: zStopObj,
+  stops_count: z.number().int(),
+});
 
 /**
  * ui_blocks point into `data` instead of repeating it: every tool result is
@@ -243,13 +252,13 @@ const OUTPUT_SCHEMAS = {
   find_routes_between: transitResult(z.object({
     from: z.object({ id: z.string(), name: z.string().nullable(), stop_ids: z.array(z.string()) }),
     to: z.object({ id: z.string(), name: z.string().nullable(), stop_ids: z.array(z.string()) }),
-    options: z.array(z.object({
-      route: z.string(),
-      vehicle_type: z.string(),
-      direction: z.number().int(),
-      destination: z.string().nullable(),
-      board_stop: zStopObj,
-      alight_stop: zStopObj,
+    options: z.array(zTripLeg.extend({
+      walk_to_board_meters: z.number().int(),
+      walk_from_alight_meters: z.number().int(),
+    })),
+    transfer_options: z.array(z.object({
+      legs: z.array(zTripLeg),
+      transfer_walk_meters: z.number().int(),
       stops_count: z.number().int(),
       walk_to_board_meters: z.number().int(),
       walk_from_alight_meters: z.number().int(),
@@ -459,11 +468,21 @@ function buildTextSummary(toolName, structured) {
     }
     case "find_routes_between": {
       const count = data.options?.length ?? 0;
+      const transfers = data.transfer_options ?? [];
       const trip = `«${data.from?.name ?? "?"}» → «${data.to?.name ?? "?"}»`;
-      if (count === 0) return `No direct route ${trip}; a transfer is needed.`;
+      const viaTransfer = (t) => {
+        const [a, b] = t.legs;
+        const walk = t.transfer_walk_meters ? `walk ${t.transfer_walk_meters}m to «${b.board_stop.name}», ` : "";
+        return `${a.route} from «${a.board_stop.name}» to «${a.alight_stop.name}», ${walk}then ${b.route} towards «${b.destination ?? "?"}» (${plural(t.stops_count, "stop")} in total)`;
+      };
+      if (count === 0) {
+        if (!transfers.length) return `No route ${trip} with at most one transfer.`;
+        return `No direct route ${trip}; ${plural(transfers.length, "option")} with one transfer. Best: ${viaTransfer(transfers[0])}.`;
+      }
       const best = data.options[0];
       const walk = best.walk_to_board_meters ? `, board at «${best.board_stop.name}» (${best.walk_to_board_meters}m walk)` : "";
-      return `${plural(count, "direct route")} ${trip}. Best: ${best.route} towards «${best.destination ?? "?"}», ${plural(best.stops_count, "stop")}${walk}.`;
+      const faster = transfers.length ? ` Faster with one transfer: ${viaTransfer(transfers[0])}.` : "";
+      return `${plural(count, "direct route")} ${trip}. Best: ${best.route} towards «${best.destination ?? "?"}», ${plural(best.stops_count, "stop")}${walk}.${faster}`;
     }
     case "get_nearby_vehicles": {
       const count = data.vehicles?.length ?? 0;
@@ -675,7 +694,7 @@ ${TRANSIT_ASSISTANT_GUIDANCE}
 | \`search_stops\` | Stops matching a name (Ukrainian or English), with IDs, coordinates and serving routes. |
 | \`get_stops_around_location\` | Stops near lat/lon (ID, name, coordinates, distance, serving routes). |
 | \`get_stop_realtime\` | Live arrivals at a stop: route, destination, minutes to arrival, vehicle positions. |
-| \`find_routes_between\` | Direct routes from one stop to another: where to board and get off, destination, stop count. |
+| \`find_routes_between\` | Routes from one stop to another, direct or with one interchange in a nearby-stop cluster: where to board, transfer and get off. |
 | \`get_route_static\` | Route metadata, stop lists for both directions, first-stop timetable; polylines on request. |
 | \`get_route_realtime\` | Live vehicles on a route with destination and next stop. |
 | \`get_nearby_vehicles\` | Live vehicles near a point, nearest first, optionally filtered by route. |
@@ -693,7 +712,7 @@ Prompts are reusable instruction templates. Pass the listed **arguments** when i
 | \`transit-map-view\` | \`stop_id\` | Map-first rendering for live vehicles near a stop. |
 | \`transit-arrival-list\` | \`stop_id\` | Arrival list sorted by ETA, grouped by route when needed. |
 | \`transit-hybrid-view\` | \`stop_id\` | Map (top) + arrival list (bottom) with ETA consistency checks. |
-| \`plan-trip\` | \`from\`, \`to\` | Direct routes between two named places, with live departures from the boarding stop. |
+| \`plan-trip\` | \`from\`, \`to\` | Routes between two named places (direct or one transfer), with live departures from the boarding stop. |
 | \`route-status\` | \`route_name\` | Where a route's vehicles are right now and how many run each way. |
 `,
 };
@@ -947,10 +966,11 @@ function registerTools(server) {
     {
       title: "Find Routes Between Stops",
       description:
-        "Lists the direct routes (no transfer) from one place to another: which stop to board, where to get off, the direction's destination, stops in between, and the walk at each end — best first, walking counted. " +
+        "Lists the routes from one place to another: which stop to board, where to get off, the direction's destination, stops in between, and the walk at each end — best first, walking counted. " +
+        "`options` are direct routes. `transfer_options` have exactly one interchange (never more): ride `legs[0]`, walk `transfer_walk_meters` (within a 300 m stop cluster, 0 when it is the same stop) to `legs[1].board_stop`, ride `legs[1]`. They are listed when there is no direct route or when they beat the best direct one. " +
         "Use when the user asks how to get from A to B, or which bus/tram goes from one place to another. " +
         "Each end covers every stop within a 300 m walk of the one given, since a line's two directions often stop on opposite sides of a street under different names; `board_stop` says where to actually wait. " +
-        "An empty `options` list means no direct route: a transfer is needed. " +
+        "Both lists empty means the trip needs two or more transfers. " +
         "Requires numeric stop IDs; get them with `search_stops` or `get_stops_around_location` first. Follow up with `get_stop_realtime` on `board_stop` for live departures.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
@@ -969,19 +989,29 @@ function registerTools(server) {
           return toolError(NOT_FOUND_HINTS.stop(result.missing));
         }
         const endpoint = (e) => ({ id: String(e.code), name: e.name ?? null, stop_ids: e.codes.map(String) });
+        const leg = (o) => ({
+          route: o.route,
+          vehicle_type: o.vehicle_type,
+          direction: o.direction,
+          destination: o.destination,
+          board_stop: toStopObj(o.board_stop),
+          alight_stop: toStopObj(o.alight_stop),
+          stops_count: o.stops_count,
+        });
         return ok("find_routes_between", {
           from: endpoint(result.from),
           to: endpoint(result.to),
           options: result.options.map((o) => ({
-            route: o.route,
-            vehicle_type: o.vehicle_type,
-            direction: o.direction,
-            destination: o.destination,
-            board_stop: toStopObj(o.board_stop),
-            alight_stop: toStopObj(o.alight_stop),
-            stops_count: o.stops_count,
+            ...leg(o),
             walk_to_board_meters: o.walk_to_board_meters,
             walk_from_alight_meters: o.walk_from_alight_meters,
+          })),
+          transfer_options: (result.transfer_options ?? []).map((t) => ({
+            legs: t.legs.map(leg),
+            transfer_walk_meters: t.transfer_walk_meters,
+            stops_count: t.stops_count,
+            walk_to_board_meters: t.walk_to_board_meters,
+            walk_from_alight_meters: t.walk_from_alight_meters,
           })),
           updated_at: new Date().toISOString(),
         });
@@ -1448,7 +1478,7 @@ function registerWorkflowPrompts(server) {
     "plan-trip",
     {
       title: "Plan a Trip",
-      description: "Find direct routes between two places in Lviv and the next live departures.",
+      description: "Find routes (direct or with one transfer) between two places in Lviv and the next live departures.",
       argsSchema: {
         from: z.string().min(1).describe("Where the trip starts: stop name, landmark, or numeric stop ID."),
         to: z.string().min(1).describe("Where the trip ends: stop name, landmark, or numeric stop ID."),
@@ -1461,11 +1491,12 @@ function registerWorkflowPrompts(server) {
         "Tool workflow:",
         "1) Resolve each end to a stop ID: use it as is when it is a number, otherwise call `search_stops`. When several different places match, ask which one is meant instead of guessing.",
         "2) Call `find_routes_between` with the two stop IDs.",
-        "3) If `options` is empty, say a transfer is needed and stop there.",
-        "4) Otherwise call `get_stop_realtime` on the best option's `board_stop.id` and keep the arrivals of that option's route heading to its `destination`.",
+        "3) If both `options` and `transfer_options` are empty, say the trip needs more than one transfer and stop there.",
+        "4) Otherwise take the best direct option, or the first transfer option when there is no direct one or it is listed as better. Call `get_stop_realtime` on its first boarding stop and keep the arrivals of that route heading to its `destination`.",
         "",
         "Answer:",
         "- Lead with the best option: route, where to board (and the walk to it), where to get off, number of stops.",
+        "- For a transfer, name the interchange: where to get off the first vehicle, the walk to the second stop (if any), and the second route and its direction.",
         "- Give the next live departures of that route from the boarding stop; if none are reported, say so.",
         "- List up to two alternatives in one line each.",
         "- Reply in the language the user wrote in.",
