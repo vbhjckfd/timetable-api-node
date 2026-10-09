@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const metrics = vi.hoisted(() => ({ count: vi.fn(), distribution: vi.fn(), captureException: vi.fn() }));
 
@@ -216,7 +216,8 @@ describe("stopArrivalService.getTimetableForStop", () => {
       },
       {
         tripUpdate: {
-          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          // Relative to the pinned clock, not the module-level futureTimeSec.
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: Math.floor(Date.now() / 1000) + 600 } }],
           trip: { routeId: "ROUTE1", tripId: "TRIP1" },
           vehicle: { id: "VH1" },
         },
@@ -254,23 +255,35 @@ describe("stopArrivalService.getTimetableForStop", () => {
 });
 
 describe("stopArrivalService.getTimetableForStop — schedule fallback", () => {
-  // "HH:MM" in Europe/Kyiv, the zone the departure maps are written in and the
-  // one stopScheduleService reads them back in. Building these off the process
-  // clock passed on a Kyiv laptop and returned nothing on a UTC CI runner.
-  function kyivHHMM(offsetMinutes) {
-    const at = new Date(Date.now() + offsetMinutes * 60 * 1000);
-    return at.toLocaleTimeString("en-GB", {
-      timeZone: "Europe/Kyiv",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  // The departure maps hold Europe/Kyiv wall-clock times and the service day
+  // never crosses midnight, so a departure "10 minutes from now" taken off the
+  // real clock fell on the next day whenever CI ran after 23:50 Kyiv time and
+  // the schedule came back empty. The clock is pinned to noon Kyiv time on the
+  // current Kyiv day instead (only Date is faked; timers stay real).
+  function kyivNoonToday() {
+    const now = new Date();
+    const [h, m] = now
+      .toLocaleTimeString("en-GB", { timeZone: "Europe/Kyiv", hourCycle: "h23" })
+      .split(":")
+      .map(Number);
+    const minutesFromNoon = h * 60 + m - 12 * 60;
+    return new Date(now.getTime() - minutesFromNoon * 60 * 1000);
   }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(kyivNoonToday());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   const scheduledRoute = {
     ...mockRoute,
-    stop_departure_time_map: { MG1001: [kyivHHMM(10)] },
-    stop_departure_time_map_workday: { MG1001: [kyivHHMM(10)] },
-    stop_departure_time_map_weekend: { MG1001: [kyivHHMM(10)] },
+    stop_departure_time_map: { MG1001: ["12:10"] },
+    stop_departure_time_map_workday: { MG1001: ["12:10"] },
+    stop_departure_time_map_weekend: { MG1001: ["12:10"] },
   };
 
   const stopWithSchedule = {
