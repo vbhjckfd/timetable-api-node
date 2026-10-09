@@ -108,13 +108,17 @@ describe("signLinks", () => {
     expect(signLinks(62, {})).toEqual({
       svg: "https://offline.lad.lviv.ua/62",
       pdf: "https://pdf.lad.lviv.ua/62.pdf",
+      schemaSvg: "https://offline.lad.lviv.ua/62/schema",
+      schemaPdf: "https://pdf.lad.lviv.ua/62/schema.pdf",
     });
   });
 
-  it("hangs the query off both links", () => {
+  it("hangs the query off every link", () => {
     expect(signLinks(62, { add: ["T02"], remove: ["T03"] })).toEqual({
       svg: "https://offline.lad.lviv.ua/62?add=T02&remove=T03",
       pdf: "https://pdf.lad.lviv.ua/62.pdf?add=T02&remove=T03",
+      schemaSvg: "https://offline.lad.lviv.ua/62/schema?add=T02&remove=T03",
+      schemaPdf: "https://pdf.lad.lviv.ua/62/schema.pdf?add=T02&remove=T03",
     });
   });
 });
