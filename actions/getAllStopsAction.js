@@ -63,6 +63,7 @@ tr:nth-child(even) { background: #f3f6fa; }
 tr:hover td { background: #e6eefb; }
 th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #ccd; }
 th.name { width: 15%; }
+.gtfs-id { cursor: help; border-bottom: 1px dotted #888; }
 a { text-decoration: none; }
 .route.removed { color: red; text-decoration: line-through; }
 .route.added { color: green; }
@@ -100,7 +101,7 @@ ${contactBannerHtml("stops")}
       // from: the served HTML stays the plain upstream listing, cacheable for
       // 30 days, and the overrides are applied in the browser.
       result += `<tr data-code="${s.code}">
-            <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a> (${s.microgiz_id})</td>
+            <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a> <span class="gtfs-id" title="Внутрішній ID зупинки в GTFS-даних перевізника (stop_id)">(${s.microgiz_id})</span></td>
             <td>
                 <a target="blank" data-kind="svg" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
                 &nbsp;
