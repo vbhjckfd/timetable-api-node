@@ -456,7 +456,7 @@ describe("timetable MCP server", () => {
     const text = result.content.find((c) => c.type === "text")?.text;
     // Canonical name, not the echoed input.
     expect(text).toContain("Route Т30");
-    expect(text).toContain("1 active vehicle (1 → «Рясне»)");
+    expect(text).toContain("1 active vehicle: vehicle-1 → «Рясне», next stop «Опера» (707)");
 
     const sc = result.structuredContent;
     expect(sc.view).toBe("transit_realtime");
@@ -598,7 +598,7 @@ describe("timetable MCP server", () => {
     });
 
     expect(result.content[0].text).toContain(
-      "1 direct route «Опера» → «Вокзал». Best: Т01 towards «Вокзал», 4 stops, board at «Опера» (50m walk).",
+      "1 direct route «Опера» → «Вокзал», best first: Т01 towards «Вокзал» from «Опера» (708) to «Вокзал» (101), 4 stops, 50m walk to board.",
     );
     const sc = result.structuredContent;
     expect(sc.data.from).toEqual({ id: "707", name: "Опера", stop_ids: ["707", "708"] });
@@ -631,7 +631,7 @@ describe("timetable MCP server", () => {
     });
     expect(viaTransfer.isError).toBeFalsy();
     expect(viaTransfer.content[0].text).toBe(
-      "No direct route «Опера» → «Сихів»; 1 option with one transfer. Best: А03 from «Опера» to «Підвальна», walk 30m to «Друкарська», then А05 towards «Сихів» (3 stops in total).",
+      "No direct route «Опера» → «Сихів». 1 option with one transfer: А03 from «Опера» (707) to «Підвальна», walk 30m to «Друкарська» (20), then А05 towards «Сихів» (3 stops in total).",
     );
     const t = viaTransfer.structuredContent.data.transfer_options[0];
     expect(t.legs.map((l) => [l.route, l.board_stop.id, l.alight_stop.id])).toEqual([
@@ -688,7 +688,8 @@ describe("timetable MCP server", () => {
       arrival: "2100-01-01T12:05:00.000Z",
       departure: null,
     });
-    expect(text).toContain("Next stop: «Opera»");
+    expect(text).toContain("2 upcoming stops: «Opera» (707) in ");
+    expect(text).toContain("«Rynok» (708)");
 
     await client.close();
   });

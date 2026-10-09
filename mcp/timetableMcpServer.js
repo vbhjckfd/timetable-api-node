@@ -426,6 +426,12 @@ function sortedArrivals(arrivals) {
 // --- Natural-language text summaries (replaces full JSON dump) ---
 
 const plural = (count, word) => `${count} ${word}${count !== 1 ? "s" : ""}`;
+const routeList = (routes) => (routes?.length ? `, routes ${routes.join(", ")}` : "");
+/** Whole minutes from now until an ISO timestamp; null when unknown, 0 when already due. */
+const minutesUntil = (iso) => {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(t) ? null : Math.max(0, Math.round((t - Date.now()) / 60_000));
+};
 
 function buildTextSummary(toolName, structured) {
   const { data } = structured;
@@ -434,69 +440,86 @@ function buildTextSummary(toolName, structured) {
       const stopName = data.stop?.name ?? `#${data.stop?.id}`;
       const count = data.arrivals?.length ?? 0;
       if (count === 0) return `Stop «${stopName}»: no arrivals found.`;
-      const next = data.arrivals[0];
-      const eta = next.arrival_minutes != null ? `${next.arrival_minutes} min` : "soon";
-      return `Stop «${stopName}»: ${plural(count, "arrival")}. Next: ${next.route ?? "?"} → «${next.direction ?? "?"}» in ${eta}.`;
+      // Clients that only show the model `content` (not structuredContent) must
+      // still see every arrival, or it reports a later trolleybus as missing.
+      const list = data.arrivals.map((a) => {
+        const eta = a.arrival_minutes != null ? `${a.arrival_minutes} min` : "soon";
+        return `${a.route ?? "?"} → «${a.direction ?? "?"}» in ${eta}`;
+      }).join("; ");
+      return `Stop «${stopName}»: ${plural(count, "arrival")}: ${list}.`;
     }
     case "get_route_static": {
       const name = data.route?.name ?? "?";
       const longName = data.route?.long_name;
-      const d0 = data.stops?.[0]?.length ?? 0;
-      const d1 = data.stops?.[1]?.length ?? 0;
-      return `Route ${name}${longName ? ` (${longName})` : ""}: ${d0} outbound stops, ${d1} inbound stops.`;
+      const directions = (data.stops ?? []).map((stops, i) => {
+        const label = i === 0 ? "outbound" : "inbound";
+        const list = stops.map((s) => `«${s.name ?? "?"}» (${s.id})`).join(", ");
+        return `${label} ${plural(stops.length, "stop")}: ${list || "none"}`;
+      });
+      return `Route ${name}${longName ? ` (${longName})` : ""}. ${directions.join(". ")}.`;
     }
     case "get_route_realtime": {
       const count = data.vehicles?.length ?? 0;
-      const byDestination = Object.entries(
-        (data.vehicles ?? []).reduce((acc, v) => {
-          if (v.destination) acc[v.destination] = (acc[v.destination] ?? 0) + 1;
-          return acc;
-        }, {}),
-      ).map(([destination, n]) => `${n} → «${destination}»`);
-      return `Route ${data.route_name}: ${plural(count, "active vehicle")}${byDestination.length ? ` (${byDestination.join(", ")})` : ""}.`;
+      if (count === 0) return `Route ${data.route_name}: no active vehicles.`;
+      const list = data.vehicles.map((v) => {
+        const towards = v.destination ? ` → «${v.destination}»` : "";
+        const eta = minutesUntil(v.next_stop?.arrival);
+        const next = v.next_stop ? `, next stop «${v.next_stop.name ?? "?"}» (${v.next_stop.id})${eta != null ? ` in ${eta} min` : ""}` : "";
+        return `${v.id}${towards}${next}${v.lowfloor ? ", low-floor" : ""}`;
+      }).join("; ");
+      return `Route ${data.route_name}: ${plural(count, "active vehicle")}: ${list}.`;
     }
     case "get_stops_around_location": {
       const count = data.stops?.length ?? 0;
       if (count === 0) return `No stops found within ${data.radius_meters}m.`;
-      const nearest = data.stops[0];
-      return `${plural(count, "stop")} within ${data.radius_meters}m. Nearest: «${nearest.name}» (code ${nearest.id}, ${nearest.distance_meters ?? "?"}m).`;
+      const list = data.stops.map((s) => `«${s.name}» (code ${s.id}, ${s.distance_meters ?? "?"}m${routeList(s.routes)})`).join("; ");
+      return `${plural(count, "stop")} within ${data.radius_meters}m, nearest first: ${list}.`;
     }
     case "search_stops": {
       const count = data.stops?.length ?? 0;
       if (count === 0) return `No stops match «${data.query}».`;
-      const list = data.stops.slice(0, 5).map((s) => `«${s.name}» (${s.id})`).join(", ");
-      return `${plural(count, "stop")} match «${data.query}»: ${list}${count > 5 ? ", …" : ""}.`;
+      const list = data.stops.map((s) => `«${s.name}» (${s.id}${routeList(s.routes)})`).join("; ");
+      return `${plural(count, "stop")} match «${data.query}»: ${list}.`;
     }
     case "find_routes_between": {
-      const count = data.options?.length ?? 0;
+      const options = data.options ?? [];
       const transfers = data.transfer_options ?? [];
       const trip = `«${data.from?.name ?? "?"}» → «${data.to?.name ?? "?"}»`;
+      const direct = (o) => {
+        const walk = o.walk_to_board_meters ? `, ${o.walk_to_board_meters}m walk to board` : "";
+        return `${o.route} towards «${o.destination ?? "?"}» from «${o.board_stop.name}» (${o.board_stop.id}) to «${o.alight_stop.name}» (${o.alight_stop.id}), ${plural(o.stops_count, "stop")}${walk}`;
+      };
       const viaTransfer = (t) => {
         const [a, b] = t.legs;
-        const walk = t.transfer_walk_meters ? `walk ${t.transfer_walk_meters}m to «${b.board_stop.name}», ` : "";
-        return `${a.route} from «${a.board_stop.name}» to «${a.alight_stop.name}», ${walk}then ${b.route} towards «${b.destination ?? "?"}» (${plural(t.stops_count, "stop")} in total)`;
+        const walk = t.transfer_walk_meters ? `walk ${t.transfer_walk_meters}m to «${b.board_stop.name}» (${b.board_stop.id}), ` : "";
+        return `${a.route} from «${a.board_stop.name}» (${a.board_stop.id}) to «${a.alight_stop.name}», ${walk}then ${b.route} towards «${b.destination ?? "?"}» (${plural(t.stops_count, "stop")} in total)`;
       };
-      if (count === 0) {
-        if (!transfers.length) return `No route ${trip} with at most one transfer.`;
-        return `No direct route ${trip}; ${plural(transfers.length, "option")} with one transfer. Best: ${viaTransfer(transfers[0])}.`;
-      }
-      const best = data.options[0];
-      const walk = best.walk_to_board_meters ? `, board at «${best.board_stop.name}» (${best.walk_to_board_meters}m walk)` : "";
-      const faster = transfers.length ? ` Faster with one transfer: ${viaTransfer(transfers[0])}.` : "";
-      return `${plural(count, "direct route")} ${trip}. Best: ${best.route} towards «${best.destination ?? "?"}», ${plural(best.stops_count, "stop")}${walk}.${faster}`;
+      if (!options.length && !transfers.length) return `No route ${trip} with at most one transfer.`;
+      const parts = [];
+      parts.push(options.length
+        ? `${plural(options.length, "direct route")} ${trip}, best first: ${options.map(direct).join("; ")}.`
+        : `No direct route ${trip}.`);
+      if (transfers.length) parts.push(`${plural(transfers.length, "option")} with one transfer: ${transfers.map(viaTransfer).join("; ")}.`);
+      return parts.join(" ");
     }
     case "get_nearby_vehicles": {
       const count = data.vehicles?.length ?? 0;
       if (count === 0) return `No vehicles within ${data.radius_meters}m.`;
-      const routes = [...new Set(data.vehicles.map((v) => v.route).filter(Boolean))].join(", ");
       const shown = data.total > count ? ` (nearest ${count} of ${data.total})` : "";
-      return `${plural(count, "vehicle")} within ${data.radius_meters}m${shown}. Routes: ${routes || "?"}.`;
+      const list = data.vehicles.map((v) => {
+        const towards = v.destination ? ` → «${v.destination}»` : "";
+        return `${v.route ?? "?"}${towards}, vehicle ${v.id ?? "?"}, ${v.distance_meters ?? "?"}m away${v.lowfloor ? ", low-floor" : ""}`;
+      }).join("; ");
+      return `${plural(count, "vehicle")} within ${data.radius_meters}m${shown}, nearest first: ${list}.`;
     }
     case "get_vehicle_info": {
-      const upcoming = data.upcoming_stops?.length ?? 0;
+      const upcoming = data.upcoming_stops ?? [];
       const towards = data.destination ? ` towards «${data.destination}»` : "";
-      const next = data.upcoming_stops?.[0]?.name ? ` Next stop: «${data.upcoming_stops[0].name}».` : "";
-      return `Vehicle ${data.vehicle_id} on route ${data.route ?? "?"}${towards} (plate: ${data.license_plate ?? "unknown"}). ${plural(upcoming, "upcoming stop")}.${next}`;
+      const list = upcoming.map((s) => {
+        const eta = minutesUntil(s.arrival);
+        return `«${s.name ?? "?"}» (${s.id})${eta != null ? ` in ${eta} min` : ""}`;
+      }).join(", ");
+      return `Vehicle ${data.vehicle_id} on route ${data.route ?? "?"}${towards} (plate: ${data.license_plate ?? "unknown"}). ${plural(upcoming.length, "upcoming stop")}${list ? `: ${list}` : ""}.`;
     }
     default:
       return `${toolName}: data retrieved.`;
