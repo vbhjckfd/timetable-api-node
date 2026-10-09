@@ -72,8 +72,8 @@ describe("getAllStopsAction", () => {
     await getAllStopsAction(req, res, next);
 
     const html = res.send.mock.calls[0][0];
-    expect(html).toContain("<th>Макет таблички</th>");
-    expect(html).toContain("<th>Макет мапи</th>");
+    expect(html).toContain("<th>Табличка</th>");
+    expect(html).toContain("<th>Мапа</th>");
     expect(html).toContain('href="https://offline.lad.lviv.ua/1001/schema"');
     expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/schema.pdf"');
   });

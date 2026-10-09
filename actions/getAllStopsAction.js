@@ -57,9 +57,22 @@ export default async (req, res, next) => {
 <link rel="icon" href="/favicon.ico">
 <style>
 table, th { text-align: left; }
+table { border-collapse: collapse; }
+th, td { padding: 4px 6px; }
+tr:nth-child(even) { background: #f3f6fa; }
+tr:hover td { background: #e6eefb; }
+th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #ccd; }
+th.name { width: 15%; }
+.gtfs-id { cursor: help; border-bottom: 1px dotted #888; }
 a { text-decoration: none; }
+td.loc { white-space: nowrap; }
+.route { display: inline-block; padding: 1px 7px; margin: 1px 0; border-radius: 10px; font-size: 0.9em; background: #eee; border: 1px solid #ccc; }
+.route[data-route^="А"] { background: #e3edfc; border-color: #9bbbe8; color: #1d4f91; }
+.route[data-route^="Т"] { background: #fde6e6; border-color: #eda4a4; color: #9b1c1c; }
 .route.removed { color: red; text-decoration: line-through; }
 .route.added { color: green; }
+.route.added { background: #e4f6e4; border-color: #7cc47c; }
+.route.removed { background: #f4f4f4; border-color: #ccc; }
 .route { cursor: pointer; }
 #overrides-summary { margin-top: 1em; }
 #overrides-summary textarea { width: 100%; max-width: 600px; box-sizing: border-box; }
@@ -74,9 +87,9 @@ ${contactBannerHtml("stops")}
 
     result += `<tr>
         <th>Код</th>
-        <th>Макет таблички</th>
-        <th>Макет мапи</th>
-        <th>Назва</th>
+        <th>Табличка</th>
+        <th>Мапа</th>
+        <th class="name">Назва</th>
         <th>Розташування</th>
         <th>Маршрути</th>
         </tr>`;
@@ -94,7 +107,7 @@ ${contactBannerHtml("stops")}
       // from: the served HTML stays the plain upstream listing, cacheable for
       // 30 days, and the overrides are applied in the browser.
       result += `<tr data-code="${s.code}">
-            <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a> (${s.microgiz_id})</td>
+            <td><a target="blank" href="https://lad.lviv.ua/stops/${s.code}">${s.code}</a> <span class="gtfs-id" title="Внутрішній ID зупинки в GTFS-даних перевізника (stop_id)">(${s.microgiz_id})</span></td>
             <td>
                 <a target="blank" data-kind="svg" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
                 &nbsp;
@@ -106,7 +119,7 @@ ${contactBannerHtml("stops")}
                 <a target="blank" data-kind="schemaPdf" href="https://pdf.lad.lviv.ua/${s.code}/schema.pdf">PDF</a>
             </td>
             <td>${escapeHtml(s.name)}</td>
-            <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]}, ${loc[1]}</a></td>
+            <td class="loc"><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]}, ${loc[1]}</a></td>
             <td data-routes="${escapeHtml(transfers.join(" "))}">${transfers
               .map((r) => `<span class="route kept" data-route="${escapeHtml(r)}">${escapeHtml(r)}</span>`)
               .join(" ")}</td>
