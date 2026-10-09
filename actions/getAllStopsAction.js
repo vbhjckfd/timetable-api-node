@@ -57,6 +57,12 @@ export default async (req, res, next) => {
 <link rel="icon" href="/favicon.ico">
 <style>
 table, th { text-align: left; }
+table { border-collapse: collapse; }
+th, td { padding: 4px 6px; }
+tr:nth-child(even) { background: #f3f6fa; }
+tr:hover td { background: #e6eefb; }
+th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #ccd; }
+th.name { width: 15%; }
 a { text-decoration: none; }
 .route.removed { color: red; text-decoration: line-through; }
 .route.added { color: green; }
@@ -74,9 +80,9 @@ ${contactBannerHtml("stops")}
 
     result += `<tr>
         <th>Код</th>
-        <th>Макет таблички</th>
-        <th>Макет мапи</th>
-        <th>Назва</th>
+        <th>Табличка</th>
+        <th>Мапа</th>
+        <th class="name">Назва</th>
         <th>Розташування</th>
         <th>Маршрути</th>
         </tr>`;
