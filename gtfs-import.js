@@ -16,6 +16,7 @@ import {
 } from "./utils/appHelpers.js";
 
 import PublicGoogleSheetsParser from "public-google-sheets-parser";
+import { buildEngNames, engNameFor } from "./utils/engNames.js";
 const spreadsheetId = "1AXRYgB4QqFaUCBEHJ8gueMnpYR2tI2NMgi2d8Ai7nAY";
 
 import { readFile } from "fs/promises";
@@ -181,10 +182,13 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
   const parser = new PublicGoogleSheetsParser(spreadsheetId);
   const items = await parser.parse();
 
-  const engNames = items.reduce((acc, cur) => {
-    acc[cur["№ зупин-ки"]] = cur["Назва зупинки латиницею"];
-    return acc;
-  }, {});
+  const engNames = buildEngNames(
+    items.map((row) => ({
+      code: Number(row["№ зупин-ки"]),
+      uk: String(row["Назва зупинки українською"] ?? "").trim(),
+      en: String(row["Назва зупинки латиницею"] ?? "").trim(),
+    })),
+  );
 
   const stopPromises = importedStops.map(async (stopRow) => {
     let code = stopRow.stop_name.match(/(\([\-\d]+\))/i);
@@ -246,7 +250,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     let stopModel = {
       code: code,
       name: stop_name,
-      eng_name: engNames[code] || "",
+      eng_name: engNameFor(code, stop_name, engNames),
       microgiz_id: stopRow.stop_id,
       location: {
         type: "Point",
