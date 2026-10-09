@@ -69,6 +69,8 @@ export function signLinks(code, entry) {
   return {
     svg: `https://offline.lad.lviv.ua/${code}${suffix}`,
     pdf: `https://pdf.lad.lviv.ua/${code}.pdf${suffix}`,
+    schemaSvg: `https://offline.lad.lviv.ua/${code}/schema${suffix}`,
+    schemaPdf: `https://pdf.lad.lviv.ua/${code}/schema.pdf${suffix}`,
   };
 }
 

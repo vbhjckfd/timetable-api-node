@@ -62,7 +62,19 @@ describe("getAllStopsAction", () => {
     expect(html).toContain('<span class="route kept" data-route="А01">А01</span>');
     expect(html).toContain('data-kind="svg"');
     expect(html).toContain('data-kind="pdf"');
+    expect(html).toContain('data-kind="schemaSvg"');
+    expect(html).toContain('data-kind="schemaPdf"');
     expect(html).toContain('src="/stop-overrides.js"');
+  });
+
+  it("links the map poster as SVG and PDF", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain("<th>Макет мапи</th>");
+    expect(html).toContain('href="https://offline.lad.lviv.ua/1001/schema"');
+    expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/schema.pdf"');
   });
 
   it("styles removed routes red and struck through, added ones green", async () => {

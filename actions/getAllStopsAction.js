@@ -75,6 +75,7 @@ ${contactBannerHtml("stops")}
     result += `<tr>
         <th>Код</th>
         <th>Макет</th>
+        <th>Макет мапи</th>
         <th>Назва</th>
         <th>Розташування</th>
         <th>Маршрути</th>
@@ -98,6 +99,11 @@ ${contactBannerHtml("stops")}
                 <a target="blank" data-kind="svg" href="https://offline.lad.lviv.ua/${s.code}">SVG</a>
                 &nbsp;
                 <a target="blank" data-kind="pdf" href="https://pdf.lad.lviv.ua/${s.code}.pdf">PDF</a>
+            </td>
+            <td>
+                <a target="blank" data-kind="schemaSvg" href="https://offline.lad.lviv.ua/${s.code}/schema">SVG</a>
+                &nbsp;
+                <a target="blank" data-kind="schemaPdf" href="https://pdf.lad.lviv.ua/${s.code}/schema.pdf">PDF</a>
             </td>
             <td>${escapeHtml(s.name)}</td>
             <td><a target="blank" href="https://www.openstreetmap.org/?mlat=${loc[0]}&mlon=${loc[1]}#map=18/${loc[0]}/${loc[1]}">${loc[0]}, ${loc[1]}</a></td>
