@@ -74,7 +74,7 @@ ${contactBannerHtml("stops")}
 
     result += `<tr>
         <th>Код</th>
-        <th>Макет</th>
+        <th>Макет таблички</th>
         <th>Макет мапи</th>
         <th>Назва</th>
         <th>Розташування</th>
