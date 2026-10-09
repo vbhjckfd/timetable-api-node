@@ -106,9 +106,16 @@ export default async (req, res, next) => {
 <style>
 table {border-collapse: collapse;}
 table, th { text-align: left; }
-table tr {border-bottom: 1pt solid black;}
+table tr {border-bottom: 1px solid #dde;}
+th, td { padding: 4px 6px; }
 table td {vertical-align: top;}
 table td:first-child { width: 360px; }
+tr:nth-child(even) { background: #f3f6fa; }
+th { position: sticky; top: 0; z-index: 1000; background: #fff; border-bottom: 2px solid #ccd; }
+.gtfs-id { cursor: help; border-bottom: 1px dotted #888; }
+.route { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: bold; background: #eee; border: 1px solid #ccc; }
+.route[data-route^="А"] { background: #e3edfc; border-color: #9bbbe8; color: #1d4f91; }
+.route[data-route^="Т"] { background: #fde6e6; border-color: #eda4a4; color: #9b1c1c; }
 a { text-decoration: none; }
 .route-map { width: 320px; height: 500px; }
 .route-map:fullscreen, .route-map:-webkit-full-screen { width: 100vw; height: 100vh; }
@@ -348,6 +355,13 @@ function simExpand(el, i, j) {
 <body>
 ${contactBannerHtml("routes")}
 <table>
+<tr>
+<th>Маршрут</th>
+<th>Назва</th>
+<th>Напрямок 1</th>
+<th>Напрямок 2</th>
+<th>Мапа</th>
+</tr>
 `;
   for (let [i, r] of routesRaw.entries()) {
     const allStops = {};
@@ -409,9 +423,9 @@ ${contactBannerHtml("routes")}
 
     const mapControls = (shapes[0] || shapes[1])
       ? `<div class="dir-btns">` +
-        `<button data-map="${mapId}" data-dirs="0" onclick="showDirs('${mapId}',[0])">Dir 1</button>` +
-        `<button data-map="${mapId}" data-dirs="1" onclick="showDirs('${mapId}',[1])">Dir 2</button>` +
-        `<button data-map="${mapId}" data-dirs="0,1" class="active" onclick="showDirs('${mapId}',[0,1])">Both</button>` +
+        `<button data-map="${mapId}" data-dirs="0" onclick="showDirs('${mapId}',[0])">Напрямок 1</button>` +
+        `<button data-map="${mapId}" data-dirs="1" onclick="showDirs('${mapId}',[1])">Напрямок 2</button>` +
+        `<button data-map="${mapId}" data-dirs="0,1" class="active" onclick="showDirs('${mapId}',[0,1])">Обидва</button>` +
         `</div>`
       : "";
 
@@ -429,7 +443,7 @@ ${contactBannerHtml("routes")}
       : "";
 
     result += `<tr>
-        <td><a target="_blank" href="https://lad.lviv.ua/route/${routeNameToUrlFriendly(r.short_name)}">${escapeHtml(r.short_name)}</a> (${r.external_id})${similarHtml}</td>
+        <td><a target="_blank" class="route" data-route="${escapeHtml(r.short_name)}" href="https://lad.lviv.ua/route/${routeNameToUrlFriendly(r.short_name)}">${escapeHtml(r.short_name)}</a> <span class="gtfs-id" title="Внутрішній ID маршруту в GTFS-даних перевізника (route_id)">(${r.external_id})</span>${similarHtml}</td>
         <td>${escapeHtml(r.long_name)}</td>
         <td><ol>${stopsByShape[0]}</ol></td>
         <td><ol>${stopsByShape[1]}</ol></td>
