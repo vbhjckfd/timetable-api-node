@@ -29,15 +29,34 @@ make start
 nvm use && make test
 ```
 
+## TypeScript
+
+The code is TypeScript and runs straight from the `.ts` sources under Node's
+built-in type stripping — there is no build step for the server, the GTFS
+import or the scripts. That means only erasable syntax (no `enum`,
+`namespace` or parameter properties), `import type` for type-only imports, and
+relative imports that name the `.ts` file; `tsconfig.json` enforces all three.
+
+```bash
+npm run typecheck   # tsc, no emit
+```
+
+`npm run build` emits just `mcp/stdio.js`, the published `bin`: Node does not
+strip types inside `node_modules`, so the npm package has to ship JavaScript.
+It runs on `npm pack`/`npm publish`; the output is not committed.
+
+`public/stopOverrides.js` is served to browsers as-is, so it stays JavaScript
+and is type-checked from its JSDoc.
+
 ## Monitoring
 
 New Relic APM, off unless `NEW_RELIC_LICENSE_KEY` is set. It also carries
-errors and the custom metrics recorded through `utils/metrics.js`.
+errors and the custom metrics recorded through `utils/metrics.ts`.
 
 New Relic runs as a preloaded agent, so `npm start` carries the flags:
 
 ```bash
-node -r dotenv/config -r newrelic --import newrelic/esm-loader.mjs index.js
+node -r dotenv/config -r newrelic --import newrelic/esm-loader.mjs index.ts
 ```
 
 `dotenv/config` is preloaded first so `.env` is populated before the agent

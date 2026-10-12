@@ -1,0 +1,99 @@
+import type { NextFunction, Request, Response } from "express";
+import * as metrics from "../utils/metrics.ts";
+import db from "../connections/timetableSqliteDb.ts";
+import type { RouteDoc, StopDoc } from "../types/domain.ts";
+import { formatRouteName, isLowFloor } from "../utils/appHelpers.ts";
+import {
+  getVehiclesLocations,
+  getArrivalTimes,
+} from "../services/microgizService.ts";
+
+export default async (req: Request<{ vehicleId: string }>, res: Response, next: NextFunction) => {
+  metrics.count('vehicle_lookup.by_id', 1);
+  // Upcoming stops come from trip_updates and are secondary to the position:
+  // a failed arrivals feed degrades to no stops instead of failing the lookup
+  // of a vehicle the position feed does know about.
+  const [vehiclePositionRaw, arrivalTimeItemsRaw] = await Promise.all([
+    getVehiclesLocations(),
+    getArrivalTimes().catch((e) => {
+      metrics.captureException(e);
+      return [];
+    }),
+  ]);
+
+  const vehicleEntity = vehiclePositionRaw.find(
+    (entity) => entity.vehicle.vehicle.id == req.params.vehicleId,
+  );
+  if (!vehicleEntity) return res.sendStatus(404);
+  const vehiclePosition = vehicleEntity.vehicle;
+
+  let arrivalTimes = arrivalTimeItemsRaw
+    .filter((e) => e.tripUpdate?.vehicle?.id == req.params.vehicleId)
+    .flatMap((e) => e.tripUpdate!.stopTimeUpdate ?? [])
+    .sort((a, b) => a.stopSequence! - b.stopSequence!);
+
+  const stopIds = arrivalTimes.map((i) => i.stopId);
+
+  const stopIdsMap: Record<string, StopDoc> = Object.fromEntries(
+    db
+      .getCollection<StopDoc>("stops")
+      .find({ microgiz_id: { $in: stopIds } })
+      .map((s) => [s.microgiz_id, s]),
+  );
+
+  arrivalTimes = arrivalTimes.filter((item) => !!stopIdsMap[item.stopId!]);
+
+  const routeLocal = db
+    .getCollection<RouteDoc>("routes")
+    .findOne({ external_id: vehiclePosition.trip.routeId });
+
+  res.set("Cache-Control", `public, s-maxage=5`).send({
+    vehicleId: String(vehiclePosition.vehicle.id),
+    location: [
+      vehiclePosition.position.latitude,
+      vehiclePosition.position.longitude,
+    ],
+    routeId: vehiclePosition.trip.routeId,
+    // Short name as shown on the vehicle ("Т30"), alongside the opaque GTFS
+    // routeId. Same formatting as /transport and the stop timetable, so a
+    // client can carry it straight into /routes/static/:name.
+    route: routeLocal ? formatRouteName(routeLocal.short_name) : null,
+    bearing: vehiclePosition.position.bearing,
+    speed: vehiclePosition.position.speed ?? null,
+    direction:
+      routeLocal?.trip_direction_map?.[
+        vehiclePosition.trip.tripId.toString()
+      ] ?? null,
+    // The feed sends "" for vehicles without a plate on record.
+    licensePlate: vehiclePosition.vehicle.licensePlate || null,
+    // Same rule as /routes/dynamic and /transport, so the vehicle page can
+    // mark its marker without a second request.
+    lowfloor: routeLocal ? isLowFloor(null, vehicleEntity, routeLocal) : false,
+    arrivals: arrivalTimes.map((item) => {
+      const transfers = stopIdsMap[item.stopId!].transfers
+        .map((i) => {
+          const { _id, ...omitted } = i;
+          return omitted;
+        })
+        .filter((i) => vehiclePosition.trip.routeId != i.id)
+        .sort((a, b) => {
+          if (a["vehicle_type"] == b["vehicle_type"]) {
+            return 0;
+          }
+
+          return a["vehicle_type"] == "bus" ? 1 : -1;
+        });
+      return {
+        code: stopIdsMap[item.stopId!].code,
+        name: stopIdsMap[item.stopId!].name,
+        arrival: item.arrival
+          ? new Date(parseInt(`${item.arrival.time}000`)).toUTCString()
+          : null,
+        departure: item.departure
+          ? new Date(parseInt(`${item.departure.time}000`)).toUTCString()
+          : null,
+        transfers: transfers,
+      };
+    }),
+  });
+};

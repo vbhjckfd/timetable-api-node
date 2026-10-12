@@ -1,0 +1,31 @@
+import type { NextFunction, Request, Response } from "express";
+import db from "../connections/timetableSqliteDb.ts";
+import type { StopDoc } from "../types/domain.ts";
+
+export default async (req: Request, res: Response, next: NextFunction) => {
+  const cacheAgeSeconds = 30 * 24 * 3600;
+  const code = req.stopCode;
+
+  const stop = db.getCollection<StopDoc>("stops").findOne({ code: code });
+  if (!stop) {
+    res.status(404).send(`Bad argument, stop with code ${code} not found`);
+    return;
+  }
+
+  const transfers = stop.transfers.map((i) => {
+    const { _id, ...omitted } = i;
+    return omitted;
+  });
+
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAgeSeconds}`)
+    .set("Cache-Tag", "short")
+    .json({
+      name: stop.name,
+      eng_name: stop.eng_name,
+      longitude: stop.location.coordinates[1],
+      latitude: stop.location.coordinates[0],
+      code: stop.code,
+      transfers: transfers,
+    });
+};
