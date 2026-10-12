@@ -11,6 +11,11 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install production dependencies.
+# npm runs `node-gyp rebuild` for better-sqlite3 on install. The package ships
+# a musl prebuild, so nothing is compiled, but node-gyp still downloads Node's
+# headers (and SHASUMS256.txt) just to configure, and a timeout on that
+# download failed a deploy. Point it at the headers the image already ships.
+ENV npm_config_nodedir=/usr/local
 RUN apk add --no-cache tzdata python3 make g++ && npm install --omit=dev
 ENV TZ=Europe/Kyiv
 
