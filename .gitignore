@@ -106,6 +106,9 @@ dist
 .tern-port
 
 database/*
+
+# Built by `npm run build` for the published package only.
+mcp/stdio.js
 static.zip
 newrelic_agent.log
 

@@ -7,7 +7,7 @@
  * .cjs even though the rest of the project is ESM ("type": "module").
  *
  * No secrets live here: the license key comes from NEW_RELIC_LICENSE_KEY.
- * Without that variable the agent stays off, and utils/metrics.js calls
+ * Without that variable the agent stays off, and utils/metrics.ts calls
  * become no-ops.
  */
 exports.config = {

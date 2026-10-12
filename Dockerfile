@@ -21,7 +21,7 @@ RUN echo "$CACHEBUST"
 
 RUN apk --no-cache add curl && curl --silent --head "https://track.ua-gis.com/gtfs/lviv/static.zip" | grep 'Last-Modified:' | cut -c 16- > ./last-modified.txt
 
-RUN node ./gtfs-import.js && node ./scripts/slim-gtfs-db.js
+RUN node ./gtfs-import.ts && node ./scripts/slim-gtfs-db.ts
 
 FROM node:26-alpine
 
@@ -49,4 +49,4 @@ HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 CMD wget
 # Same flags as `npm start`, without an npm process sitting in front of node
 # (extra RSS, and it gets SIGTERM instead of the app). Keep in sync with
 # package.json "start".
-CMD [ "node", "-r", "dotenv/config", "-r", "newrelic", "--import", "newrelic/esm-loader.mjs", "index.js" ]
+CMD [ "node", "-r", "dotenv/config", "-r", "newrelic", "--import", "newrelic/esm-loader.mjs", "index.ts" ]

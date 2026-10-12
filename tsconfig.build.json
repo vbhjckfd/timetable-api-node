@@ -1,0 +1,12 @@
+{
+  // Emits mcp/stdio.js next to its source for the npm package's `bin`. Node
+  // refuses to strip types under node_modules, so the published file has to
+  // be plain JS; everything else runs from source.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowJs": false
+  },
+  "include": [],
+  "files": ["mcp/stdio.ts"]
+}

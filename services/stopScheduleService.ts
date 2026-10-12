@@ -1,0 +1,151 @@
+import { cleanUpStopName, getTextWaitTime } from "../utils/appHelpers.ts";
+import type { RouteDoc, StopDoc, Transfer } from "../types/domain.ts";
+
+/** A published-timetable departure, in the shape of a live arrival. */
+export type ScheduledArrival = Omit<Transfer, "_id" | "id"> & {
+  route_id: string;
+  lowfloor: false;
+  end_stop: string;
+  arrival_time: string;
+  time_left: string;
+  scheduled: true;
+};
+
+export interface ScheduledArrivalsOptions {
+  now?: Date;
+  windowMinutes?: number;
+  limit?: number;
+  timeZone?: string;
+}
+
+// How far ahead of "now" a scheduled departure may be and still be worth
+// showing. Long enough to cover the outer stops of the network, where headways
+// run 30 min and more, short enough that the list stays a list of what is
+// coming rather than a printed timetable.
+const SCHEDULE_WINDOW_MINUTES = 90;
+
+// Per route+direction, so a 5-minute-headway trunk route cannot crowd out the
+// half-hourly one a rider is actually waiting for.
+const MAX_ENTRIES_PER_ROUTE = 2;
+
+const MAX_ENTRIES = 8;
+
+// The departure maps hold Lviv wall-clock times. Reading them with the host's
+// local clock silently produces nothing whenever the process is not on Kyiv
+// time — which is exactly what happened in production, where the runtime image
+// ran on UTC and every departure landed hours in the past. The zone is named
+// explicitly here so the result no longer depends on the container's TZ.
+const SCHEDULE_TIME_ZONE = "Europe/Kyiv";
+
+/** `date` with its fields shifted so local getters read the zone's wall clock. */
+function asZoned(date: Date, timeZone: string): Date {
+  return new Date(date.toLocaleString("en-US", { timeZone }));
+}
+
+/**
+ * The instant at which the zone's wall clock next reads "HH:MM" on the same
+ * day as `reference`. Derived as a wall-clock delta from `reference`, so it
+ * needs no offset table and stays correct on either side of a DST switch.
+ *
+ * The service day never crosses midnight — the latest departure in the data is
+ * 23:59 — so a same-day answer is enough.
+ */
+function resolveDepartureTime(
+  hhmm: string | null | undefined,
+  reference: Date,
+  zonedReference: Date,
+): Date | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm ?? "");
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+
+  const wallTarget = new Date(zonedReference);
+  wallTarget.setHours(hours, minutes, 0, 0);
+
+  return new Date(reference.getTime() + (wallTarget.getTime() - zonedReference.getTime()));
+}
+
+// The import writes a combined map plus per-day-type splits. Saturday and
+// Sunday can differ (e.g. А06 runs a Sat-only and a Sun-only service), so pick
+// the exact day; the weekend union and then the combined map are fallbacks for
+// routes imported before those splits existed.
+function departuresForStop(route: RouteDoc, microgizId: string, weekday: number): string[] {
+  const preferred =
+    weekday === 6
+      ? [route.stop_departure_time_map_saturday, route.stop_departure_time_map_weekend]
+      : weekday === 0
+        ? [route.stop_departure_time_map_sunday, route.stop_departure_time_map_weekend]
+        : [route.stop_departure_time_map_workday];
+
+  const dayMap = preferred.find(Boolean);
+  if (dayMap) return dayMap[microgizId] ?? [];
+  return route.stop_departure_time_map?.[microgizId] ?? [];
+}
+
+/**
+ * Upcoming *scheduled* departures at a stop, in the same shape as the live
+ * arrivals from stopArrivalService.
+ *
+ * The live feed only predicts a bounded number of stops ahead of each vehicle
+ * (gtfs-eta caps a trip at its next 10 stops), so a stop far along its routes
+ * routinely has no live prediction at all even mid-service — measured at
+ * Рясне-1 (code 694), which went blank for 30-60 s at a time on a weekday
+ * evening while six routes were running. To a rider that is indistinguishable
+ * from "nothing is coming tonight". These entries fill that gap: they carry no
+ * vehicle and are flagged `scheduled: true` so a consumer can render them as
+ * timetable data rather than as a tracked vehicle.
+ */
+export function getScheduledArrivalsForStop(
+  stop: Partial<Pick<StopDoc, "microgiz_id" | "transfers">> | null | undefined,
+  routesByRouteId: Record<string, RouteDoc | undefined>,
+  {
+    now = new Date(),
+    windowMinutes = SCHEDULE_WINDOW_MINUTES,
+    limit = MAX_ENTRIES,
+    timeZone = SCHEDULE_TIME_ZONE,
+  }: ScheduledArrivalsOptions = {},
+): ScheduledArrival[] {
+  if (!stop?.microgiz_id || !Array.isArray(stop.transfers)) return [];
+
+  const zonedNow = asZoned(now, timeZone);
+  const weekday = zonedNow.getDay();
+  const until = new Date(now.getTime() + windowMinutes * 60 * 1000);
+
+  const entries: ScheduledArrival[] = [];
+
+  for (const transfer of stop.transfers) {
+    const route = routesByRouteId[transfer.id];
+    if (!route) continue;
+
+    const { _id, id, ...routeInfo } = transfer;
+
+    const upcoming = departuresForStop(route, stop.microgiz_id, weekday)
+      .map((hhmm) => resolveDepartureTime(hhmm, now, zonedNow))
+      .filter((at): at is Date => !!at && at > now && at <= until)
+      .sort((a, b) => a.getTime() - b.getTime())
+      .slice(0, MAX_ENTRIES_PER_ROUTE);
+
+    for (const at of upcoming) {
+      entries.push({
+        route_id: id,
+        lowfloor: false,
+        end_stop: transfer.end_stop_name
+          ? cleanUpStopName(transfer.end_stop_name)
+          : "",
+        arrival_time: at.toUTCString(),
+        time_left: getTextWaitTime(at, now),
+        scheduled: true,
+        ...routeInfo,
+      });
+    }
+  }
+
+  return entries
+    .sort((a, b) => new Date(a.arrival_time).getTime() - new Date(b.arrival_time).getTime())
+    .slice(0, limit);
+}
+
+export default { getScheduledArrivalsForStop };

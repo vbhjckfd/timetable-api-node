@@ -1,0 +1,45 @@
+{
+  // Type-check only. The server, the import and the scripts run as .ts
+  // directly under Node's built-in type stripping, so there is no build step
+  // for them; `npm run build` (tsconfig.build.json) emits only the published
+  // stdio bin, since Node will not strip types inside node_modules.
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "resolveJsonModule": true,
+
+    // What Node's type stripping can run: relative imports name the .ts file,
+    // type-only imports are marked as such, and no syntax needs emitting
+    // (enums, namespaces, parameter properties).
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+
+    // public/stopOverrides.js ships to the browser as-is, so it stays JS and
+    // is checked from its JSDoc.
+    "allowJs": true,
+    "checkJs": false,
+
+    "noEmit": true
+  },
+  "include": [
+    "*.ts",
+    "actions",
+    "connections",
+    "mcp",
+    "services",
+    "types",
+    "utils",
+    "scripts",
+    "public"
+  ]
+}

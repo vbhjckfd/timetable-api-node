@@ -1,3 +1,6 @@
+// @ts-check
+/// <reference lib="dom" />
+
 /**
  * Per-stop route overrides for the /stops listing.
  *
@@ -14,6 +17,14 @@
  * the test suite, so the DOM half only runs when init() is called.
  */
 
+/**
+ * @typedef {{ add: string[], remove: string[] }} Override
+ * @typedef {{ add?: unknown, remove?: unknown } | null | undefined} OverrideInput
+ *   What storage or a caller hands in: possibly partial, possibly garbage.
+ * @typedef {Record<string, OverrideInput>} Overrides Keyed by stop code.
+ * @typedef {{ name: string, state: "kept" | "removed" | "added" }} RouteChip
+ */
+
 export const STORAGE_KEY = "lad-route-overrides";
 
 export const MAX_ROUTES_PER_LIST = 40;
@@ -21,6 +32,10 @@ export const MAX_ROUTES_PER_LIST = 40;
 // Route names are alphanumeric in both alphabets: А03, Т25, 32A, Аеропорт.
 const ROUTE_NAME = /^[\p{L}\p{N}]{1,16}$/u;
 
+/**
+ * @param {unknown} name
+ * @returns {name is string}
+ */
 export function isValidRouteName(name) {
   return typeof name === "string" && ROUTE_NAME.test(name);
 }
@@ -28,8 +43,12 @@ export function isValidRouteName(name) {
 /**
  * Trims anything that is not a usable route name, drops duplicates, and caps
  * the length. A name in both lists means remove, since that is the safer read.
+ *
+ * @param {OverrideInput} entry
+ * @returns {Override}
  */
 export function normalizeOverride(entry) {
+  /** @param {unknown} list */
   const clean = (list) =>
     Array.from(new Set(Array.isArray(list) ? list : []))
       .filter(isValidRouteName)
@@ -41,6 +60,7 @@ export function normalizeOverride(entry) {
   return { add, remove };
 }
 
+/** @param {OverrideInput} entry */
 export function isEmptyOverride(entry) {
   const { add, remove } = normalizeOverride(entry);
   return add.length === 0 && remove.length === 0;
@@ -50,6 +70,8 @@ export function isEmptyOverride(entry) {
  * The query string timetable-offline and timetable-pdf both understand.
  * Comma-separated, each name percent-encoded: the services split on the comma
  * after decoding, and route names are Cyrillic.
+ *
+ * @param {OverrideInput} entry
  */
 export function overrideQuery(entry) {
   const { add, remove } = normalizeOverride(entry);
@@ -62,6 +84,11 @@ export function overrideQuery(entry) {
   return parts.join("&");
 }
 
+/**
+ * @param {string | number} code
+ * @param {OverrideInput} entry
+ * @returns {{ svg: string, pdf: string, schemaSvg: string, schemaPdf: string }}
+ */
 export function signLinks(code, entry) {
   const query = overrideQuery(entry);
   const suffix = query ? `?${query}` : "";
@@ -77,19 +104,23 @@ export function signLinks(code, entry) {
 /**
  * The route column as it should read: upstream routes in their own order, the
  * removed ones still shown but struck through, the added ones after them.
+ *
+ * @param {unknown} routes
+ * @param {OverrideInput} entry
+ * @returns {RouteChip[]}
  */
 export function applyOverride(routes, entry) {
   const { add, remove } = normalizeOverride(entry);
   const upstream = Array.isArray(routes) ? routes : [];
 
-  const kept = upstream.map((name) => ({
+  const kept = upstream.map((/** @type {string} */ name) => ({
     name,
-    state: remove.includes(name) ? "removed" : "kept",
+    state: /** @type {RouteChip["state"]} */ (remove.includes(name) ? "removed" : "kept"),
   }));
 
   const added = add
     .filter((name) => !upstream.includes(name))
-    .map((name) => ({ name, state: "added" }));
+    .map((name) => ({ name, state: /** @type {const} */ ("added") }));
 
   return [...kept, ...added];
 }
@@ -98,6 +129,11 @@ export function applyOverride(routes, entry) {
  * Toggles a name that the API does list for the stop: kept becomes removed and
  * back. Toggling one the API does not list drops it from the add list instead,
  * so a chip added by mistake can be clicked away.
+ *
+ * @param {OverrideInput} entry
+ * @param {unknown} routes
+ * @param {string} name
+ * @returns {Override}
  */
 export function toggleRoute(entry, routes, name) {
   const { add, remove } = normalizeOverride(entry);
@@ -117,6 +153,11 @@ export function toggleRoute(entry, routes, name) {
 /**
  * A name the API already lists for the stop is not added — it is un-removed,
  * which is what asking for it back means.
+ *
+ * @param {OverrideInput} entry
+ * @param {unknown} routes
+ * @param {unknown} name
+ * @returns {Override}
  */
 export function addRoute(entry, routes, name) {
   if (!isValidRouteName(name)) return normalizeOverride(entry);
@@ -135,6 +176,9 @@ export function addRoute(entry, routes, name) {
  * One line of the plain-text summary an editor pastes to whoever maintains
  * the upstream database. "Додати"/"Видалити" only appear when that list is
  * non-empty, so a stop with just one side reads as one clause.
+ *
+ * @param {string | number} code
+ * @param {OverrideInput} entry
  */
 export function formatOverrideLine(code, entry) {
   const { add, remove } = normalizeOverride(entry);
@@ -149,20 +193,26 @@ export function formatOverrideLine(code, entry) {
 /**
  * All overridden stops, one line each, lowest code first. Empty when nothing
  * has been changed, so the caller can hide the box entirely.
+ *
+ * @param {Overrides | null | undefined} overrides
  */
 export function formatSummary(overrides) {
   return Object.keys(overrides ?? {})
-    .filter((code) => !isEmptyOverride(overrides[code]))
+    .filter((code) => !isEmptyOverride(/** @type {Overrides} */ (overrides)[code]))
     .sort((a, b) => Number(a) - Number(b))
-    .map((code) => formatOverrideLine(code, overrides[code]))
+    .map((code) => formatOverrideLine(code, /** @type {Overrides} */ (overrides)[code]))
     .join("\n");
 }
 
 // ── DOM ─────────────────────────────────────────────────────────────────────
 
+/**
+ * @param {HTMLTableRowElement} row
+ * @param {Overrides} overrides
+ */
 function renderRow(row, overrides) {
-  const code = row.dataset.code;
-  const cell = row.querySelector("[data-routes]");
+  const code = /** @type {string} */ (row.dataset.code);
+  const cell = /** @type {HTMLElement} */ (row.querySelector("[data-routes]"));
   const routes = cell.dataset.routes ? cell.dataset.routes.split(" ") : [];
   const entry = normalizeOverride(overrides[code]);
 
@@ -183,8 +233,8 @@ function renderRow(row, overrides) {
   cell.append(input);
 
   const links = signLinks(code, entry);
-  for (const link of row.querySelectorAll("[data-kind]")) {
-    link.href = links[link.dataset.kind];
+  for (const link of /** @type {NodeListOf<HTMLAnchorElement>} */ (row.querySelectorAll("[data-kind]"))) {
+    link.href = links[/** @type {keyof typeof links} */ (link.dataset.kind)];
   }
 }
 
@@ -193,15 +243,18 @@ function renderRow(row, overrides) {
  * in some browsers rather than just returning null, and a hand-edited or
  * previous-format value in there is not JSON worth trusting either — either
  * way this falls back to no overrides rather than breaking the listing.
+ *
+ * @returns {Overrides}
  */
 export function loadOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {};
+    return JSON.parse(/** @type {string} */ (localStorage.getItem(STORAGE_KEY))) ?? {};
   } catch {
     return {};
   }
 }
 
+/** @param {Overrides} overrides */
 export function saveOverrides(overrides) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
@@ -213,9 +266,12 @@ export function saveOverrides(overrides) {
   }
 }
 
+/** @param {Overrides} overrides */
 function renderSummary(overrides) {
   const box = document.getElementById("overrides-summary");
-  const textarea = document.getElementById("overrides-summary-text");
+  const textarea = /** @type {HTMLTextAreaElement | null} */ (
+    document.getElementById("overrides-summary-text")
+  );
   if (!box || !textarea) return;
 
   const text = formatSummary(overrides);
@@ -224,7 +280,7 @@ function renderSummary(overrides) {
 }
 
 export function init() {
-  const rows = Array.from(document.querySelectorAll("tr[data-code]"));
+  const rows = /** @type {HTMLTableRowElement[]} */ (Array.from(document.querySelectorAll("tr[data-code]")));
   if (!rows.length) return;
 
   const overrides = loadOverrides();
@@ -234,7 +290,9 @@ export function init() {
   const copyButton = document.getElementById("overrides-summary-copy");
   if (copyButton) {
     copyButton.addEventListener("click", async () => {
-      const textarea = document.getElementById("overrides-summary-text");
+      const textarea = /** @type {HTMLTextAreaElement} */ (
+        document.getElementById("overrides-summary-text")
+      );
       try {
         await navigator.clipboard.writeText(textarea.value);
       } catch {
@@ -245,37 +303,42 @@ export function init() {
     });
   }
 
+  /** @param {HTMLTableRowElement} row */
   const routesOf = (row) => {
-    const cell = row.querySelector("[data-routes]");
+    const cell = /** @type {HTMLElement} */ (row.querySelector("[data-routes]"));
     return cell.dataset.routes ? cell.dataset.routes.split(" ") : [];
   };
 
+  /**
+   * @param {HTMLTableRowElement} row
+   * @param {string} code
+   */
   const persist = (row, code) => {
     renderRow(row, overrides);
     renderSummary(overrides);
     if (!saveOverrides(overrides)) {
-      row.querySelector("[data-routes]").append(" ⚠️");
+      /** @type {HTMLElement} */ (row.querySelector("[data-routes]")).append(" ⚠️");
     }
   };
 
   document.addEventListener("click", (event) => {
-    const chip = event.target.closest(".route");
+    const chip = /** @type {HTMLElement | null} */ (/** @type {Element} */ (event.target).closest(".route"));
     if (!chip) return;
 
-    const row = chip.closest("tr[data-code]");
-    const code = row.dataset.code;
-    overrides[code] = toggleRoute(overrides[code], routesOf(row), chip.dataset.route);
+    const row = /** @type {HTMLTableRowElement} */ (chip.closest("tr[data-code]"));
+    const code = /** @type {string} */ (row.dataset.code);
+    overrides[code] = toggleRoute(overrides[code], routesOf(row), /** @type {string} */ (chip.dataset.route));
     if (isEmptyOverride(overrides[code])) delete overrides[code];
     persist(row, code);
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
-    const input = event.target.closest(".route-add");
+    const input = /** @type {HTMLInputElement | null} */ (/** @type {Element} */ (event.target).closest(".route-add"));
     if (!input) return;
 
-    const row = input.closest("tr[data-code]");
-    const code = row.dataset.code;
+    const row = /** @type {HTMLTableRowElement} */ (input.closest("tr[data-code]"));
+    const code = /** @type {string} */ (row.dataset.code);
     const name = input.value.trim();
     if (!isValidRouteName(name)) return;
 

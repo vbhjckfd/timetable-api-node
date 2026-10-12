@@ -46,3 +46,6 @@ cleanup-revisions.sh
 # Misc
 .nvmrc
 last-modified.txt
+tsconfig.json
+tsconfig.build.json
+vitest.config.ts
