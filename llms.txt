@@ -18,6 +18,7 @@ Live GTFS-RT feed: vehicle positions, stop arrivals with ETAs, route shapes, and
 - `GET /routes/static/{name}` — Route stop list, departure times, and polyline shape for both directions.
 - `GET /routes/dynamic/{name}` — Live vehicle positions on a route.
 - `GET /vehicle/{vehicleId}` — Single vehicle position and upcoming stop sequence.
+- `GET /vehicle-by-plate/{plate}` — Vehicle ID for a license plate (case, spaces and dashes ignored).
 - `GET /transport?latitude=…&longitude=…` — All active vehicles within 1 km of a coordinate.
 
 ## MCP

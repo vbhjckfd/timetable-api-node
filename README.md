@@ -20,8 +20,33 @@ Express-based API for Lviv transport timetable data with a read-only MCP endpoin
 
 ```bash
 nvm use
+npm install
+cp .env.dist .env
+make import   # first run, and whenever the GTFS feed changes
 make start
 ```
+
+`make import` downloads the static GTFS feed (`gtfs-import-config.json`) and
+writes the two stores the server reads: `database/Timetable` (LokiJS: stops,
+routes, shapes, first-stop schedules) and `database/gtfs` (SQLite: trips and
+calendars). Both are gitignored, so a fresh clone has no data until it runs.
+`make import-slim` re-imports only the light tables into SQLite and leaves
+`database/Timetable` alone.
+
+### Configuration
+
+All variables are optional; see `.env.dist`.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `8080` | HTTP port. |
+| `VEHICLES_LOCATION_URL` | `https://track.ua-gis.com/gtfs/lviv/vehicle_position` | GTFS-RT vehicle positions feed. |
+| `TRIP_UDPDATES_URL` | `https://track.ua-gis.com/gtfs/lviv/trip_updates` | GTFS-RT trip updates feed (the misspelling is the real name). |
+| `MCP_PUBLIC_BASE_URL` | `https://api.lad.lviv.ua` | Base URL used in MCP metadata (icon URL). |
+| `NEW_RELIC_LICENSE_KEY` | — | Enables New Relic APM (see [Monitoring](#monitoring)). |
+| `NEW_RELIC_APP_NAME`, `NEW_RELIC_LOG_LEVEL` | `timetable-api-node`, `info` | New Relic agent settings. |
+| `PULSE_WORKER_URL`, `PULSE_SIGNAL_SECRET` | — | Signal a Pulse worker on each `/stops/:code/timetable` request; both must be set. |
+| `MCP_URL` | `https://api.lad.lviv.ua/mcp` | Only for the `timetable-mcp` stdio proxy: the remote endpoint it forwards to. |
 
 ## Test
 
@@ -466,8 +491,9 @@ All stops as a JSON array, sorted by code.
 The upstream route list for a stop is sometimes behind reality. `GET /stops`
 applies a stored override to its `Маршрути` column — removed routes shown red and
 struck through, added ones green — and hangs the matching `?add=`/`?remove=` on
-that row's SVG and PDF links, which `offline.lad.lviv.ua` and `pdf.lad.lviv.ua`
-both understand.
+that row's SVG and PDF links in both the `Табличка` (stop sign) and `Мапа`
+(network poster, `/:code/schema`) columns, which `offline.lad.lviv.ua` and
+`pdf.lad.lviv.ua` both understand.
 
 The route column is always clickable: click a route to drop or restore it, type
 one into the `+` box to add it.
@@ -551,3 +577,35 @@ Look up a vehicle ID by its license plate. Short-cached (5 s).
 Vehicles within 1 km of a point. Short-cached (10 s).
 
 - **Response:** array of `{ id, route, routeId, direction, vehicle_type, color, location: [lat, lng], bearing, speed, lowfloor }`. `routeId` is usable as `:name` in `/routes/static/:name`; `direction` matches the index into `stops`/`shapes` (0 = outbound, 1 = return, null if unknown). `speed` is m/s or `null`.
+
+### Service and discovery
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /health` | `{ status: "ok" }`, or 503 while the timetable store is not loaded. Does not probe the upstream feed. |
+| `GET /ping` | `{}` |
+| `GET /openapi.yaml` (also `/.well-known/openapi.yaml`) | OpenAPI 3.0 description of the REST API. |
+| `GET /llms.txt`, `GET /INTEGRATION.md` | LLM-oriented overview and the [integration guide](INTEGRATION.md). |
+| `GET /.well-known/ai-plugin.json`, `GET /.well-known/agent.json` | OpenAI plugin manifest and A2A agent card. |
+| `GET /server.json`, `GET /smithery.json` | MCP Registry and Smithery manifests. |
+| `GET /sitemap.xml` | Sitemap of the public `lad.lviv.ua` pages. |
+
+## Deployment
+
+Production runs on Cloud Run (`timetable-api-node`, `us-central1`, project
+`timetable-252615`) behind Cloudflare.
+
+- **Image.** The Dockerfile imports the GTFS feed at build time
+  (`gtfs-import.ts`, then `scripts/slim-gtfs-db.ts` empties the SQLite tables
+  the server never reads), so every image carries its own data snapshot.
+  `last-modified.txt` records the feed's `Last-Modified` header.
+- **Cloud Build.** `cloudbuild.yaml` builds, pushes and deploys the image. A
+  daily scheduled run sets `_DATA_REFRESH=1` and skips the whole build when
+  the upstream `static.zip` is unchanged since the deployed revision.
+- **Manual.** `make deploy` builds a `linux/amd64` image, pushes it and deploys
+  it. `make smoke` checks a few production endpoints; `make clear-short-cache`,
+  `clear-long-cache` and `clear-all-cache` purge Cloudflare by cache tag.
+- **npm package.** `make publish` bumps the patch version (which also syncs
+  `server.json` and `openapi.yaml`) and pushes the tag; the tag triggers
+  `.github/workflows/publish.yml`, which publishes to npm and the MCP Registry.
+  The package ships only the `timetable-mcp` stdio proxy.

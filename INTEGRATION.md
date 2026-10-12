@@ -92,7 +92,7 @@ Or pin the config:
 }
 ```
 
-The `npx` entry is a thin stdio proxy — it forwards every request to the live API, so there is no database or config to set up. npx still installs the package's npm dependencies on first run, so expect a short download.
+The `npx` entry is a thin stdio proxy — it forwards every request to the live API, so there is no database or config to set up. npx still installs the package's npm dependencies on first run, so expect a short download. Set `MCP_URL` to point it at another deployment (default `https://api.lad.lviv.ua/mcp`).
 
 ### MCP Inspector (testing)
 
