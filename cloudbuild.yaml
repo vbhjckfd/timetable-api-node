@@ -14,7 +14,7 @@ steps:
           exit 0
         fi
         UP=$$(curl -fsS -I https://track.ua-gis.com/gtfs/lviv/static.zip 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($$1)=="last-modified"{print $$2}')
-        DEP=$$(curl -fsS https://timetable-api-node-1041251696619.us-central1.run.app/last-modified.txt 2>/dev/null | tr -d '\r\n')
+        DEP=$$(curl -fsS https://timetable-api-node-1041251696619.europe-north1.run.app/last-modified.txt 2>/dev/null | tr -d '\r\n')
         echo "upstream=[$$UP] deployed=[$$DEP]"
         if [ -n "$$UP" ] && [ "$$UP" = "$$DEP" ]; then
           echo "GTFS static unchanged; skipping rebuild."
@@ -87,8 +87,8 @@ options:
   substitutionOption: ALLOW_LOOSE
 substitutions:
   _TRIGGER_ID: 3cfc8543-fcbb-4a25-a504-60cd67484549
-  _DEPLOY_REGION: us-central1
-  _GCR_HOSTNAME: us.gcr.io
+  _DEPLOY_REGION: europe-north1
+  _GCR_HOSTNAME: eu.gcr.io
   _PLATFORM: managed
   _SERVICE_NAME: timetable-api-node
   _LABELS: gcb-trigger-id=3cfc8543-fcbb-4a25-a504-60cd67484549

@@ -96,7 +96,7 @@ license key, not an `NRAK-...` user API key.
 Cloud Run reads the key from Secret Manager:
 
 ```bash
-gcloud run services update timetable-api-node --region=us-central1 --project=timetable-252615 --set-secrets=NEW_RELIC_LICENSE_KEY=new-relic-license-key:latest
+gcloud run services update timetable-api-node --region=europe-north1 --project=timetable-252615 --set-secrets=NEW_RELIC_LICENSE_KEY=new-relic-license-key:latest
 ```
 
 ## MCP Server
@@ -592,7 +592,7 @@ Vehicles within 1 km of a point. Short-cached (10 s).
 
 ## Deployment
 
-Production runs on Cloud Run (`timetable-api-node`, `us-central1`, project
+Production runs on Cloud Run (`timetable-api-node`, `europe-north1`, project
 `timetable-252615`) behind Cloudflare.
 
 - **Image.** The Dockerfile imports the GTFS feed at build time

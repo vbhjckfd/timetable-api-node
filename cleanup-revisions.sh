@@ -2,9 +2,9 @@
 
 # Set your variables
 SERVICE_NAME="timetable-api-node"
-REGION="us-central1"
+REGION="europe-north1"
 PROJECT_ID="timetable-252615"
-GCR_IMAGE="us.gcr.io/$PROJECT_ID/github_vbhjckfd_timetable-api-node/$SERVICE_NAME"
+GCR_IMAGE="eu.gcr.io/$PROJECT_ID/github_vbhjckfd_timetable-api-node/$SERVICE_NAME"
 
 # 1. Get the name of the LATEST revision so we can exclude it explicitly
 LATEST_REV=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.latestCreatedRevisionName)')

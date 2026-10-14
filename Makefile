@@ -4,9 +4,9 @@ NVM_USE := source ~/.nvm/nvm.sh && nvm use --silent
 .PHONY: start import import-slim test build deploy publish clear-short-cache clear-long-cache clear-all-cache cleanup-revisions smoke
 
 PROJECT_ID ?= timetable-252615
-IMAGE ?= gcr.io/$(PROJECT_ID)/timetable-api-node-sqlite
+IMAGE ?= eu.gcr.io/$(PROJECT_ID)/timetable-api-node-sqlite
 SERVICE_NAME ?= timetable-api-node
-REGION ?= us-central1
+REGION ?= europe-north1
 DOCKER_PLATFORM ?= linux/amd64
 # Keep in sync with _MEMORY in cloudbuild.yaml — 256Mi OOMs at startup.
 MEMORY ?= 512Mi
