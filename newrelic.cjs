@@ -32,9 +32,11 @@ exports.config = {
     // Crawlers probe /mcp constantly: GET is answered with a deliberate 405
     // (the transport is stateless, so there is no SSE stream to open) and
     // 404s are noise. Neither is an application fault, so keep them out of
-    // the error rate. 400s stay visible: they mean a client sent a body the
-    // JSON-RPC schema rejected, which is worth seeing.
-    ignore_status_codes: [404, 405],
+    // the error rate. 429 is the rate limiters doing their job, and 406 is a
+    // client refusing every content type we offer, not a fault here. 400s
+    // stay visible: they mean a client sent a body the JSON-RPC schema
+    // rejected, which is worth seeing.
+    ignore_status_codes: [404, 405, 406, 429],
   },
   transaction_tracer: {
     enabled: true,
