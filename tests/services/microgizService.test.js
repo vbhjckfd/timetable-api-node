@@ -102,7 +102,8 @@ describe("getVehiclesLocations", () => {
     });
     expect(await getVehiclesLocations()).toEqual(mockEntities);
 
-    // 2) every subsequent attempt fails → fall back to the cache
+    // 2) past the reuse window, every attempt fails → fall back to the cache
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -198,7 +199,8 @@ describe("getArrivalTimes", () => {
     });
     expect(await getArrivalTimes()).toEqual(mockEntities);
 
-    // every subsequent attempt fails → fall back to the cache
+    // past the reuse window, every attempt fails → fall back to the cache
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -222,6 +224,52 @@ describe("getArrivalTimes", () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
 
     await expect(getArrivalTimes()).rejects.toThrow();
+  });
+});
+
+describe("feed reuse", () => {
+  const okResponse = () => ({
+    ok: true,
+    headers: { get: vi.fn().mockReturnValue("8") },
+    arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+  });
+
+  it.each([
+    ["getVehiclesLocations", getVehiclesLocations],
+    ["getArrivalTimes", getArrivalTimes],
+  ])("%s reuses a fetch younger than 5s", async (_name, get) => {
+    fetchMock.mockImplementation(async () => okResponse());
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({ entity: [{ id: "a" }] });
+
+    await get();
+    await get();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
+    await get();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["getVehiclesLocations", getVehiclesLocations],
+    ["getArrivalTimes", getArrivalTimes],
+  ])("%s shares one download between concurrent callers", async (_name, get) => {
+    fetchMock.mockImplementation(async () => okResponse());
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({ entity: [{ id: "a" }] });
+
+    const [a, b, c] = await Promise.all([get(), get(), get()]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(a).toBe(b);
+    expect(b).toBe(c);
+  });
+
+  it("does not keep a failed download for the next caller", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503 });
+    await expect(getArrivalTimes()).rejects.toThrow();
+
+    fetchMock.mockImplementation(async () => okResponse());
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({ entity: [{ id: "b" }] });
+    expect(await getArrivalTimes()).toEqual([{ id: "b" }]);
   });
 });
 

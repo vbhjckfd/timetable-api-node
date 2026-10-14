@@ -107,13 +107,42 @@ interface FeedCache<T> {
 }
 
 let vehiclesCache: FeedCache<VehicleEntity> | null = null;
+let vehiclesInFlight: Promise<VehicleEntity[]> | null = null;
+
+// Both feeds move about every 10s upstream, yet every request used to download
+// them afresh: New Relic showed one feed fetch per API request, ~80-110ms each
+// and most of the timetable/transport response time. A fetch younger than this
+// is reused, and requests arriving while one is running share it. Callers
+// already treat the entities as shared (see stopArrivalService), since the
+// stale fallback below hands out the same objects.
+const FEED_FRESH_MS = 5_000;
+
+function reuseOrLoad<T>(
+  cache: FeedCache<T> | null,
+  inFlight: Promise<T[]> | null,
+  load: () => Promise<T[]>,
+  setInFlight: (p: Promise<T[]> | null) => void,
+): Promise<T[]> {
+  if (cache && Date.now() - cache.at < FEED_FRESH_MS) return Promise.resolve(cache.entities);
+  if (inFlight) return inFlight;
+  const p = load().finally(() => setInFlight(null));
+  setInFlight(p);
+  return p;
+}
 
 // Test seam: drop the in-memory fallback so cases stay isolated.
 export function __resetVehiclesCache(): void {
   vehiclesCache = null;
+  vehiclesInFlight = null;
 }
 
-export async function getVehiclesLocations(): Promise<VehicleEntity[]> {
+export function getVehiclesLocations(): Promise<VehicleEntity[]> {
+  return reuseOrLoad(vehiclesCache, vehiclesInFlight, loadVehiclesLocations, (p) => {
+    vehiclesInFlight = p;
+  });
+}
+
+async function loadVehiclesLocations(): Promise<VehicleEntity[]> {
   const url =
     process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position";
   try {
@@ -141,13 +170,21 @@ export async function getVehiclesLocations(): Promise<VehicleEntity[]> {
 // window much shorter than the position feed's.
 const ARRIVALS_STALE_MAX_AGE_MS = 60 * 1000;
 let arrivalsCache: FeedCache<FeedEntity> | null = null;
+let arrivalsInFlight: Promise<FeedEntity[]> | null = null;
 
 // Test seam: drop the in-memory fallback so cases stay isolated.
 export function __resetArrivalsCache(): void {
   arrivalsCache = null;
+  arrivalsInFlight = null;
 }
 
-export async function getArrivalTimes(): Promise<FeedEntity[]> {
+export function getArrivalTimes(): Promise<FeedEntity[]> {
+  return reuseOrLoad(arrivalsCache, arrivalsInFlight, loadArrivalTimes, (p) => {
+    arrivalsInFlight = p;
+  });
+}
+
+async function loadArrivalTimes(): Promise<FeedEntity[]> {
   // trip_updates is served from our own gtfs-eta worker (R2-cached,
   // max-age=10), so the full backoff ladder used for the upstream position
   // feed would fan request volume out to the worker on every error. One
