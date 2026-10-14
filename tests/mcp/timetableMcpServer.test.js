@@ -737,6 +737,36 @@ describe("timetable MCP server", () => {
     expect(payload).toContain("get_stop_realtime");
   });
 
+  it.each([
+    ["no Accept header", undefined],
+    ["application/json only", "application/json"],
+    ["a wildcard", "*/*"],
+  ])("answers plain JSON to a client sending %s", async (_label, accept) => {
+    const headers = { "Content-Type": "application/json" };
+    if (accept) headers.Accept = accept;
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/application\/json/);
+    const payload = await response.json();
+    expect(payload.result.tools.map((t) => t.name)).toContain("get_stop_realtime");
+  });
+
+  it("keeps streaming for a client that accepts only text/event-stream", async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/text\/event-stream/);
+  });
+
   it("serves .well-known robots hint", async () => {
     const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     const robotsText = await robotsResponse.text();

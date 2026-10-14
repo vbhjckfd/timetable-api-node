@@ -1771,10 +1771,36 @@ function dropNullParams(body: unknown): unknown {
   return rest;
 }
 
+// The transport answers 406 unless Accept names both application/json and
+// text/event-stream. Plenty of real clients send neither (aiohttp scripts,
+// registry probes): 1,011 of them were turned away in one week, 9% of all
+// POST /mcp. The server is stateless and every response is a single message,
+// so plain JSON serves them fully. The transport reads the header from
+// rawHeaders, so that is what has to be rewritten.
+const FULL_ACCEPT = "application/json, text/event-stream";
+
+/** Widens Accept for the transport; true when the client can't take an SSE stream. */
+export function normalizeMcpAccept(req: Request): boolean {
+  const accept = req.headers.accept ?? "";
+  const wantsSse = /text\/event-stream/i.test(accept);
+  if (wantsSse && /application\/json/i.test(accept)) return false;
+
+  req.headers.accept = FULL_ACCEPT;
+  const raw = req.rawHeaders.filter((_, i, all) => {
+    const name = i % 2 === 0 ? all[i] : all[i - 1];
+    return name.toLowerCase() !== "accept";
+  });
+  raw.push("Accept", FULL_ACCEPT);
+  req.rawHeaders.splice(0, req.rawHeaders.length, ...raw);
+  return !wantsSse;
+}
+
 export async function handleMcpPostRequest(req: Request, res: Response): Promise<void> {
+  const jsonOnly = normalizeMcpAccept(req);
   const server = createTimetableMcpServer();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
+    enableJsonResponse: jsonOnly,
   });
 
   try {
