@@ -102,8 +102,8 @@ describe("getVehiclesLocations", () => {
     });
     expect(await getVehiclesLocations()).toEqual(mockEntities);
 
-    // 2) past the reuse window, every attempt fails → fall back to the cache
-    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
+    // 2) past the serve-stale window, every attempt fails → fall back to the cache
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 15_001);
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -199,8 +199,8 @@ describe("getArrivalTimes", () => {
     });
     expect(await getArrivalTimes()).toEqual(mockEntities);
 
-    // past the reuse window, every attempt fails → fall back to the cache
-    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
+    // past the serve-stale window, every attempt fails → fall back to the cache
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 15_001);
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -248,6 +248,50 @@ describe("feed reuse", () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
     await get();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["getVehiclesLocations", getVehiclesLocations],
+    ["getArrivalTimes", getArrivalTimes],
+  ])("%s serves a 5-15s old copy at once and refreshes it in the background", async (_name, get) => {
+    const decode = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode;
+    fetchMock.mockImplementation(async () => okResponse());
+    decode.mockReturnValue({ entity: [{ id: "old" }] });
+    await get();
+
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 10_000);
+    let release;
+    fetchMock.mockImplementation(() => new Promise((r) => (release = r)));
+
+    // The download hangs, yet requests are answered from the old copy.
+    expect(await get()).toEqual([{ id: "old" }]);
+    expect(await get()).toEqual([{ id: "old" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    decode.mockReturnValue({ entity: [{ id: "new" }] });
+    release(okResponse());
+    await vi.waitFor(async () => expect(await get()).toEqual([{ id: "new" }]));
+  });
+
+  it.each([
+    ["getVehiclesLocations", getVehiclesLocations],
+    ["getArrivalTimes", getArrivalTimes],
+  ])("%s waits for a download once the copy is older than 15s", async (_name, get) => {
+    const decode = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode;
+    fetchMock.mockImplementation(async () => okResponse());
+    decode.mockReturnValue({ entity: [{ id: "old" }] });
+    await get();
+
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 15_001);
+    decode.mockReturnValue({ entity: [{ id: "new" }] });
+    expect(await get()).toEqual([{ id: "new" }]);
+  });
+
+  it("passes a keep-alive dispatcher to fetch", async () => {
+    fetchMock.mockImplementation(async () => okResponse());
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({ entity: [] });
+    await getArrivalTimes();
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
   });
 
   it.each([

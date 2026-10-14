@@ -1,6 +1,7 @@
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 import type { transit_realtime } from "gtfs-realtime-bindings";
 import type Loki from "lokijs";
+import { Agent } from "undici";
 import {
   getRouteColor,
   formatRouteName,
@@ -47,9 +48,19 @@ async function fetchPlus(url: string, options: RequestInit = {}, retries: number
 // returned with HTTP 200 (e.g. a connection cut mid-stream) would otherwise
 // pass res.ok and feed a truncated buffer to the protobuf decoder. Throwing
 // here instead lets the retry path re-fetch a fresh, complete payload.
+// The feeds come from Cloudflare in front of an R2 bucket in Eastern Europe,
+// while this service runs in us-central1, so a fresh TLS connection costs
+// several transatlantic round trips. Node's default agent drops idle sockets
+// after 4s, shorter than the gap between feed downloads; keep them for 30s.
+const feedDispatcher = new Agent({ keepAliveTimeout: 30_000, keepAliveMaxTimeout: 60_000 });
+
 async function fetchBytes(url: string, options: RequestInit = {}, retries: number): Promise<Uint8Array> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...options });
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(10_000),
+      dispatcher: feedDispatcher,
+      ...options,
+    } as RequestInit);
     if (res.ok) {
       const data = new Uint8Array(await res.arrayBuffer());
       const expected = Number(res.headers.get("content-length"));
@@ -110,12 +121,20 @@ let vehiclesCache: FeedCache<VehicleEntity> | null = null;
 let vehiclesInFlight: Promise<VehicleEntity[]> | null = null;
 
 // Both feeds move about every 10s upstream, yet every request used to download
-// them afresh: New Relic showed one feed fetch per API request, ~80-110ms each
-// and most of the timetable/transport response time. A fetch younger than this
-// is reused, and requests arriving while one is running share it. Callers
-// already treat the entities as shared (see stopArrivalService), since the
-// stale fallback below hands out the same objects.
+// them afresh: New Relic showed one feed fetch per API request, 80-300ms each
+// and most of the timetable/transport response time. So requests no longer
+// wait for a download at all while a recent copy exists:
+// - younger than FEED_FRESH_MS: served as is;
+// - younger than FEED_SERVE_STALE_MS: served as is, and a refresh starts in
+//   the background (one at a time) for the next request;
+// - older, or nothing yet: the request waits for the download, shared with
+//   any other request already waiting.
+// Refreshing on traffic rather than on a timer is deliberate: Cloud Run
+// throttles CPU between requests, so a timer would stall exactly when idle.
+// Callers already treat the entities as shared (see stopArrivalService),
+// since the stale fallback in the loaders hands out the same objects.
 const FEED_FRESH_MS = 5_000;
+const FEED_SERVE_STALE_MS = 15_000;
 
 function reuseOrLoad<T>(
   cache: FeedCache<T> | null,
@@ -123,10 +142,19 @@ function reuseOrLoad<T>(
   load: () => Promise<T[]>,
   setInFlight: (p: Promise<T[]> | null) => void,
 ): Promise<T[]> {
-  if (cache && Date.now() - cache.at < FEED_FRESH_MS) return Promise.resolve(cache.entities);
-  if (inFlight) return inFlight;
-  const p = load().finally(() => setInFlight(null));
-  setInFlight(p);
+  const age = cache ? Date.now() - cache.at : Infinity;
+  if (cache && age < FEED_FRESH_MS) return Promise.resolve(cache.entities);
+
+  let p = inFlight;
+  if (!p) {
+    p = load().finally(() => setInFlight(null));
+    setInFlight(p);
+  }
+  if (cache && age < FEED_SERVE_STALE_MS) {
+    // The loaders log their own failures; nobody awaits this one.
+    p.catch(() => {});
+    return Promise.resolve(cache.entities);
+  }
   return p;
 }
 
