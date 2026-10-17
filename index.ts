@@ -446,6 +446,13 @@ app.get("/smithery.json", (req, res) => {
   res.sendFile(path.join(__dirname, "smithery.json"));
 });
 
+// Glama checks this path on the server's own domain to confirm who maintains
+// the listing; it 404'd before, though the file was already in the repo.
+app.get("/.well-known/glama.json", (req, res) => {
+  setStaticAssetCache(res, 3600 * 24 * 7);
+  res.sendFile(path.join(__dirname, "glama.json"));
+});
+
 app.get("/server.json", (req, res) => {
   setStaticAssetCache(res, 3600 * 24 * 7);
   res.sendFile(path.join(__dirname, "server.json"));
