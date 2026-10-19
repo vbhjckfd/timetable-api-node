@@ -293,7 +293,15 @@ paths:
                 type: array
                 items:
                   type: object
-                  description: Raw route record from the internal database.
+                  description: >
+                    Raw route record from the internal database, plus `color` (hex,
+                    e.g. `#EF88AA`) and `type` (bus, tram or trolleybus) as returned by
+                    /routes/static/{name}.
+                  properties:
+                    color:
+                      type: string
+                    type:
+                      type: string
 
 components:
   parameters:

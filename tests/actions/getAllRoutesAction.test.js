@@ -60,6 +60,15 @@ describe("getAllRoutesAction", () => {
     expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 
+  it("adds each route's colour and mode to /routes.json", async () => {
+    const { req, res, next } = makeReqRes({ path: "/routes.json" });
+    await getAllRoutesAction(req, res, next);
+
+    expect(res.json).toHaveBeenCalledWith([
+      expect.objectContaining({ short_name: "А01", color: "#0E4F95", type: "bus" }),
+    ]);
+  });
+
   it("sets the same cache headers on /routes.json", async () => {
     const { req, res, next } = makeReqRes({ path: "/routes.json" });
     await getAllRoutesAction(req, res, next);

@@ -4,6 +4,8 @@ import {
   contactBannerHtml,
   contactBannerStyle,
   escapeHtml,
+  getRouteColor,
+  getRouteType,
   routeNameToUrlFriendly,
   shapes_by_direction,
 } from "../utils/appHelpers.ts";
@@ -26,8 +28,16 @@ export default async (req: Request, res: Response, next: NextFunction) => {
     .set("Cache-Tag", "short");
 
   if (req.path.endsWith(".json")) {
-    // Return all data in JSON format
-    return res.json(routesRaw);
+    // Raw records plus the colour and mode `/routes/static/:name` gives one route at a
+    // time: a route picker would otherwise need one call per line (70 against a
+    // 60-a-minute limit) just to paint the list.
+    return res.json(
+      routesRaw.map((r) => ({
+        ...r,
+        color: getRouteColor(r.short_name),
+        type: getRouteType(r.short_name),
+      })),
+    );
   }
 
   const mapInits: string[] = [];
