@@ -8,7 +8,7 @@ Live GTFS-RT feed: vehicle positions, stop arrivals with ETAs, route shapes, and
 
 - [OpenAPI spec](https://api.lad.lviv.ua/openapi.yaml): Full OpenAPI 3.0 description of all endpoints
 - [All stops](https://api.lad.lviv.ua/stops.json): Complete stop list with codes, names, coordinates, and served routes
-- [All routes](https://api.lad.lviv.ua/routes.json): Complete route list
+- [All routes](https://api.lad.lviv.ua/routes.json): Complete route list (short/long name, colour, mode, stop codes per direction); `?full=1` adds shapes and departure maps (~9 MB)
 
 ## Key endpoints
 

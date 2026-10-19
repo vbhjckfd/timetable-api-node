@@ -283,7 +283,20 @@ paths:
     get:
       operationId: getAllRoutes
       summary: Full route list
-      description: Returns every route in the network with all internal fields.
+      description: >
+        Returns every route in the network, sorted by short name. By default each
+        item carries only the list fields (about 20 KB in all); pass `full=1` for the
+        raw records with shapes and departure maps (about 9 MB).
+      parameters:
+        - name: full
+          in: query
+          required: false
+          description: >
+            `1` (or `true`) returns the raw route records from the internal
+            database instead of the list fields.
+          schema:
+            type: string
+            enum: ['1', 'true']
       responses:
         '200':
           description: Array of all routes.
@@ -294,14 +307,32 @@ paths:
                 items:
                   type: object
                   description: >
-                    Raw route record from the internal database, plus `color` (hex,
-                    e.g. `#EF88AA`) and `type` (bus, tram or trolleybus) as returned by
-                    /routes/static/{name}.
+                    List fields below. With `full=1`, the raw route record from the
+                    internal database (trip maps, `shapes`, `stop_departure_time_map*`)
+                    plus `color` and `type`.
                   properties:
+                    external_id:
+                      type: string
+                      description: GTFS route_id.
+                    short_name:
+                      type: string
+                      example: "Т30"
+                    long_name:
+                      type: string
+                      nullable: true
                     color:
                       type: string
+                      description: Hex colour as returned by /routes/static/{name} (e.g. `#EF88AA`).
                     type:
                       type: string
+                      enum: [bus, tram, trolleybus]
+                    stops_by_shape:
+                      type: object
+                      description: Stop codes per direction, keyed "0" and "1".
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: integer
 
 components:
   parameters:

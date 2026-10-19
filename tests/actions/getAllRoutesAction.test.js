@@ -69,6 +69,43 @@ describe("getAllRoutesAction", () => {
     ]);
   });
 
+  it("returns only the list fields from /routes.json by default", async () => {
+    db.getCollection.mockImplementation(() =>
+      makeChainableCollection([
+        { ...mockRoute, $loki: 1, meta: { revision: 0 }, shapes: {}, stop_departure_time_map: {} },
+      ]),
+    );
+    const { req, res, next } = makeReqRes({ path: "/routes.json" });
+    await getAllRoutesAction(req, res, next);
+
+    expect(res.json).toHaveBeenCalledWith([
+      {
+        external_id: "EXT1",
+        short_name: "А01",
+        long_name: "Route One",
+        color: "#0E4F95",
+        type: "bus",
+        stops_by_shape: mockRoute.stops_by_shape,
+      },
+    ]);
+  });
+
+  it("returns raw records without LokiJS internals from /routes.json?full=1", async () => {
+    db.getCollection.mockImplementation(() =>
+      makeChainableCollection([
+        { ...mockRoute, $loki: 1, meta: { revision: 0 }, stop_departure_time_map: { 1001: {} } },
+      ]),
+    );
+    const { req, res, next } = makeReqRes({ path: "/routes.json", query: { full: "1" } });
+    await getAllRoutesAction(req, res, next);
+
+    const [route] = res.json.mock.calls[0][0];
+    expect(route).toMatchObject({ short_name: "А01", color: "#0E4F95", type: "bus" });
+    expect(route.stop_departure_time_map).toEqual({ 1001: {} });
+    expect(route).not.toHaveProperty("$loki");
+    expect(route).not.toHaveProperty("meta");
+  });
+
   it("sets the same cache headers on /routes.json", async () => {
     const { req, res, next } = makeReqRes({ path: "/routes.json" });
     await getAllRoutesAction(req, res, next);

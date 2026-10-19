@@ -538,7 +538,8 @@ Nearby stops — same search as `get_stops_around_location`, for non-MCP clients
 
 All routes as a JSON array, sorted by short name.
 
-- **Response:** raw route objects from the timetable store.
+- **Optional:** `full=1` — raw route objects from the timetable store (trip maps, shapes, departure maps; ~9 MB) instead of the list fields.
+- **Response:** array of `{ external_id, short_name, long_name, color, type, stops_by_shape }` (~20 KB). `stops_by_shape` holds stop codes per direction, keyed `"0"` and `"1"`.
 
 (`GET /routes` returns an HTML table.)
 

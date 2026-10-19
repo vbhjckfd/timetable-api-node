@@ -28,14 +28,33 @@ export default async (req: Request, res: Response, next: NextFunction) => {
     .set("Cache-Tag", "short");
 
   if (req.path.endsWith(".json")) {
-    // Raw records plus the colour and mode `/routes/static/:name` gives one route at a
-    // time: a route picker would otherwise need one call per line (70 against a
-    // 60-a-minute limit) just to paint the list.
+    // The colour and mode `/routes/static/:name` gives one route at a time: a route
+    // picker would otherwise need one call per line (70 against a 60-a-minute limit)
+    // just to paint the list.
+    const extras = (r: RouteDoc) => ({
+      color: getRouteColor(r.short_name),
+      type: getRouteType(r.short_name),
+    });
+
+    // The raw records are ~9 MB, nearly all of it departure maps no list
+    // needs, so they sit behind `?full=1`. LokiJS's `$loki`/`meta` are store
+    // internals and leave in neither form.
+    if (req.query.full === "1" || req.query.full === "true") {
+      return res.json(
+        routesRaw.map((r) => {
+          const { $loki, meta, ...rest } = r as RouteDoc & { $loki?: unknown; meta?: unknown };
+          return { ...rest, ...extras(r) };
+        }),
+      );
+    }
+
     return res.json(
       routesRaw.map((r) => ({
-        ...r,
-        color: getRouteColor(r.short_name),
-        type: getRouteType(r.short_name),
+        external_id: r.external_id,
+        short_name: r.short_name,
+        long_name: r.long_name,
+        ...extras(r),
+        stops_by_shape: r.stops_by_shape,
       })),
     );
   }
