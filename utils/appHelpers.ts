@@ -333,6 +333,7 @@ export function getRouteColor(routeName: string): string {
   switch (routeName.charAt(0)) {
     case "Т": {
       const colorMap: Record<string, string> = {
+        38: "9B0A00",
         33: "6F7C32",
         32: "E51467",
         31: "229038",
@@ -344,7 +345,7 @@ export function getRouteColor(routeName: string): string {
         23: "BD8260",
         22: "3E9B7D",
         "09": "26602C",
-        "08": "9E9E9E",
+        "08": "919191",
         "07": "0971B7",
         "06": "954592",
         "05": "FECD27",
@@ -365,6 +366,14 @@ export function getRouteColor(routeName: string): string {
   }
 
   return "#0E4F95";
+}
+
+// Text drawn on a route's colour is white, except on the few lines too pale for it.
+const DARK_TEXT_LINES = new Set(["24", "27", "30"]);
+
+export function getRouteTextColor(routeName: string): string {
+  const rawNumber = (routeName.match(/\d+/g) ?? []).join("");
+  return routeName.charAt(0) === "Т" && DARK_TEXT_LINES.has(rawNumber) ? "#000000" : "#FFFFFF";
 }
 
 export function getSmapleTrips(route: Pick<RouteDoc, "trip_direction_map">): string[] {

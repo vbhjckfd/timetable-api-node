@@ -7,6 +7,7 @@ vi.mock("../../connections/timetableSqliteDb.js", () => ({
 vi.mock("../../utils/appHelpers.js", () => ({
   normalizeRouteName: vi.fn((n) => n),
   getRouteColor: vi.fn(() => "#00ff00"),
+  getRouteTextColor: vi.fn(() => "#FFFFFF"),
   getRouteType: vi.fn(() => "tram"),
 }));
 

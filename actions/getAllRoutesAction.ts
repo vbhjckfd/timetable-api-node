@@ -5,6 +5,7 @@ import {
   contactBannerStyle,
   escapeHtml,
   getRouteColor,
+  getRouteTextColor,
   getRouteType,
   routeNameToUrlFriendly,
   shapes_by_direction,
@@ -33,6 +34,7 @@ export default async (req: Request, res: Response, next: NextFunction) => {
     // just to paint the list.
     const extras = (r: RouteDoc) => ({
       color: getRouteColor(r.short_name),
+      text_color: getRouteTextColor(r.short_name),
       type: getRouteType(r.short_name),
     });
 

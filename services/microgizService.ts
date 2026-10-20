@@ -4,6 +4,7 @@ import type Loki from "lokijs";
 import { Agent } from "undici";
 import {
   getRouteColor,
+  getRouteTextColor,
   formatRouteName,
   getRouteType,
 } from "../utils/appHelpers.ts";
@@ -270,6 +271,7 @@ export async function routesThroughStop(
       return {
         id: r.external_id,
         color: getRouteColor(r.short_name),
+        text_color: getRouteTextColor(r.short_name),
         route: formatRouteName(r.short_name),
         vehicle_type: getRouteType(r.short_name),
         shape_id: shapeId,

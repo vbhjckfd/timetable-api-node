@@ -3,6 +3,7 @@ import {
   normalizeRouteName,
   shapes_by_direction,
   getRouteColor,
+  getRouteTextColor,
   getRouteType,
 } from "../utils/appHelpers.ts";
 import { stopScheduleByDayType } from "../utils/stopScheduleByDayType.ts";
@@ -76,6 +77,7 @@ export default async (req: Request<{ name: string }>, res: Response, next: NextF
     .send({
       id: routeLocal.external_id,
       color: getRouteColor(routeLocal.short_name),
+      text_color: getRouteTextColor(routeLocal.short_name),
       type: getRouteType(routeLocal.short_name),
       route_short_name: routeLocal.short_name,
       route_long_name: routeLocal.long_name,

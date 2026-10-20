@@ -14,6 +14,7 @@ import {
   routeNameToUrlFriendly,
   getRouteType,
   getRouteColor,
+  getRouteTextColor,
   secondsUntilImportDone,
   formatRouteName,
   cleanUpStopName,
@@ -128,9 +129,27 @@ describe("getRouteColor", () => {
   it("returns default color for bus route", () => {
     expect(getRouteColor("А01")).toBe("#0E4F95");
   });
+  it("returns colours for Т38 and Т08", () => {
+    expect(getRouteColor("Тр38")).toBe("#9B0A00");
+    expect(getRouteColor("Т08")).toBe("#919191");
+  });
   it("falls back to the default color for a tram/trolleybus line missing from the map", () => {
     expect(getRouteColor("Тр26")).toBe("#0E4F95");
     expect(getRouteColor("Т10")).toBe("#0E4F95");
+  });
+});
+
+describe("getRouteTextColor", () => {
+  it("returns black on the pale trolleybus lines", () => {
+    expect(getRouteTextColor("Тр24")).toBe("#000000");
+    expect(getRouteTextColor("Тр27")).toBe("#000000");
+    expect(getRouteTextColor("Тр30")).toBe("#000000");
+  });
+  it("returns white elsewhere", () => {
+    expect(getRouteTextColor("Тр38")).toBe("#FFFFFF");
+    expect(getRouteTextColor("Т08")).toBe("#FFFFFF");
+    expect(getRouteTextColor("А24")).toBe("#FFFFFF");
+    expect(getRouteTextColor("Н-А30")).toBe("#FFFFFF");
   });
 });
 

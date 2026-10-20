@@ -4,6 +4,7 @@ import type { Trip } from "gtfs";
 import {
   formatRouteName,
   getRouteColor,
+  getRouteTextColor,
   getRouteType,
   getDirectionByTrip,
   cleanUpStopName,
@@ -174,6 +175,7 @@ const stopArrivalService = {
         );
         routeInfo = {
           color: getRouteColor(routeObj.short_name),
+          text_color: getRouteTextColor(routeObj.short_name),
           route: formatRouteName(routeObj.short_name),
           vehicle_type: getRouteType(routeObj.short_name),
         };

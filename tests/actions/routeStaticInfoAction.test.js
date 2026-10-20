@@ -10,6 +10,7 @@ vi.mock("../../utils/appHelpers.js", () => ({
   shapes_by_direction: vi.fn(() => [[[49.845, 24.023]], [[49.846, 24.024]]]),
   secondsUntilImportDone: vi.fn(() => 3600),
   getRouteColor: vi.fn(() => "#ff0000"),
+  getRouteTextColor: vi.fn(() => "#FFFFFF"),
   getRouteType: vi.fn(() => "bus"),
 }));
 

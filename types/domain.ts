@@ -16,6 +16,7 @@ export interface Transfer {
   _id?: unknown;
   id: string;
   color: string;
+  text_color: string;
   route: string;
   vehicle_type: VehicleType;
   shape_id: string | undefined;

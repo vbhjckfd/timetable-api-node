@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { getVehiclesLocations } from "../services/microgizService.ts";
 import {
   getRouteColor,
+  getRouteTextColor,
   formatRouteName,
   getRouteType,
   isLowFloor,
@@ -58,6 +59,7 @@ export default async (req: Request, res: Response, next: NextFunction) => {
     return {
       id: i.vehicle.vehicle.id,
       color: getRouteColor(route.short_name),
+      text_color: getRouteTextColor(route.short_name),
       route: formatRouteName(route.short_name),
       vehicle_type: getRouteType(route.short_name),
       routeId: String(i.vehicle.trip.routeId),

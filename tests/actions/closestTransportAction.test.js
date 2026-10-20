@@ -13,6 +13,7 @@ vi.mock("../../utils/appHelpers.js", async (importOriginal) => {
   return {
     ...actual,
     getRouteColor: vi.fn(() => "#ff0000"),
+    getRouteTextColor: vi.fn(() => "#FFFFFF"),
     formatRouteName: vi.fn((n) => n),
     getRouteType: vi.fn(() => "bus"),
     isLowFloor: vi.fn(() => false),

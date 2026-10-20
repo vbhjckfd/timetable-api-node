@@ -84,6 +84,7 @@ describe("getAllRoutesAction", () => {
         short_name: "А01",
         long_name: "Route One",
         color: "#0E4F95",
+        text_color: "#FFFFFF",
         type: "bus",
         stops_by_shape: mockRoute.stops_by_shape,
       },
