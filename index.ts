@@ -408,11 +408,16 @@ app.get("/robots.txt", (req, res) => {
     "# Non-standard hint for AI agent discovery:",
     `# mcp-server: ${baseUrl}/.well-known/mcp/server-card.json`,
   ];
+  setStaticAssetCache(res);
   res.type("text/plain").send(lines.join("\n"));
 });
 
 app.get("/last-modified.txt", (req, res, next) => {
-  res.set("Cache-Control", `public, max-age=0, s-maxage=${5 * 60}`);
+  // Written by every image build from the GTFS feed's Last-Modified, so a data
+  // refresh changes it: "short", not "long".
+  res
+    .set("Cache-Control", `public, max-age=0, s-maxage=${5 * 60}`)
+    .set("Cache-Tag", "short");
   res.sendFile(path.join(__dirname, "last-modified.txt"));
 });
 

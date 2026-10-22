@@ -71,5 +71,5 @@ export default async (req: Request, res: Response, next: NextFunction) => {
     };
   });
 
-  res.set("Cache-Control", `public, s-maxage=5`).send(result);
+  res.set("Cache-Control", `public, s-maxage=5`).set("Cache-Tag", "short").send(result);
 };

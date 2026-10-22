@@ -37,6 +37,7 @@ export default async (req: Request, res: Response, next: NextFunction) => {
       "Cache-Control",
       `public, max-age=0, s-maxage=${skipTimetableData ? 10 * 24 * 3600 : cacheAge}`,
     )
+    .set("Cache-Tag", "short")
     .json({
       name: stop.name,
       eng_name: stop.eng_name,

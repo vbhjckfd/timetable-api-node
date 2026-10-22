@@ -56,5 +56,5 @@ export default async (req: Request<{ name: string }>, res: Response, next: NextF
     metrics.count('route_dynamic.no_vehicles', 1, { route: routeTag });
   }
 
-  res.set("Cache-Control", `public, s-maxage=10`).send(result);
+  res.set("Cache-Control", `public, s-maxage=10`).set("Cache-Tag", "short").send(result);
 };

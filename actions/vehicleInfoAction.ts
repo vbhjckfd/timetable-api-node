@@ -47,7 +47,7 @@ export default async (req: Request<{ vehicleId: string }>, res: Response, next: 
     .getCollection<RouteDoc>("routes")
     .findOne({ external_id: vehiclePosition.trip.routeId });
 
-  res.set("Cache-Control", `public, s-maxage=5`).send({
+  res.set("Cache-Control", `public, s-maxage=5`).set("Cache-Tag", "short").send({
     vehicleId: String(vehiclePosition.vehicle.id),
     location: [
       vehiclePosition.position.latitude,
