@@ -113,5 +113,6 @@ describe("getStopTimetableAction", () => {
       "Cache-Control",
       expect.stringContaining("s-maxage=10"),
     );
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 });

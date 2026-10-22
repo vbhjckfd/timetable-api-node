@@ -60,7 +60,8 @@ steps:
       - |
         if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
         # "short" = GTFS-derived pages (/routes, /stops, route and stop statics,
-        # sitemap); any build can change them, so always purge.
+        # sitemap) plus the seconds-long live responses; any build can change
+        # them, so always purge.
         curl -s --max-time 10 "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=short"
         # "long" = docs, manifests and icons baked into the image (openapi.yaml,
         # llms.txt, favicon, server.json, ...). A data refresh cannot change

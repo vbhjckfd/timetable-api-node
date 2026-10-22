@@ -29,5 +29,6 @@ export default async (req: Request, res: Response, next: NextFunction) => {
 
   res
     .set("Cache-Control", `public, max-age=0, s-maxage=${cacheAge}`)
+    .set("Cache-Tag", "short")
     .json(timetableData);
 };

@@ -104,6 +104,9 @@ describe("getSingleStopAction", () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ timetable: [] }),
     );
+    // Cached for 10 days, and name/transfers come from GTFS: a data refresh
+    // has to be able to purge it.
+    expect(res.set).toHaveBeenCalledWith("Cache-Tag", "short");
   });
 
   it("returns empty timetable when TimetableService throws", async () => {

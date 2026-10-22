@@ -21,5 +21,6 @@ export default async (req: Request<{ plate: string }>, res: Response) => {
 
   res
     .set("Cache-Control", "public, s-maxage=5")
+    .set("Cache-Tag", "short")
     .send({ vehicleId: match.vehicle.vehicle.id });
 };
