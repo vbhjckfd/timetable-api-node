@@ -193,6 +193,32 @@ vi.mock("../../services/transitLookupService.js", () => ({
   ),
 }));
 
+const MOCK_DISRUPTION = {
+  id: "t30-detour",
+  kind: "detour",
+  reason: "Ремонт вул. Тестової",
+  since: "2026-10-01",
+  until: null,
+  until_text: "до кінця року",
+  routes: [{ name: "Т30", id: "T30" }],
+  stops: [],
+  alternatives: [],
+  detour: { via: ["вул. Обхідна"], skipped_stops: [1234] },
+  note: null,
+  source: "Test",
+  url: null,
+};
+
+vi.mock("../../services/disruptionService.js", () => ({
+  // Matches the way the real filter does: by route (either alphabet) or stop.
+  activeDisruptions: vi.fn((filter) => {
+    if (!filter) return [MOCK_DISRUPTION];
+    const routes = [...(filter.routes ?? [])].map((r) => String(r).replace("Т", "T"));
+    const stops = [...(filter.stops ?? [])];
+    return routes.includes("T30") || stops.includes(1234) ? [MOCK_DISRUPTION] : [];
+  }),
+}));
+
 import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
 import pkg from "../../package.json" with { type: "json" };
 import {
@@ -253,6 +279,7 @@ const TOOL_NAMES = [
   "get_route_realtime",
   "get_nearby_vehicles",
   "get_vehicle_info",
+  "get_disruptions",
 ];
 
 async function connectClient() {
@@ -841,6 +868,50 @@ describe("MCP additions", () => {
       argument: { name: "route_name", value: "н" },
     });
     expect(completion.completion.values).toEqual(["Н2"]);
+    await client.close();
+  });
+});
+
+describe("disruptions in MCP results", () => {
+  it("get_disruptions lists what is in force, filtered by route or stop", async () => {
+    const client = await connectClient();
+
+    const all = await client.callTool({ name: "get_disruptions", arguments: {} });
+    expect(all.structuredContent.data.disruptions).toHaveLength(1);
+    expect(all.structuredContent.data.route).toBeNull();
+    const text = all.content.find((c) => c.type === "text")?.text;
+    expect(text).toContain("Т30 on a detour via вул. Обхідна");
+    expect(text).toContain("до кінця року");
+
+    const other = await client.callTool({ name: "get_disruptions", arguments: { route: "А01" } });
+    expect(other.structuredContent.data.disruptions).toEqual([]);
+    expect(other.content[0].text).toContain("No announced disruptions for route А01");
+
+    const atStop = await client.callTool({ name: "get_disruptions", arguments: { stop_id: "1234" } });
+    expect(atStop.structuredContent.data.stop_id).toBe("1234");
+    expect(atStop.structuredContent.data.disruptions[0].id).toBe("t30-detour");
+
+    await client.close();
+  });
+
+  it("get_route_static carries the route's disruption in data and text", async () => {
+    const client = await connectClient();
+
+    const hit = await client.callTool({ name: "get_route_static", arguments: { route_name: "T30" } });
+    expect(hit.structuredContent.data.disruptions).toEqual([MOCK_DISRUPTION]);
+    expect(hit.content[0].text).toContain("Announced disruptions: Т30 on a detour");
+
+    const miss = await client.callTool({ name: "get_route_static", arguments: { route_name: "А01" } });
+    expect(miss.structuredContent.data.disruptions).toBeUndefined();
+    expect(miss.content[0].text).not.toContain("Announced disruptions");
+
+    await client.close();
+  });
+
+  it("get_stop_realtime carries a disruption touching the stop", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 1234 } });
+    expect(result.structuredContent.data.disruptions?.[0]?.id).toBe("t30-detour");
     await client.close();
   });
 });

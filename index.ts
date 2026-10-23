@@ -28,6 +28,7 @@ import vehicleByPlateAction from "./actions/vehicleByPlateAction.ts";
 import closestTransportAction from "./actions/closestTransportAction.ts";
 import getAllRoutesAction from "./actions/getAllRoutesAction.ts";
 import sitemapAction from "./actions/sitemapAction.ts";
+import getDisruptionsAction from "./actions/getDisruptionsAction.ts";
 import {
   buildMcpServerCard,
   handleMcpPostRequest,
@@ -150,6 +151,7 @@ app.get("/routes/static/:name", routeInfoStaticAction);
 app.get("/vehicle/:vehicleId", vehicleInfoAction);
 app.get("/vehicle-by-plate/:plate", vehicleByPlateAction);
 app.get("/transport", liveDataRateLimiter, closestTransportAction);
+app.get("/disruptions", getDisruptionsAction);
 
 app.get("/sitemap.xml", sitemapAction);
 
@@ -271,6 +273,16 @@ app.get("/.well-known/agent.json", (req, res) => {
         inputModes: ["text/plain"],
         outputModes: ["application/json"],
         examples: ["Track vehicle 12345", "Where is vehicle 12345 heading?"],
+      },
+      {
+        id: "get_disruptions",
+        name: "Get Disruptions",
+        description:
+          "Announced closures, detours and moved stops in force today, optionally for one route or stop.",
+        tags: ["transit", "disruptions", "detours", "road-works", "lviv"],
+        inputModes: ["text/plain"],
+        outputModes: ["application/json"],
+        examples: ["Is bus А34 on a detour?", "Which routes are affected by road works?"],
       },
     ],
     authentication: { schemes: [] },

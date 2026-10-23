@@ -116,6 +116,7 @@ All tools are read-only. Argument names are **exact** — pass them as shown.
 | `get_route_realtime` | `route_name` (string) | Live vehicles on a route with destination and next stop. |
 | `get_nearby_vehicles` | `latitude`, `longitude` (numbers), `radius_meters`, `route`, `limit` (optional) | Live vehicles near a coordinate, nearest first. |
 | `get_vehicle_info` | `vehicle_id` (string) | One vehicle: route, destination, plate, upcoming stops with names. |
+| `get_disruptions` | `route` (string), `stop_id` (optional) | Announced closures, detours and moved stops in force today. Stop, route and trip tools also add a `disruptions` array when one applies — mention it to the user. |
 
 Every tool result is JSON with three keys — `view`, `data` (the payload), and `ui_blocks` (ordered map/arrival-list rendering hints that point into `data`). Resolve a stop name with `search_stops`, or an address/coordinates with `get_stops_around_location`, before calling stop-based tools.
 

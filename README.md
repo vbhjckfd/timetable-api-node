@@ -196,6 +196,7 @@ All tools are read-only. Stop IDs are the numeric codes on stop signs, returned 
 | `get_route_realtime` | `route_name` | Vehicles on the route with `destination` and `next_stop` (`id`, `name`, ISO `arrival`). |
 | `get_nearby_vehicles` | `latitude`, `longitude`, `radius_meters` (100–1000, default 500), `route`, `limit` (1–50, default 15) | Live vehicles nearest first, with `destination` and `distance_meters`; `total` counts all in range. |
 | `get_vehicle_info` | `vehicle_id` | One vehicle: position, route, `destination`, plate, upcoming stops (`id`, `name`, ISO times) not yet passed. |
+| `get_disruptions` | `route`, `stop_id` (both optional) | Announced closures, detours (`detour.via` streets) and moved stops in force today. `get_stop_realtime`, `get_route_static`, `get_route_realtime` and `find_routes_between` also add a `disruptions` array when one touches their routes or stops. |
 
 <details>
 <summary><code>get_stop_realtime</code> — example</summary>
@@ -578,6 +579,14 @@ Look up a vehicle ID by its license plate. Short-cached (5 s).
 Vehicles within 1 km of a point. Short-cached (10 s).
 
 - **Response:** array of `{ id, route, routeId, direction, vehicle_type, color, location: [lat, lng], bearing, speed, lowfloor }`. `routeId` is usable as `:name` in `/routes/static/:name`; `direction` matches the index into `stops`/`shapes` (0 = outbound, 1 = return, null if unknown). `speed` is m/s or `null`.
+
+#### `GET /disruptions?route={name}&stop={code}`
+
+Closures, detours and moved stops the city announced that are in force today. The GTFS feed carries none of them. Cached 5 min at the CDN.
+
+- Hand-curated in [`data/disruptions.json`](data/disruptions.json), checked against a schema at startup and in tests; add or edit an entry there and deploy. An entry is served from its `since` day through its `until` day (Kyiv time), so a stale one hides itself.
+- `route` (Cyrillic or Latin short name) and `stop` (numeric code) are optional filters; with either, only entries touching it are listed.
+- **Response:** `{ disruptions, updated_at }`. Each item: `{ id, kind, reason, since, until, until_text, routes, stops, alternatives, detour, note, source, url }`. `kind` is `suspended`, `detour`, `stop_moved` or `stop_closed`; `routes` and `alternatives` are `{ name, id }` (`name` like `Т33`, `id` the Latin form used in lad.lviv.ua URLs); `detour` is `{ via: [streets], skipped_stops: [codes] }` or `null`.
 
 ### Service and discovery
 

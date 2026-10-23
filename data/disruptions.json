@@ -1,0 +1,58 @@
+[
+  {
+    "id": "mazepy-t33",
+    "kind": "suspended",
+    "reason": "Ремонт вул. Гетьмана І. Мазепи",
+    "since": "2026-05-18",
+    "until": null,
+    "until_text": "орієнтовно до кінця 2026 року",
+    "routes": ["Т33"],
+    "alternatives": [
+      "А08", "А17", "А21", "А22", "А31", "А34", "А37", "А41",
+      "А46", "А47", "А51", "А52", "А55", "А56", "А84"
+    ],
+    "source": "Львівська міська рада",
+    "url": "https://city-adm.lviv.ua/news/city/transport/u-merii-poiasnyly-chomu-troleibusnyi-marshrut-33-na-period-remontu-vul-mazepy-ne-kursuvatyme/"
+  },
+  {
+    "id": "mazepy-detour-orlyka",
+    "kind": "detour",
+    "reason": "Ремонт вул. Гетьмана І. Мазепи від П. Орлика до Інструментальної",
+    "since": "2026-10-03",
+    "until": null,
+    "until_text": "орієнтовно до кінця 2026 року",
+    "routes": ["А12", "А17", "А34", "А46", "А51", "А55", "А84"],
+    "detour": {
+      "via": ["вул. П. Орлика", "вул. Тичини", "вул. Хвильового", "вул. Інструментальна"]
+    },
+    "note": "В обох напрямках, далі за звичною схемою.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-detour-khvylovoho",
+    "kind": "detour",
+    "reason": "Ремонт вул. Гетьмана І. Мазепи від П. Орлика до Інструментальної",
+    "since": "2026-10-03",
+    "until": null,
+    "until_text": "орієнтовно до кінця 2026 року",
+    "routes": ["А31", "А41", "А56"],
+    "detour": {
+      "via": ["вул. Хвильового", "вул. Інструментальна"]
+    },
+    "note": "В обох напрямках, далі за звичною схемою.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "kovcha-overpass",
+    "kind": "stop_moved",
+    "reason": "Будівництво шляхопроводу на вул. Отця Омеляна Ковча",
+    "since": "2026-07-10",
+    "until": null,
+    "until_text": "до завершення будівництва",
+    "note": "Зупинку на вул. Ковча перенесено перед будмайданчик; рух у бік вул. Шевченка — однією смугою.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  }
+]

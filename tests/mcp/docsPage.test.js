@@ -38,6 +38,7 @@ describe("renderMcpDocsPage", () => {
       "get_route_realtime",
       "get_nearby_vehicles",
       "get_vehicle_info",
+      "get_disruptions",
     ]) {
       expect(html).toContain(`id="${tool}"`);
     }

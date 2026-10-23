@@ -24,6 +24,8 @@ import {
   searchStops,
 } from "../services/transitLookupService.ts";
 import type { StopSummary, TransferOption, TripLeg } from "../services/transitLookupService.ts";
+import { activeDisruptions } from "../services/disruptionService.ts";
+import type { DisruptionFilter } from "../services/disruptionService.ts";
 import { distanceMeters, formatRouteName } from "../utils/appHelpers.ts";
 import type { ScheduleByDayType } from "../utils/stopScheduleByDayType.ts";
 
@@ -92,6 +94,7 @@ const TRANSIT_ASSISTANT_GUIDANCE = `\
 - User asks which stops a route serves, where it goes, or its timetable → \`get_route_static\` (\`include_shapes: true\` only for drawing a map)
 - User asks "what vehicles are near me" → \`get_nearby_vehicles\` (filter with \`route\` when relevant)
 - User wants to follow one vehicle by ID → \`get_vehicle_info\`
+- User asks about closures, road works, detours or why a route is not running → \`get_disruptions\` (optionally filtered by \`route\` or \`stop_id\`)
 
 ## Input conventions
 
@@ -116,6 +119,7 @@ Block types:
 - Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
 - \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`saturday\`/\`sunday\`) are only populated for the first stop of each direction. Saturday and Sunday timetables can differ; \`schedule.weekend\` merges both days and is kept only for backward compatibility.
 - \`direction\` is the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return); \`destination\` is the name of that direction's last stop.
+- Detours, suspended routes and moved stops are not in the GTFS feed. \`get_stop_realtime\`, \`get_route_static\`, \`get_route_realtime\` and \`find_routes_between\` add a \`disruptions\` array when an announced one touches their routes or stops; always tell the user about it, since stop lists and timetables do not reflect it.
 - \`find_routes_between\` allows at most one interchange, made within a walkable stop cluster (≤ 300 m). Empty \`options\` and \`transfer_options\` mean the trip needs two or more transfers.
 `;
 
@@ -162,6 +166,24 @@ const zArrivalObj = z.object({
 });
 const zNextStop = z.object({ id: z.string(), name: z.string().nullable(), arrival: z.string() }).nullable();
 const zCenter = z.tuple([zCoord, zCoord]);
+const zDisruptionRoute = z.object({ name: z.string(), id: z.string() });
+const zDisruption = z.object({
+  id: z.string(),
+  kind: z.enum(["suspended", "detour", "stop_moved", "stop_closed"]),
+  reason: z.string(),
+  since: z.string(),
+  until: z.string().nullable(),
+  until_text: z.string().nullable(),
+  routes: z.array(zDisruptionRoute),
+  stops: z.array(z.number().int()),
+  alternatives: z.array(zDisruptionRoute),
+  detour: z.object({ via: z.array(z.string()), skipped_stops: z.array(z.number().int()) }).nullable(),
+  note: z.string().nullable(),
+  source: z.string().nullable(),
+  url: z.string().nullable(),
+});
+/** Only present when an announced disruption touches the result, so most answers stay as they were. */
+const zDisruptions = z.array(zDisruption).optional();
 const zTripLeg = z.object({
   route: z.string(),
   vehicle_type: z.string(),
@@ -207,7 +229,7 @@ const transitResult = <D extends z.ZodType, B extends z.ZodType = typeof zMapBlo
 
 const OUTPUT_SCHEMAS = {
   get_stop_realtime: transitResult(
-    z.object({ stop: zStopObj, arrivals: z.array(zArrivalObj), updated_at: z.string() }),
+    z.object({ stop: zStopObj, arrivals: z.array(zArrivalObj), disruptions: zDisruptions, updated_at: z.string() }),
     z.discriminatedUnion("type", [zMapBlock, zArrivalListBlock]),
   ),
   get_route_static: transitResult(z.object({
@@ -227,6 +249,7 @@ const OUTPUT_SCHEMAS = {
       }).optional(),
     }))),
     shapes: z.array(z.array(z.array(z.number()))).optional(),
+    disruptions: zDisruptions,
     updated_at: z.string(),
   })),
   get_route_realtime: transitResult(z.object({
@@ -242,6 +265,7 @@ const OUTPUT_SCHEMAS = {
       bearing: z.number().nullable(),
       lowfloor: z.boolean().nullable(),
     })),
+    disruptions: zDisruptions,
     updated_at: z.string(),
   })),
   get_stops_around_location: transitResult(z.object({
@@ -271,6 +295,7 @@ const OUTPUT_SCHEMAS = {
       walk_from_alight_meters: z.number().int(),
     })),
     map_stops: z.array(zStopObj.extend({ role: z.enum(["board", "transfer", "transfer_alight", "transfer_board", "alight"]) })),
+    disruptions: zDisruptions,
     updated_at: z.string(),
   })),
   get_nearby_vehicles: transitResult(z.object({
@@ -309,6 +334,12 @@ const OUTPUT_SCHEMAS = {
     })),
     updated_at: z.string(),
   })),
+  get_disruptions: transitResult(z.object({
+    route: z.string().nullable(),
+    stop_id: z.string().nullable(),
+    disruptions: z.array(zDisruption),
+    updated_at: z.string(),
+  })),
 };
 
 type ToolName = keyof typeof OUTPUT_SCHEMAS;
@@ -327,6 +358,7 @@ const CACHE_TTL_MS: Record<ToolName, number> = {
   get_route_static: 5 * 60_000,
   search_stops: 5 * 60_000,
   find_routes_between: 5 * 60_000,
+  get_disruptions: 5 * 60_000,
 };
 
 function getCached(toolName: ToolName, args: unknown): CallToolResult | null {
@@ -463,7 +495,42 @@ const minutesUntil = (iso: string | null | undefined): number | null => {
   return Number.isNaN(t) ? null : Math.max(0, Math.round((t - Date.now()) / 60_000));
 };
 
+type DisruptionOut = z.infer<typeof zDisruption>;
+
+const KIND_LABEL: Record<DisruptionOut["kind"], string> = {
+  suspended: "not running",
+  detour: "on a detour",
+  stop_moved: "stop moved",
+  stop_closed: "stop closed",
+};
+
+function describeDisruption(d: DisruptionOut): string {
+  const routes = d.routes.map((r) => r.name).join(", ");
+  const stops = d.stops.length ? ` (stops ${d.stops.join(", ")})` : "";
+  const via = d.detour?.via.length ? ` via ${d.detour.via.join(", ")}` : "";
+  const until = d.until_text ?? (d.until ? `until ${d.until}` : "no end date announced");
+  const instead = d.alternatives.length ? `; use ${d.alternatives.map((r) => r.name).join(", ")} instead` : "";
+  const note = d.note ? ` ${d.note}` : "";
+  return `${routes ? `${routes} ` : ""}${KIND_LABEL[d.kind]}${stops}${via}: ${d.reason}, since ${d.since}, ${until}${instead}.${note}`;
+}
+
+/** The text a model reads must carry the disruption too: some clients drop structuredContent. */
+function disruptionSuffix(data: unknown): string {
+  const list = (data as { disruptions?: DisruptionOut[] } | null)?.disruptions;
+  return list?.length ? ` Announced disruptions: ${list.map(describeDisruption).join(" ")}` : "";
+}
+
 function buildTextSummary(toolName: ToolName, structured: { data: unknown }): string {
+  if (toolName === "get_disruptions") {
+    const data = structured.data as ToolData<"get_disruptions">;
+    const scope = [data.route && `route ${data.route}`, data.stop_id && `stop ${data.stop_id}`].filter(Boolean).join(" or ");
+    if (!data.disruptions.length) return `No announced disruptions${scope ? ` for ${scope}` : ""} in force today.`;
+    return `${plural(data.disruptions.length, "announced disruption")}${scope ? ` for ${scope}` : ""} in force today: ${data.disruptions.map(describeDisruption).join(" ")}`;
+  }
+  return buildToolSummary(toolName, structured) + disruptionSuffix(structured.data);
+}
+
+function buildToolSummary(toolName: ToolName, structured: { data: unknown }): string {
   switch (toolName) {
     case "get_stop_realtime": {
       const data = structured.data as ToolData<"get_stop_realtime">;
@@ -808,6 +875,7 @@ ${TRANSIT_ASSISTANT_GUIDANCE}
 | \`get_route_realtime\` | Live vehicles on a route with destination and next stop. |
 | \`get_nearby_vehicles\` | Live vehicles near a point, nearest first, optionally filtered by route. |
 | \`get_vehicle_info\` | One vehicle by ID: position, route, destination, plate, upcoming stops with names. |
+| \`get_disruptions\` | Announced closures, detours and moved stops in force today, optionally for one route or stop. |
 
 All tools are **read-only** and safe to retry.
 `,
@@ -1050,6 +1118,12 @@ async function cachedTool(
 
 const ok = <N extends ToolName>(toolName: N, body: ToolData<N>): CallToolResult => formatToolResult(toolName, { statusCode: 200, body });
 
+/** `{ disruptions }` to spread into a result when any touch these routes or stops, else nothing. */
+function disruptionsField(filter: DisruptionFilter): { disruptions?: DisruptionOut[] } {
+  const list = activeDisruptions(filter);
+  return list.length ? { disruptions: list } : {};
+}
+
 /** RFC 1123 from the REST action → ISO 8601, like every other timestamp in these tools. */
 const toIsoOrNull = (value: string | null | undefined): string | null => {
   const ms = Date.parse(value ?? "");
@@ -1117,11 +1191,17 @@ function registerTools(server: McpServer): void {
         }
 
         const body = actionResult.body ?? {};
+        const arrivals = sortedArrivals(
+          Array.isArray(body.timetable) ? body.timetable.map((item) => normalizeRealtimeArrival(item)) : [],
+        );
+        const servingRoutes = [
+          ...(Array.isArray(body.transfers) ? body.transfers.map((t) => t.route) : []),
+          ...arrivals.map((a) => a.route),
+        ].filter((r): r is string => !!r);
         return ok("get_stop_realtime", {
           stop: toStopObj({ code: body.code, name: body.name, lat: body.latitude, lng: body.longitude }),
-          arrivals: sortedArrivals(
-            Array.isArray(body.timetable) ? body.timetable.map((item) => normalizeRealtimeArrival(item)) : [],
-          ),
+          arrivals,
+          ...disruptionsField({ routes: servingRoutes, stops: [stopCode] }),
           updated_at: new Date().toISOString(),
         });
       });
@@ -1218,6 +1298,10 @@ function registerTools(server: McpServer): void {
             walk_from_alight_meters: t.walk_from_alight_meters,
           })),
           map_stops: bestTripStops(result.options[0], transferOptions[0]),
+          ...disruptionsField({
+            routes: [...result.options, ...transferOptions.flatMap((t) => t.legs)].map((l) => l.route),
+            stops: [...result.from.codes, ...result.to.codes],
+          }),
           updated_at: new Date().toISOString(),
         });
       });
@@ -1256,9 +1340,10 @@ function registerTools(server: McpServer): void {
         }
 
         const body = actionResult.body ?? {};
+        const routeName = body.route_short_name ? formatRouteName(body.route_short_name) : null;
         return ok("get_route_static", {
           route: {
-            name: body.route_short_name ? formatRouteName(body.route_short_name) : null,
+            name: routeName,
             long_name: body.route_long_name ?? null,
             color: body.color ?? null,
             type: body.type ?? null,
@@ -1287,6 +1372,7 @@ function registerTools(server: McpServer): void {
                 ),
               }
             : {}),
+          ...disruptionsField({ routes: [routeName ?? route_name] }),
           updated_at: new Date().toISOString(),
         });
       });
@@ -1338,6 +1424,44 @@ function registerTools(server: McpServer): void {
               lowfloor: typeof v.lowfloor === "boolean" ? v.lowfloor : null,
             };
           }),
+          ...disruptionsField({ routes: [route?.name ?? route_name] }),
+          updated_at: new Date().toISOString(),
+        });
+      });
+    },
+  );
+
+  server.registerTool(
+    "get_disruptions",
+    {
+      title: "Get Disruptions",
+      description:
+        "Lists closures, detours and moved stops the city announced that are in force today: affected routes, the streets a detour uses, routes to take instead of a suspended one, reason, dates and source. " +
+        "The GTFS stop lists and timetables do not reflect any of this. " +
+        "Use when the user asks about road works, closures, detours, or why a route is not running or a vehicle is off its usual path. " +
+        "Pass `route` and/or `stop_id` to get only the entries touching them; omit both for the whole city.",
+      annotations: TOOL_ANNOTATIONS,
+      inputSchema: {
+        route: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Only disruptions on this route, by short name (e.g. \"Т30\", \"А34\"). Omit for all routes."),
+        stop_id: zStopId().optional().describe("Only disruptions at this stop. Omit for all stops."),
+      },
+      outputSchema: OUTPUT_SCHEMAS.get_disruptions,
+    },
+    async ({ route, stop_id }) => {
+      countToolCall("get_disruptions");
+      const stopCode = stop_id != null ? normalizeStopCode(stop_id) : null;
+      return cachedTool("get_disruptions", { route: route ?? null, stopCode }, async () => {
+        const filtered = route != null || stopCode != null;
+        return ok("get_disruptions", {
+          route: route ? resolveRoute(route)?.name ?? route : null,
+          stop_id: stopCode != null ? String(stopCode) : null,
+          disruptions: activeDisruptions(
+            filtered ? { routes: route ? [route] : [], stops: stopCode != null ? [stopCode] : [] } : undefined,
+          ),
           updated_at: new Date().toISOString(),
         });
       });

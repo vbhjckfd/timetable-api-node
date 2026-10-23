@@ -20,6 +20,7 @@ Live GTFS-RT feed: vehicle positions, stop arrivals with ETAs, route shapes, and
 - `GET /vehicle/{vehicleId}` — Single vehicle position and upcoming stop sequence.
 - `GET /vehicle-by-plate/{plate}` — Vehicle ID for a license plate (case, spaces and dashes ignored).
 - `GET /transport?latitude=…&longitude=…` — All active vehicles within 1 km of a coordinate.
+- `GET /disruptions?route=…&stop=…` — Announced closures, detours and moved stops in force today (not in the GTFS feed). Both filters optional.
 
 ## MCP
 

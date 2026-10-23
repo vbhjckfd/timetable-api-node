@@ -264,6 +264,51 @@ paths:
         '400':
           description: Invalid coordinates.
 
+  /disruptions:
+    get:
+      operationId: getDisruptions
+      summary: Announced closures, detours and moved stops in force today
+      description: >
+        Disruptions the city announced and the GTFS feed does not carry:
+        suspended routes, detours (streets used instead), moved or closed
+        stops. Hand-curated; an entry is listed from its `since` day through
+        its `until` day (Kyiv time). Pass `route` or `stop` to get only the
+        entries touching it.
+      parameters:
+        - name: route
+          in: query
+          required: false
+          description: Route short name, Cyrillic or Latin (`Т30`, `T30`, `А1`, `A01`).
+          schema:
+            type: string
+        - name: stop
+          in: query
+          required: false
+          description: Numeric stop code.
+          schema:
+            type: string
+            pattern: '^\d+$'
+      responses:
+        '200':
+          description: Disruptions in force today.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  disruptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Disruption'
+                  updated_at:
+                    type: string
+                    format: date-time
+                required:
+                  - disruptions
+                  - updated_at
+        '400':
+          description: "`stop` is not a numeric code."
+
   /stops.json:
     get:
       operationId: getAllStops
@@ -791,3 +836,76 @@ components:
           description: Vehicle speed in m/s as reported by the GPS unit. Null when not provided by the feed.
         lowfloor:
           type: boolean
+    Disruption:
+      type: object
+      properties:
+        id:
+          type: string
+          example: mazepy-detour-orlyka
+        kind:
+          type: string
+          enum: [suspended, detour, stop_moved, stop_closed]
+        reason:
+          type: string
+          description: Why, in Ukrainian.
+          example: Ремонт вул. Гетьмана І. Мазепи
+        since:
+          type: string
+          format: date
+        until:
+          type: string
+          format: date
+          nullable: true
+          description: Last day in force; null while the city has not named one.
+        until_text:
+          type: string
+          nullable: true
+          description: The city's own wording for the end, e.g. «орієнтовно до кінця 2026 року».
+        routes:
+          type: array
+          description: Routes affected. `name` is the short name, `id` the Latin form used in lad.lviv.ua URLs.
+          items:
+            $ref: '#/components/schemas/DisruptionRoute'
+        stops:
+          type: array
+          items:
+            type: integer
+        alternatives:
+          type: array
+          description: Routes the city suggests instead of a suspended one.
+          items:
+            $ref: '#/components/schemas/DisruptionRoute'
+        detour:
+          type: object
+          nullable: true
+          properties:
+            via:
+              type: array
+              description: Streets the detour runs along, in order.
+              items:
+                type: string
+            skipped_stops:
+              type: array
+              items:
+                type: integer
+        note:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        url:
+          type: string
+          format: uri
+          nullable: true
+      required: [id, kind, reason, since, until, routes, stops, alternatives]
+    DisruptionRoute:
+      type: object
+      properties:
+        name:
+          type: string
+          example: А34
+        id:
+          type: string
+          example: A34
+      required: [name, id]
