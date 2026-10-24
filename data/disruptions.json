@@ -66,7 +66,18 @@
     "detour": {
       "via": ["с. Гряда"]
     },
-    "note": "Автобус №56А цього дня не курсує.",
+    "source": "Львівський портал",
+    "url": "https://portal.lviv.ua/news/2026/10/24/cherez-remont-dorohy-u-velykykh-hrybovychakh-tymchasovo-zminiat-rukh-dvokh-avtobusiv"
+  },
+  {
+    "id": "velyki-hrybovychi-a56",
+    "kind": "suspended",
+    "reason": "Ремонт з’їздів із траси у Великих Грибовичах",
+    "since": "2026-10-25",
+    "until": "2026-10-25",
+    "until_text": "лише 25 жовтня, з 26 жовтня — за звичною схемою",
+    "routes": ["А56"],
+    "note": "У повідомленні міста маршрут названо №56А.",
     "source": "Львівський портал",
     "url": "https://portal.lviv.ua/news/2026/10/24/cherez-remont-dorohy-u-velykykh-hrybovychakh-tymchasovo-zminiat-rukh-dvokh-avtobusiv"
   }
