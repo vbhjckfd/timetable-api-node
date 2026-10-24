@@ -317,7 +317,8 @@ describe("stopArrivalService.getTimetableForStop — schedule fallback", () => {
     getArrivalTimes.mockResolvedValue([
       {
         tripUpdate: {
-          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: futureTimeSec } }],
+          // Relative to the pinned clock, not the module-level futureTimeSec.
+          stopTimeUpdate: [{ stopId: "MG1001", arrival: { time: Math.floor(Date.now() / 1000) + 600 } }],
           trip: { routeId: "ROUTE1", tripId: "TRIP1" },
           vehicle: { id: "VH1" },
         },
