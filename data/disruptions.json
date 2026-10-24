@@ -54,5 +54,20 @@
     "note": "Зупинку на вул. Ковча перенесено перед будмайданчик; рух у бік вул. Шевченка — однією смугою.",
     "source": "ZAXID.NET",
     "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "velyki-hrybovychi-a62",
+    "kind": "detour",
+    "reason": "Ремонт з’їздів із траси у Великих Грибовичах",
+    "since": "2026-10-25",
+    "until": "2026-10-25",
+    "until_text": "лише 25 жовтня, з 26 жовтня — за звичною схемою",
+    "routes": ["А62"],
+    "detour": {
+      "via": ["с. Гряда"]
+    },
+    "note": "Автобус №56А цього дня не курсує.",
+    "source": "Львівський портал",
+    "url": "https://portal.lviv.ua/news/2026/10/24/cherez-remont-dorohy-u-velykykh-hrybovychakh-tymchasovo-zminiat-rukh-dvokh-avtobusiv"
   }
 ]
