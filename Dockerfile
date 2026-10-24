@@ -1,30 +1,40 @@
 # https://hub.docker.com/_/node
-FROM node:26-alpine AS build_image
-ARG CACHEBUST=1
 
-# Create and change to the app directory.
-WORKDIR /usr/src/app
-
-# Copy application dependency manifests to the container image.
-# A wildcard is used to ensure both package.json AND package-lock.json are copied.
-# Copying this separately prevents re-running npm install on every code change.
-COPY package*.json ./
-
-# Install production dependencies.
+# Production dependencies for the target platform (linux/amd64 on Cloud Run).
+# Only package*.json goes in, so this layer stays cached until dependencies
+# change — under QEMU on an arm64 laptop it is the slowest step by far.
+#
 # npm runs `node-gyp rebuild` for better-sqlite3 on install. The package ships
 # a musl prebuild, so nothing is compiled, but node-gyp still downloads Node's
 # headers (and SHASUMS256.txt) just to configure, and a timeout on that
 # download failed a deploy. Point it at the headers the image already ships.
+FROM node:26-alpine AS deps
+WORKDIR /usr/src/app
+COPY package*.json ./
 ENV npm_config_nodedir=/usr/local
-RUN apk add --no-cache tzdata python3 make g++ && npm install --omit=dev
-ENV TZ=Europe/Kyiv
+RUN apk add --no-cache python3 make g++ && npm install --omit=dev
 
-# Copy local code to the container image.
+# GTFS import runs on the build machine's own platform: the sqlite DB and the
+# loki Timetable file are platform-independent, and running node under QEMU
+# made the import several times slower. Needs its own native node_modules.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS data
+WORKDIR /usr/src/app
+RUN apk add --no-cache tzdata
+ENV TZ=Europe/Kyiv
+COPY package*.json ./
+ENV npm_config_nodedir=/usr/local
+RUN apk add --no-cache python3 make g++ && npm install --omit=dev
+
 COPY . ./
 
+# Declared here, not at the top: every RUN after an ARG is a cache miss when
+# its value changes, and `make build` passes a new timestamp each time — that
+# re-ran npm install on every deploy.
+ARG CACHEBUST=1
 RUN echo "$CACHEBUST"
 
-RUN apk --no-cache add curl && curl --silent --head "https://track.ua-gis.com/gtfs/lviv/static.zip" | grep 'Last-Modified:' | cut -c 16- > ./last-modified.txt
+RUN wget -S --spider "https://track.ua-gis.com/gtfs/lviv/static.zip" 2>&1 \
+  | grep -i 'Last-Modified:' | sed 's/^ *[Ll]ast-[Mm]odified: *//' > ./last-modified.txt
 
 RUN node ./gtfs-import.ts && node ./scripts/slim-gtfs-db.ts
 
@@ -43,10 +53,10 @@ ENV TZ=Europe/Kyiv
 WORKDIR /usr/src/app
 
 COPY . ./
-COPY --from=build_image /usr/src/app/node_modules ./node_modules
-COPY --from=build_image /usr/src/app/database/Timetable ./database/Timetable
-COPY --from=build_image /usr/src/app/database/gtfs ./database/gtfs
-COPY --from=build_image /usr/src/app/last-modified.txt ./last-modified.txt
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+COPY --from=data /usr/src/app/database/Timetable ./database/Timetable
+COPY --from=data /usr/src/app/database/gtfs ./database/gtfs
+COPY --from=data /usr/src/app/last-modified.txt ./last-modified.txt
 
 HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 CMD wget -q --spider http://localhost:8080/health
 
