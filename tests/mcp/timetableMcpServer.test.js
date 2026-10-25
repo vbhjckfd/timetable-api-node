@@ -7,6 +7,28 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 vi.mock("../../actions/getSingleStopAction.js", () => ({
   default: async (req, res) => {
     if (req.stopCode === 404404) return res.status(404).send(`Bad argument, stop with code ${req.stopCode} not found`);
+    if (req.stopCode === 505) {
+      return res.json({
+        code: 505, name: "Mixed Stop", latitude: 49.84, longitude: 24.02, transfers: [],
+        timetable: [
+          { route: "Т01", end_stop: "Вокзал", vehicle_type: "tram", time_left: "2 хв", vehicle_id: "old-1", lowfloor: false },
+          { route: "Т01", end_stop: "Вокзал", vehicle_type: "tram", time_left: "6 хв", vehicle_id: "new-1", lowfloor: true },
+          // Timetable entries always say lowfloor: false; that is not a fact about any vehicle.
+          { route: "Т01", end_stop: "Вокзал", vehicle_type: "tram", time_left: "20 хв", lowfloor: false, scheduled: true },
+        ],
+      });
+    }
+    if (req.stopCode === 708) {
+      return res.json({
+        code: 708, name: "Опера", latitude: 49.844, longitude: 24.0268, transfers: [],
+        timetable: [
+          { route: "Т01", end_stop: "Вокзал", direction: 0, time_left: "3 хв", vehicle_id: "t1-a", lowfloor: true },
+          { route: "Т01", end_stop: "Опера", direction: 1, time_left: "1 хв", vehicle_id: "t1-back", lowfloor: false },
+          { route: "Т02", end_stop: "Вокзал", direction: 0, time_left: "2 хв", vehicle_id: "t2", lowfloor: false },
+          { route: "Т01", end_stop: "Вокзал", direction_id: 0, time_left: "15 хв", lowfloor: false, scheduled: true },
+        ],
+      });
+    }
     if (req.stopCode === 303) {
       // A scheduled arrival with no time the parser can read.
       return res.json({ code: 303, name: "No ETA Stop", latitude: 49.84, longitude: 24.02, transfers: [], timetable: [{ route: "Т01", end_stop: "Сихів", vehicle_type: "tram" }] });
@@ -60,6 +82,14 @@ vi.mock("../../actions/routeStaticInfoAction.js", () => ({
 
 vi.mock("../../actions/routeDynamicInfoAction.js", () => ({
   default: async (req, res) => {
+    if (req.params.name === "T31") {
+      return res.json([
+        { id: "c", direction: 0, location: [49.84, 24.0], bearing: 0, lowfloor: false },
+        { id: "a", direction: 0, location: [49.84, 24.02], bearing: 0, lowfloor: true },
+        { id: "b", direction: 0, location: [49.84, 24.01], bearing: 0, lowfloor: false },
+        { id: "back", direction: 1, location: [49.84, 24.03], bearing: 180, lowfloor: false },
+      ]);
+    }
     res.json([
       {
         id: "vehicle-1",
@@ -151,8 +181,12 @@ vi.mock("../../services/transitLookupService.js", () => ({
         ]
       : [],
   ),
+  POINT_WALK_RADIUS_METERS: 600,
   findRoutesBetween: vi.fn((from, to) => {
     if (from === 9999 || to === 9999) return { from: null, to: null, options: [], missing: 9999 };
+    // A point in the sea, nowhere near a stop.
+    if (typeof from === "object" && from.lat === 10) return { from: null, to: null, options: [], transfer_options: [], missing: "from" };
+    if (typeof from === "object") from = 707;
     if (to === 708) {
       return {
         from: { code: from, name: "Опера", codes: [from, 708] },
@@ -165,7 +199,7 @@ vi.mock("../../services/transitLookupService.js", () => ({
     const stop = (code, name, lat = 49.84, lng = 24.02) => ({ code, name, eng_name: null, lat, lng, routes: [] });
     if (to === 5555) {
       const leg = (route, board, alight, destination, stops_count) => ({
-        route, vehicle_type: "bus", direction: 0, destination, board_stop: board, alight_stop: alight, stops_count,
+        route, route_id: `EXT-${route}`, vehicle_type: "bus", direction: 0, destination, board_stop: board, alight_stop: alight, stops_count,
       });
       return {
         from: { code: from, name: "Опера", codes: [from] },
@@ -190,20 +224,43 @@ vi.mock("../../services/transitLookupService.js", () => ({
       from: { code: from, name: "Опера", codes: [from, 708] },
       to: { code: to, name: "Вокзал", codes: [to] },
       options: [
-        { route: "Т01", vehicle_type: "tram", direction: 0, destination: "Вокзал", board_stop: stop(708, "Опера"), alight_stop: stop(to, "Вокзал"), stops_count: 4, walk_to_board_meters: 50, walk_from_alight_meters: 0 },
+        { route: "Т01", route_id: "EXT1", vehicle_type: "tram", direction: 0, destination: "Вокзал", board_stop: stop(708, "Опера"), alight_stop: stop(to, "Вокзал"), stops_count: 4, walk_to_board_meters: 50, walk_from_alight_meters: 0 },
       ],
     };
   }),
   listRouteNames: vi.fn(() => ["А01", "А03", "Н2", "Т01", "Т30"]),
   resolveRoute: vi.fn((name) =>
-    name === "T30" || name === "1030" ? { external_id: "EXT30", name: "Т30", destinations: ["Рясне", "Сихів"] } : null,
+    name === "T30" || name === "1030"
+      ? { external_id: "EXT30", name: "Т30", destinations: ["Рясне", "Сихів"], stops: [[707, 708], [708, 707]] }
+      : name === "T31"
+        ? { external_id: "EXT31", name: "Т31", destinations: ["Схід", "Захід"], stops: [[700, 707, 708, 709], [709, 700]] }
+        : null,
   ),
   destinationsFor: vi.fn((pairs) =>
     Object.fromEntries(pairs.map(({ routeId, direction }) => [`${routeId}:${direction}`, `End of ${routeId}/${direction}`])),
   ),
-  nextStopsForVehicles: vi.fn(async (ids) =>
-    Object.fromEntries(ids.map((id) => [id, { code: 707, name: "Опера", arrival: "2026-01-01T12:05:00.000Z" }])),
-  ),
+  etasForVehicles: vi.fn(async (ids) => {
+    const at = (minutes) => Date.parse("2026-01-01T12:00:00.000Z") + minutes * 60_000;
+    // T31, front to back: a is past 707, b is one stop behind, c is too far back for the feed to reach 707.
+    const fixtures = {
+      a: [{ code: 708, name: "Тест-708", time: at(2) }, { code: 709, name: "Тест-709", time: at(5) }],
+      b: [{ code: 707, name: "Опера", time: at(1) }, { code: 708, name: "Тест-708", time: at(6) }],
+      c: [{ code: 700, name: "Тест-700", time: at(0) }],
+    };
+    return Object.fromEntries(ids.map((id) => [id, fixtures[id] ?? [{ code: 707, name: "Опера", time: at(5) }]]));
+  }),
+}));
+
+vi.mock("../../services/tripScheduleService.js", () => ({
+  // "HH:MM" reads as noon in Kyiv on a fixed day, so the echoed time is stable.
+  parseTripTime: vi.fn((value) => (/^\d{1,2}:\d{2}$/.test(value) ? new Date("2026-01-01T10:00:00.000Z") : null)),
+  scheduleTrip: vi.fn((legs) => ({
+    leave_at: "12:00",
+    arrive_at: "12:20",
+    total_minutes: 20,
+    legs: legs.map((_, i) => ({ board_at: `12:0${4 + i * 4}`, alight_at: `12:1${2 + i * 4}` })),
+  })),
+  scheduledHeadway: vi.fn((routeId, direction) => (routeId === "EXT31" && direction === 0 ? 5 : null)),
 }));
 
 const MOCK_DISRUPTION = {
@@ -649,7 +706,7 @@ describe("timetable MCP server", () => {
     });
 
     expect(result.content[0].text).toContain(
-      "1 direct route «Опера» → «Вокзал», best first: Т01 towards «Вокзал» from «Опера» (708) to «Вокзал» (101), 4 stops, 50m walk to board.",
+      "1 direct route «Опера» → «Вокзал», best first: Т01 towards «Вокзал» from «Опера» (708) to «Вокзал» (101), 4 stops, 50m walk to board; next 3, 15 min (partly scheduled); by timetable leave 12:00, board 12:04, arrive 12:20 (20 min).",
     );
     const sc = result.structuredContent;
     expect(sc.data.from).toEqual({ id: "707", name: "Опера", stop_ids: ["707", "708"] });
@@ -681,8 +738,8 @@ describe("timetable MCP server", () => {
       arguments: { from_stop_id: 707, to_stop_id: 5555 },
     });
     expect(viaTransfer.isError).toBeFalsy();
-    expect(viaTransfer.content[0].text).toBe(
-      "No direct route «Опера» → «Сихів». 1 option with one transfer: А03 from «Опера» (707) to «Підвальна», walk 30m to «Друкарська» (20), then А05 towards «Сихів» (3 stops in total).",
+    expect(viaTransfer.content[0].text).toContain(
+      "No direct route «Опера» → «Сихів». 1 option with one transfer: А03 from «Опера» (707) to «Підвальна», walk 30m to «Друкарська» (20), then А05 towards «Сихів» (3 stops in total); no live departures; by timetable leave 12:00, board 12:04, arrive 12:20 (20 min).",
     );
     const t = viaTransfer.structuredContent.data.transfer_options[0];
     expect(t.legs.map((l) => [l.route, l.board_stop.id, l.alight_stop.id])).toEqual([
@@ -720,6 +777,135 @@ describe("timetable MCP server", () => {
     await client.callTool({ name: "find_routes_between", arguments: { from_stop_id: 707, to_stop_id: 4242 } });
     expect(servedFilter).toHaveBeenCalled();
     expect(findRoutesBetween).toHaveBeenLastCalledWith(707, 4242, expect.any(Function));
+    await client.close();
+  });
+
+  it("find_routes_between carries live next departures of the first leg, that route and way only", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({ name: "find_routes_between", arguments: { from_stop_id: 707, to_stop_id: 101 } });
+    const [option] = result.structuredContent.data.options;
+    // Т01 the other way and Т02 at the same stop are left out; the timetable entry stays, flagged.
+    expect(option.next_departures).toEqual([
+      { arrival_minutes: 3, scheduled: false, vehicle_id: "t1-a", lowfloor: true },
+      { arrival_minutes: 15, scheduled: true, vehicle_id: null, lowfloor: null },
+    ]);
+    expect(option.schedule).toEqual({ leave_at: "12:00", arrive_at: "12:20", total_minutes: 20, legs: [{ board_at: "12:04", alight_at: "12:12" }] });
+    expect(result.structuredContent.data.timing.mode).toBe("depart_at");
+    await client.close();
+  });
+
+  it("find_routes_between plans for a given time, without live departures", async () => {
+    const { scheduleTrip } = await import("../../services/tripScheduleService.js");
+    const client = await connectClient();
+
+    const later = await client.callTool({
+      name: "find_routes_between",
+      arguments: { from_stop_id: 707, to_stop_id: 102, arrive_by: "12:30" },
+    });
+    expect(later.structuredContent.data.timing).toEqual({ mode: "arrive_by", at: "12:00" });
+    expect(later.structuredContent.data.options[0].next_departures).toBeUndefined();
+    expect(scheduleTrip).toHaveBeenLastCalledWith(
+      [{ route_id: "EXT1", board_code: 708, alight_code: 102, stops_count: 4 }],
+      { to_board_meters: 50, transfer_meters: [], from_alight_meters: 0 },
+      { arrive_by: new Date("2026-01-01T10:00:00.000Z") },
+    );
+    expect(later.content[0].text).toContain("Planned for arriving by 12:00, Lviv time.");
+
+    const both = await client.callTool({
+      name: "find_routes_between",
+      arguments: { from_stop_id: 707, to_stop_id: 102, depart_at: "08:00", arrive_by: "09:00" },
+    });
+    expect(both.isError).toBe(true);
+    const garbled = await client.callTool({
+      name: "find_routes_between",
+      arguments: { from_stop_id: 707, to_stop_id: 102, depart_at: "tomorrow-ish" },
+    });
+    expect(garbled.isError).toBe(true);
+    expect(garbled.content[0].text).toContain("Unreadable time «tomorrow-ish»");
+    await client.close();
+  });
+
+  it("find_routes_between takes coordinates for either end", async () => {
+    const { findRoutesBetween } = await import("../../services/transitLookupService.js");
+    const client = await connectClient();
+
+    const result = await client.callTool({
+      name: "find_routes_between",
+      arguments: { from_lat: 49.8436, from_lng: 24.0261, to_stop_id: 103 },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(findRoutesBetween).toHaveBeenLastCalledWith({ lat: 49.8436, lng: 24.0261 }, 103, expect.any(Function));
+    expect(result.structuredContent.data.from).toMatchObject({ id: "707", point: { lat: 49.8436, lng: 24.0261 } });
+    expect(result.content[0].text).toContain("your point (nearest stop «Опера») → «Вокзал»");
+
+    const nowhere = await client.callTool({
+      name: "find_routes_between",
+      arguments: { from_lat: 10, from_lng: 10, to_stop_id: 103 },
+    });
+    expect(nowhere.isError).toBe(true);
+    expect(nowhere.content[0].text).toContain("No stop within 600 m of the start point");
+
+    for (const [args, message] of [
+      [{ to_stop_id: 103 }, "Missing the trip's start"],
+      [{ from_lat: 49.84, to_stop_id: 103 }, "`from_lat` and `from_lng` go together"],
+      [{ from_stop_id: 707, from_lat: 49.84, from_lng: 24.02, to_stop_id: 103 }, "not both"],
+    ]) {
+      const bad = await client.callTool({ name: "find_routes_between", arguments: args });
+      expect(bad.isError).toBe(true);
+      expect(bad.content[0].text).toContain(message);
+    }
+    await client.close();
+  });
+
+  it("get_stop_realtime marks timetable entries and filters to low-floor vehicles", async () => {
+    const client = await connectClient();
+
+    const all = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 505 } });
+    expect(all.structuredContent.data.arrivals.map((a) => [a.vehicle_id, a.lowfloor, a.scheduled])).toEqual([
+      ["old-1", false, false],
+      ["new-1", true, false],
+      [null, null, true],
+    ]);
+    expect(all.content[0].text).toContain("Т01 → «Вокзал» in 6 min (low-floor)");
+    expect(all.content[0].text).toContain("Т01 → «Вокзал» in 20 min (scheduled, not tracked)");
+
+    const step = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 505, lowfloor_only: true } });
+    expect(step.structuredContent.data.lowfloor_only).toBe(true);
+    expect(step.structuredContent.data.arrivals.map((a) => a.vehicle_id)).toEqual(["new-1"]);
+    expect(step.content[0].text).toContain("1 low-floor arrival");
+    await client.close();
+  });
+
+  it("get_nearby_vehicles filters to low-floor vehicles", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "get_nearby_vehicles",
+      arguments: { latitude: 49.843, longitude: 24.025, lowfloor_only: true },
+    });
+    expect(result.structuredContent.data.vehicles.map((v) => v.id)).toEqual(["vehicle-42"]);
+    expect(result.structuredContent.data.total).toBe(1);
+    expect(result.content[0].text).toContain("1 low-floor vehicle within 500m");
+    await client.close();
+  });
+
+  it("get_route_realtime sums up live gaps and the timetable headway per direction", async () => {
+    const client = await connectClient();
+
+    const result = await client.callTool({ name: "get_route_realtime", arguments: { route_name: "T31" } });
+    expect(result.structuredContent.data.headways).toEqual([
+      // a leads; b reaches a's next stop 4 min after it; c is too far back to time.
+      { direction: 0, destination: "Схід", vehicles: 3, gaps_minutes: [4, null], scheduled_headway_minutes: 5 },
+      { direction: 1, destination: "Захід", vehicles: 1, gaps_minutes: [], scheduled_headway_minutes: null },
+    ]);
+    expect(result.content[0].text).toContain(
+      "Headways: towards «Схід»: 3 vehicles, gaps 4, ? min, timetable every 5 min; towards «Захід»: 1 vehicle.",
+    );
+
+    const oneWay = await client.callTool({ name: "get_route_realtime", arguments: { route_name: "T31", direction: 1 } });
+    expect(oneWay.structuredContent.data.direction).toBe(1);
+    expect(oneWay.structuredContent.data.vehicles.map((v) => v.id)).toEqual(["back"]);
+    expect(oneWay.structuredContent.data.headways.map((h) => h.direction)).toEqual([1]);
+    expect(oneWay.content[0].text).toContain("Route Т31 towards «Захід»: 1 active vehicle");
     await client.close();
   });
 

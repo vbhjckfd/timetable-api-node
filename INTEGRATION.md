@@ -110,11 +110,11 @@ All tools are read-only. Argument names are **exact** — pass them as shown.
 |------|-----------|---------|
 | `search_stops` | `query` (string), `limit` (int 1–25, optional) | Stop IDs by name — Ukrainian or English, partial, inflection-tolerant. |
 | `get_stops_around_location` | `latitude`, `longitude` (numbers), `radius_meters` (int 50–3000, optional) | Stop IDs near a coordinate, with serving routes. |
-| `get_stop_realtime` | `stop_id` (number or digit string) | Live arrivals at a stop: route, destination, minutes to arrival. |
-| `find_routes_between` | `from_stop_id`, `to_stop_id` | Routes from A to B, direct or with one interchange in a nearby-stop cluster: where to board, transfer and get off. |
+| `get_stop_realtime` | `stop_id` (number or digit string), `lowfloor_only` (bool, optional) | Live arrivals at a stop: route, destination, minutes to arrival; `scheduled: true` marks timetable entries. |
+| `find_routes_between` | `from_stop_id` or `from_lat` + `from_lng`; `to_stop_id` or `to_lat` + `to_lng`; `depart_at` or `arrive_by` (optional, `"HH:MM"` Lviv time or ISO 8601) | Routes from A to B, direct or with one interchange in a nearby-stop cluster: where to board, transfer and get off, live next departures, and a timetable estimate of when to leave and arrive. |
 | `get_route_static` | `route_name` (string, e.g. `"T30"`), `include_shapes` (bool, optional) | Stop lists (both directions), first-stop timetable; polylines on request. |
-| `get_route_realtime` | `route_name` (string) | Live vehicles on a route with destination and next stop. |
-| `get_nearby_vehicles` | `latitude`, `longitude` (numbers), `radius_meters`, `route`, `limit` (optional) | Live vehicles near a coordinate, nearest first. |
+| `get_route_realtime` | `route_name` (string), `direction` (0 or 1, optional) | Live vehicles on a route with destination and next stop; live gaps and timetable headway per direction. |
+| `get_nearby_vehicles` | `latitude`, `longitude` (numbers), `radius_meters`, `route`, `limit`, `lowfloor_only` (optional) | Live vehicles near a coordinate, nearest first. |
 | `get_vehicle_info` | `vehicle_id` (string) | One vehicle: route, destination, plate, upcoming stops with names. |
 | `get_disruptions` | `route` (string), `stop_id` (optional) | Announced closures, detours and moved stops in force today. Stop, route and trip tools also add a `disruptions` array when one applies — mention it to the user. |
 

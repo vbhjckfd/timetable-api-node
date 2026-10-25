@@ -15,7 +15,9 @@ import {
   findRoutesBetween,
   listRouteNames,
   TRANSFER_RADIUS_METERS,
+  etasForVehicles,
   nextStopsForVehicles,
+  POINT_WALK_RADIUS_METERS,
   resolveRoute,
   searchStops,
 } from "../../services/transitLookupService.js";
@@ -119,9 +121,31 @@ describe("searchStops", () => {
   });
 });
 
+describe("searchStops folding", () => {
+  it("reads Latin look-alike letters typed in a Cyrillic name", () => {
+    // Latin C and i, as typed with the layout switched mid-word.
+    expect(searchStops("Cихiв").map((s) => s.code)).toEqual([22]);
+    expect(searchStops("Пiдвальна").map((s) => s.code)).toEqual([11]);
+  });
+
+  it("ignores dots and dashes, so abbreviations still match", () => {
+    expect(searchStops("пл. ринок").map((s) => s.code)).toEqual([10]);
+    expect(searchStops("площа-ринок").map((s) => s.code)).toEqual([10]);
+  });
+
+  it("still matches English names typed in Latin", () => {
+    expect(searchStops("rynok").map((s) => s.code)).toEqual([10]);
+  });
+});
+
 describe("resolveRoute", () => {
   it("resolves Latin and Cyrillic short names to the display name with termini", () => {
-    expect(resolveRoute("T1")).toEqual({ external_id: "1", name: "Т01", destinations: ["Вокзал", "Опера"] });
+    expect(resolveRoute("T1")).toEqual({
+      external_id: "1",
+      name: "Т01",
+      destinations: ["Вокзал", "Опера"],
+      stops: [[707, 10, 11, 12], [12, 11, 10, 707]],
+    });
     expect(resolveRoute("Т01")?.name).toBe("Т01");
   });
 
@@ -217,6 +241,35 @@ describe("findRoutesBetween", () => {
     expect(findRoutesBetween(707, 12, served).options.map((o) => o.route)).toEqual(["Т01"]);
   });
 
+  it("starts from a point at every stop within a wider walk of it", () => {
+    // ~25 m from 707: the walk is measured from the point, not from the nearest stop.
+    const result = findRoutesBetween({ lat: 49.8435, lng: 24.0261 }, 12);
+    expect(result.from.code).toBe(707);
+    expect(result.options[0]).toMatchObject({ route: "Т02", board_stop: { code: 708 } });
+    expect(result.options.find((o) => o.route === "Т01").walk_to_board_meters).toBeGreaterThan(0);
+    expect(POINT_WALK_RADIUS_METERS).toBeGreaterThan(300);
+  });
+
+  it("reports which point has no stop within walking distance", () => {
+    expect(findRoutesBetween({ lat: 50.5, lng: 25.5 }, 12).missing).toBe("from");
+    expect(findRoutesBetween(707, { lat: 50.5, lng: 25.5 }).missing).toBe("to");
+  });
+
+  it("answers a walk between two points a short walk apart", () => {
+    const result = findRoutesBetween({ lat: 49.8435, lng: 24.0261 }, { lat: 49.8440, lng: 24.0268 });
+    expect(result.walk_meters).toBeGreaterThan(0);
+    expect(result.options).toEqual([]);
+  });
+
+  it("names each leg's GTFS route id, for timetable lookups", () => {
+    expect(findRoutesBetween(707, 12).options.map((o) => [o.route, o.route_id])).toEqual([
+      ["Т02", "2"],
+      ["Т09", "9"],
+      ["Т01", "1"],
+    ]);
+    expect(findRoutesBetween(707, 22).transfer_options[0].legs.map((l) => l.route_id)).toEqual(["3", "5"]);
+  });
+
   it("does not transfer outside the walking cluster", () => {
     // 21 is ~1.9 km from anything on the 707 lines; only the 11/20 cluster connects them.
     const pairs = findRoutesBetween(707, 22).transfer_options.map((t) => [t.legs[0].alight_stop.code, t.legs[1].board_stop.code]);
@@ -256,6 +309,21 @@ describe("nextStopsForVehicles", () => {
     ]);
 
     expect((await nextStopsForVehicles(["V1"], now)).V1.code).toBe(10);
+  });
+
+  it("lists every stop still ahead, soonest first, across trips", async () => {
+    const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+    const at = (minutes) => ({ time: String((now + minutes * 60_000) / 1000) });
+    getArrivalTimes.mockResolvedValue([
+      { tripUpdate: { vehicle: { id: "V1" }, stopTimeUpdate: [{ stopId: "MG12", arrival: at(40) }, { stopId: "MGNOPE", arrival: at(1) }] } },
+      { tripUpdate: { vehicle: { id: "V1" }, stopTimeUpdate: [{ stopId: "MG11", arrival: at(7) }, { stopId: "MG10", arrival: at(-5) }] } },
+    ]);
+    const etas = await etasForVehicles(["V1"], now);
+    // Passed stops and stops missing from the timetable are dropped.
+    expect(etas.V1.map((e) => [e.code, (e.time - now) / 60_000])).toEqual([
+      [11, 7],
+      [12, 40],
+    ]);
   });
 
   it("skips the feed entirely when there are no vehicles", async () => {

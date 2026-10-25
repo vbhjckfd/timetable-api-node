@@ -27,13 +27,25 @@ export interface StopSummary {
 }
 
 /**
- * Case- and apostrophe-insensitive, so "Площа Ринок", "площа ринок" and
- * "Pidvalna" all hit, and "Маріїʼ" typed with any of ' ’ ʼ matches.
+ * Latin letters that look like Cyrillic ones. Riders switch keyboard layouts
+ * mid-word ("Cихів" with a Latin C, "Пiдвальна" with a Latin i), and names
+ * are folded on both sides, so English names still match English queries.
+ */
+const LOOKALIKE_LATIN: Record<string, string> = {
+  a: "а", c: "с", e: "е", i: "і", k: "к", o: "о", p: "р", x: "х", y: "у",
+};
+
+/**
+ * Case-, apostrophe-, punctuation- and layout-insensitive, so "Площа Ринок",
+ * "пл. ринок" and "Pidvalna" all hit, and "Маріїʼ" typed with any of ' ’ ʼ
+ * matches.
  */
 function foldName(value: unknown): string {
   return String(value ?? "")
     .toLowerCase()
     .replace(/[’'ʼ`"«»]/g, "")
+    .replace(/[.,\-–—/()№]/g, " ")
+    .replace(/[aceikopxy]/g, (c) => LOOKALIKE_LATIN[c])
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -112,7 +124,7 @@ export function routeTerminusName(
 /** Same lookup the REST route endpoints use: numeric → external ID, else short name. */
 export function resolveRoute(
   name: unknown,
-): { external_id: string; name: string; destinations: (string | null)[] } | null {
+): { external_id: string; name: string; destinations: (string | null)[]; stops: number[][] } | null {
   const query = Number(name)
     ? { external_id: String(name) }
     : { short_name: normalizeRouteName(String(name)) };
@@ -122,6 +134,7 @@ export function resolveRoute(
     external_id: route.external_id,
     name: formatRouteName(route.short_name),
     destinations: [0, 1].map((direction) => routeTerminusName(route, direction)),
+    stops: [0, 1].map((direction) => route.stops_by_shape?.[String(direction)] ?? []),
   };
 }
 
@@ -173,6 +186,30 @@ export async function nextStopsForVehicles(
   vehicleIds: unknown[],
   now: number = Date.now(),
 ): Promise<Record<string, NextStop>> {
+  const etas = await etasForVehicles(vehicleIds, now);
+  return Object.fromEntries(
+    Object.entries(etas)
+      .filter(([, list]) => list.length)
+      .map(([vehicleId, [next]]) => [vehicleId, { code: next.code, name: next.name, arrival: new Date(next.time).toISOString() }]),
+  );
+}
+
+export interface StopEta {
+  code: number;
+  name: string;
+  /** Epoch milliseconds. */
+  time: number;
+}
+
+/**
+ * Every stop still ahead of each vehicle with its predicted time, soonest
+ * first, across all the trip updates the vehicle carries. Stops not in the
+ * local timetable are dropped. Same 30 s grace as nextStopsForVehicles.
+ */
+export async function etasForVehicles(
+  vehicleIds: unknown[],
+  now: number = Date.now(),
+): Promise<Record<string, StopEta[]>> {
   const wanted = new Set(vehicleIds.map(String));
   if (!wanted.size) return {};
 
@@ -180,34 +217,29 @@ export async function nextStopsForVehicles(
     wanted.has(String(e.tripUpdate?.vehicle?.id)),
   );
 
-  const nextByVehicle: Record<string, { stopId: string | null | undefined; time: number }> = {};
+  const raw: Record<string, { stopId: string | null | undefined; time: number }[]> = {};
   for (const entity of updates) {
     const vehicleId = String(entity.tripUpdate!.vehicle!.id);
     for (const update of entity.tripUpdate!.stopTimeUpdate ?? []) {
       const time = Number((update.arrival ?? update.departure)?.time) * 1000;
       if (!Number.isFinite(time) || time < now - PASSED_GRACE_MS) continue;
-      if (!nextByVehicle[vehicleId] || time < nextByVehicle[vehicleId].time) {
-        nextByVehicle[vehicleId] = { stopId: update.stopId, time };
-      }
+      (raw[vehicleId] ??= []).push({ stopId: update.stopId, time });
     }
   }
 
-  const microgizIds = Object.values(nextByVehicle).map((u) => u.stopId);
+  const microgizIds = Object.values(raw).flatMap((list) => list.map((u) => u.stopId));
   const stopsById: Record<string, StopDoc> = Object.fromEntries(
     stops()
       .find({ microgiz_id: { $in: microgizIds } })
       .map((s) => [s.microgiz_id, s]),
   );
 
-  const result: Record<string, NextStop> = {};
-  for (const [vehicleId, { stopId, time }] of Object.entries(nextByVehicle)) {
-    const stop = stopsById[stopId!];
-    if (!stop) continue;
-    result[vehicleId] = {
-      code: stop.code,
-      name: stop.name,
-      arrival: new Date(time).toISOString(),
-    };
+  const result: Record<string, StopEta[]> = {};
+  for (const [vehicleId, list] of Object.entries(raw)) {
+    result[vehicleId] = list
+      .filter((u) => stopsById[u.stopId!])
+      .sort((a, b) => a.time - b.time)
+      .map((u) => ({ code: stopsById[u.stopId!].code, name: stopsById[u.stopId!].name, time: u.time }));
   }
   return result;
 }
@@ -241,7 +273,10 @@ interface NearbyStop {
 }
 
 interface WalkArea {
+  /** The stop given, or for a point the stop nearest to it. */
   origin: StopDoc;
+  /** Where the walk starts: the stop itself, or the point. */
+  point: [number, number];
   nearby: Map<number, NearbyStop>;
 }
 
@@ -271,6 +306,8 @@ type LegsByStop = Map<number, Map<string, Leg>>;
 
 export interface TripLeg {
   route: string;
+  /** GTFS route id, for timetable lookups. */
+  route_id: string;
   vehicle_type: VehicleType;
   direction: number;
   destination: string | null;
@@ -298,6 +335,15 @@ export interface TripEndpoint {
   codes: number[];
 }
 
+/** A trip end: a stop code, or a point such as an address the rider gave. */
+export type TripEnd = number | { lat: number; lng: number };
+
+/**
+ * A point is not a platform the rider already stands on, so it gets a wider
+ * catchment than a stop does: an address is often a few blocks from the line.
+ */
+export const POINT_WALK_RADIUS_METERS = 600;
+
 export type RoutesBetween =
   | {
       from: TripEndpoint;
@@ -313,20 +359,25 @@ export type RoutesBetween =
       to: null;
       options: [];
       transfer_options: [];
-      missing: number;
+      /** The stop code that does not exist, or which point has no stop within walking distance. */
+      missing: number | "from" | "to";
     };
 
-function stopsWithinWalk(code: number): WalkArea | null {
-  const origin = stops().findOne({ code });
-  if (!origin) return null;
-  const [lat, lng] = origin.location.coordinates;
+function stopsWithinWalk(end: TripEnd): WalkArea | null {
+  const atStop = typeof end === "number";
+  const origin = atStop ? stops().findOne({ code: end }) : null;
+  if (atStop && !origin) return null;
+  const [lat, lng] = atStop ? origin!.location.coordinates : [end.lat, end.lng];
+  const radius = atStop ? WALK_RADIUS_METERS : POINT_WALK_RADIUS_METERS;
   const nearby = new Map<number, NearbyStop>();
   for (const s of stops().find({})) {
     const [sLat, sLng] = s.location.coordinates;
-    const walk = s.code === origin.code ? 0 : Math.round(distanceMeters(lat, lng, sLat, sLng));
-    if (walk <= WALK_RADIUS_METERS) nearby.set(s.code, { stop: s, walk });
+    const walk = s.code === origin?.code ? 0 : Math.round(distanceMeters(lat, lng, sLat, sLng));
+    if (walk <= radius) nearby.set(s.code, { stop: s, walk });
   }
-  return { origin, nearby };
+  if (atStop) return { origin: origin!, point: [lat, lng], nearby };
+  const nearest = [...nearby.values()].sort((a, b) => a.walk - b.walk)[0];
+  return nearest ? { origin: nearest.stop, point: [lat, lng], nearby } : null;
 }
 
 /**
@@ -471,11 +522,13 @@ function legsToDestination(dirs: RouteDirection[], nearby: Map<number, NearbySto
  * would read as "needs two or more transfers". `served` drops route and stop
  * pairs that are out of service, so a suspended route is never suggested.
  */
-export function findRoutesBetween(fromCode: number, toCode: number, served?: ServedFilter): RoutesBetween {
-  const from = stopsWithinWalk(fromCode);
-  const to = stopsWithinWalk(toCode);
+export function findRoutesBetween(fromEnd: TripEnd, toEnd: TripEnd, served?: ServedFilter): RoutesBetween {
+  const from = stopsWithinWalk(fromEnd);
+  const to = stopsWithinWalk(toEnd);
   if (!from || !to) {
-    return { from: null, to: null, options: [], transfer_options: [], missing: !from ? fromCode : toCode };
+    const end = !from ? fromEnd : toEnd;
+    const missing = typeof end === "number" ? end : !from ? "from" : "to";
+    return { from: null, to: null, options: [], transfer_options: [], missing };
   }
 
   const endpoint = ({ origin, nearby }: WalkArea): TripEndpoint => ({
@@ -484,8 +537,8 @@ export function findRoutesBetween(fromCode: number, toCode: number, served?: Ser
     codes: [...nearby.keys()].sort((a, b) => a - b),
   });
 
-  const walkBetween = from.nearby.get(toCode)?.walk;
-  if (walkBetween != null) {
+  const walkBetween = Math.round(distanceMeters(...from.point, ...to.point));
+  if (walkBetween <= WALK_RADIUS_METERS) {
     return { from: endpoint(from), to: endpoint(to), options: [], transfer_options: [], walk_meters: walkBetween };
   }
 
@@ -530,6 +583,7 @@ export function findRoutesBetween(fromCode: number, toCode: number, served?: Ser
     directIds.add(dir.id);
     options.push({
       route: formatRouteName(dir.route.short_name),
+      route_id: dir.route.external_id,
       vehicle_type: getRouteType(dir.route.short_name),
       direction: Number(dir.key),
       destination: routeTerminusName(dir.route, dir.key),
@@ -568,6 +622,7 @@ export function findRoutesBetween(fromCode: number, toCode: number, served?: Ser
 
   const legOut = ({ dir, board, alight, stops_count }: Leg): TripLeg => ({
     route: formatRouteName(dir.route.short_name),
+    route_id: dir.route.external_id,
     vehicle_type: getRouteType(dir.route.short_name),
     direction: Number(dir.key),
     destination: routeTerminusName(dir.route, dir.key),

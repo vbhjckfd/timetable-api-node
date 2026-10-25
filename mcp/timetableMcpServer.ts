@@ -16,14 +16,16 @@ import routeInfoStaticAction from "../actions/routeStaticInfoAction.ts";
 import routeDynamicInfoAction from "../actions/routeDynamicInfoAction.ts";
 import {
   destinationsFor,
+  etasForVehicles,
   findRoutesBetween,
   listRouteNames,
-  nextStopsForVehicles,
   PASSED_GRACE_MS,
+  POINT_WALK_RADIUS_METERS,
   resolveRoute,
   searchStops,
 } from "../services/transitLookupService.ts";
-import type { StopSummary, TransferOption, TripLeg } from "../services/transitLookupService.ts";
+import type { RoutesBetween, StopEta, StopSummary, TransferOption, TripEnd, TripLeg } from "../services/transitLookupService.ts";
+import { parseTripTime, scheduledHeadway, scheduleTrip } from "../services/tripScheduleService.ts";
 import { activeDisruptions, servedFilter } from "../services/disruptionService.ts";
 import type { DisruptionFilter } from "../services/disruptionService.ts";
 import { distanceMeters, formatRouteName } from "../utils/appHelpers.ts";
@@ -89,10 +91,11 @@ const TRANSIT_ASSISTANT_GUIDANCE = `\
 - User names a stop ("Опера", "Rynok", "Головний вокзал") → \`search_stops\` to get its stop ID
 - User gives an address or coordinates → \`get_stops_around_location\` to get nearby stop IDs
 - User asks about arrivals or "when is the next bus/tram at stop X" → \`get_stop_realtime\`
-- User asks how to get from A to B → resolve both stops, then \`find_routes_between\` (direct routes, or one interchange); then \`get_stop_realtime\` on the boarding stop for live times
-- User asks "where is route X right now" or how many vehicles run on it → \`get_route_realtime\`
+- User asks how to get from A to B, how long it takes, or when to leave → \`find_routes_between\` with stop IDs or coordinates for each end (direct routes, or one interchange). Each option already carries live next departures and a timetable estimate; pass \`depart_at\` or \`arrive_by\` for another time
+- User asks "where is route X right now", how many vehicles run on it, or how often it runs → \`get_route_realtime\` (\`headways\` per direction)
 - User asks which stops a route serves, where it goes, or its timetable → \`get_route_static\` (\`include_shapes: true\` only for drawing a map)
 - User asks "what vehicles are near me" → \`get_nearby_vehicles\` (filter with \`route\` when relevant)
+- User needs step-free access (wheelchair, pram) → pass \`lowfloor_only: true\` to \`get_stop_realtime\` or \`get_nearby_vehicles\`
 - User wants to follow one vehicle by ID → \`get_vehicle_info\`
 - User asks about closures, road works, detours or why a route is not running → \`get_disruptions\` (optionally filtered by \`route\` or \`stop_id\`)
 
@@ -100,7 +103,8 @@ const TRANSIT_ASSISTANT_GUIDANCE = `\
 
 - Stop IDs are **numeric codes** printed on physical stop signage (e.g. 707). Accept both integer and digits-only string.
 - Route names are **short names** as shown on vehicles and stops (e.g. "Т30", "А1"); Latin letters ("T30", "A01") work too. Numeric external IDs are also accepted, so a bare number is not a route name.
-- Never guess a stop ID from a place name — resolve it with \`search_stops\` or \`get_stops_around_location\` first.
+- Never guess a stop ID from a place name — resolve it with \`search_stops\` or \`get_stops_around_location\` first. \`find_routes_between\` also takes coordinates directly.
+- Times (\`depart_at\`, \`arrive_by\`, \`schedule\`) are Lviv local time, "HH:MM".
 - One stop name usually covers both sides of the street under different IDs; each direction stops on one of them. The \`routes\` list on each stop tells them apart.
 
 ## UI contract
@@ -116,7 +120,8 @@ Block types:
 
 ## Data caveats
 
-- Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected.
+- Live positions and ETAs come from upstream GTFS-RT feeds; occasional gaps or stale positions are expected. An arrival with \`scheduled: true\` is a timetable entry, not a tracked vehicle.
+- \`find_routes_between\` \`schedule\` times are estimates from per-stop timetables: ride times are inferred, not read off one trip, and public holidays run as their weekday.
 - \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`saturday\`/\`sunday\`) are only populated for the first stop of each direction. Saturday and Sunday timetables can differ; \`schedule.weekend\` merges both days and is kept only for backward compatibility.
 - \`direction\` is the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return); \`destination\` is the name of that direction's last stop.
 - Detours, suspended routes and moved stops are not in the GTFS feed. \`get_stop_realtime\`, \`get_route_static\`, \`get_route_realtime\` and \`find_routes_between\` add a \`disruptions\` array when an announced one touches their routes or stops; always tell the user about it, since stop lists and timetables do not reflect it.
@@ -163,6 +168,10 @@ const zArrivalObj = z.object({
   lat: zCoord,
   lng: zCoord,
   bearing: z.number().nullable(),
+  /** null when unknown: a timetable entry has no vehicle to tell. */
+  lowfloor: z.boolean().nullable(),
+  /** true for a published-timetable departure shown because no vehicle is predicted yet. */
+  scheduled: z.boolean(),
 });
 const zNextStop = z.object({ id: z.string(), name: z.string().nullable(), arrival: z.string() }).nullable();
 const zCenter = z.tuple([zCoord, zCoord]);
@@ -184,6 +193,34 @@ const zDisruption = z.object({
 });
 /** Only present when an announced disruption touches the result, so most answers stay as they were. */
 const zDisruptions = z.array(zDisruption).optional();
+const zNextDeparture = z.object({
+  arrival_minutes: z.number().int().nullable(),
+  scheduled: z.boolean(),
+  vehicle_id: z.string().nullable(),
+  lowfloor: z.boolean().nullable(),
+});
+const zTripSchedule = z
+  .object({
+    leave_at: z.string(),
+    arrive_at: z.string(),
+    total_minutes: z.number().int(),
+    legs: z.array(z.object({ board_at: z.string(), alight_at: z.string() })),
+  })
+  .nullable();
+/** What both kinds of trip option carry on top of their legs. */
+const zTripTiming = {
+  /** Timetable estimate in Lviv local time; null when the day's service does not cover the trip. */
+  schedule: zTripSchedule,
+  /** Live departures of the first leg from its boarding stop; only when planning for now. */
+  next_departures: z.array(zNextDeparture).optional(),
+};
+const zTripEndpoint = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  stop_ids: z.array(z.string()),
+  /** Set when the end was given as coordinates; `id` is then the stop nearest to it. */
+  point: z.object({ lat: z.number(), lng: z.number() }).optional(),
+});
 const zTripLeg = z.object({
   route: z.string(),
   vehicle_type: z.string(),
@@ -229,7 +266,7 @@ const transitResult = <D extends z.ZodType, B extends z.ZodType = typeof zMapBlo
 
 const OUTPUT_SCHEMAS = {
   get_stop_realtime: transitResult(
-    z.object({ stop: zStopObj, arrivals: z.array(zArrivalObj), disruptions: zDisruptions, updated_at: z.string() }),
+    z.object({ stop: zStopObj, arrivals: z.array(zArrivalObj), lowfloor_only: z.boolean(), disruptions: zDisruptions, updated_at: z.string() }),
     z.discriminatedUnion("type", [zMapBlock, zArrivalListBlock]),
   ),
   get_route_static: transitResult(z.object({
@@ -255,6 +292,7 @@ const OUTPUT_SCHEMAS = {
   get_route_realtime: transitResult(z.object({
     route_name: z.string(),
     destinations: z.array(z.string().nullable()),
+    direction: z.number().int().nullable(),
     vehicles: z.array(z.object({
       id: z.string(),
       direction: z.number().int().nullable(),
@@ -264,6 +302,14 @@ const OUTPUT_SCHEMAS = {
       lng: zCoord,
       bearing: z.number().nullable(),
       lowfloor: z.boolean().nullable(),
+    })),
+    headways: z.array(z.object({
+      direction: z.number().int(),
+      destination: z.string().nullable(),
+      vehicles: z.number().int(),
+      /** Minutes between consecutive vehicles, front to back; null where the feed does not reach far enough back. */
+      gaps_minutes: z.array(z.number().int().nullable()),
+      scheduled_headway_minutes: z.number().int().nullable(),
     })),
     disruptions: zDisruptions,
     updated_at: z.string(),
@@ -281,11 +327,14 @@ const OUTPUT_SCHEMAS = {
     updated_at: z.string(),
   })),
   find_routes_between: transitResult(z.object({
-    from: z.object({ id: z.string(), name: z.string().nullable(), stop_ids: z.array(z.string()) }),
-    to: z.object({ id: z.string(), name: z.string().nullable(), stop_ids: z.array(z.string()) }),
+    from: zTripEndpoint,
+    to: zTripEndpoint,
+    /** What the timetable estimates are for, in Lviv local "HH:MM". */
+    timing: z.object({ mode: z.enum(["depart_at", "arrive_by"]), at: z.string() }),
     options: z.array(zTripLeg.extend({
       walk_to_board_meters: z.number().int(),
       walk_from_alight_meters: z.number().int(),
+      ...zTripTiming,
     })),
     transfer_options: z.array(z.object({
       legs: z.array(zTripLeg),
@@ -293,6 +342,7 @@ const OUTPUT_SCHEMAS = {
       stops_count: z.number().int(),
       walk_to_board_meters: z.number().int(),
       walk_from_alight_meters: z.number().int(),
+      ...zTripTiming,
     })),
     map_stops: z.array(zStopObj.extend({ role: z.enum(["board", "transfer", "transfer_alight", "transfer_board", "alight"]) })),
     /** Only present when the two stops are a short walk apart, in which case no ride is searched. */
@@ -304,6 +354,7 @@ const OUTPUT_SCHEMAS = {
     center_lat: zCoord,
     center_lng: zCoord,
     radius_meters: z.number(),
+    lowfloor_only: z.boolean(),
     total: z.number().int(),
     vehicles: z.array(z.object({
       id: z.string().nullable(),
@@ -359,7 +410,8 @@ const CACHE_TTL_MS: Record<ToolName, number> = {
   get_stops_around_location: 60_000,
   get_route_static: 5 * 60_000,
   search_stops: 5 * 60_000,
-  find_routes_between: 5 * 60_000,
+  // Live departures ride along now; the route search itself is memoised longer.
+  find_routes_between: 10_000,
   get_disruptions: 5 * 60_000,
 };
 
@@ -437,6 +489,9 @@ interface TimetableEntry {
   lat?: unknown;
   lng?: unknown;
   bearing?: unknown;
+  direction_id?: unknown;
+  lowfloor?: unknown;
+  scheduled?: unknown;
 }
 
 export function parseArrivalMinutes(entry: TimetableEntry): number | null {
@@ -475,6 +530,9 @@ function normalizeRealtimeArrival(entry: TimetableEntry): ToolData<"get_stop_rea
     lat: normalizeCoordinate(rawLat),
     lng: normalizeCoordinate(rawLng),
     bearing: normalizeBearing(entry.bearing),
+    // A timetable entry always says lowfloor: false, which is a placeholder, not a fact.
+    lowfloor: entry.scheduled === true ? null : typeof entry.lowfloor === "boolean" ? entry.lowfloor : null,
+    scheduled: entry.scheduled === true,
   };
 }
 
@@ -538,15 +596,16 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
       const data = structured.data as ToolData<"get_stop_realtime">;
       const stopName = data.stop?.name ?? `#${data.stop?.id}`;
       const count = data.arrivals?.length ?? 0;
-      if (count === 0) return `Stop «${stopName}»: no arrivals found.`;
+      if (count === 0) return `Stop «${stopName}»: no ${data.lowfloor_only ? "low-floor " : ""}arrivals found.`;
       // Clients that only show the model `content` (not structuredContent) must
       // still see every arrival, or it reports a later trolleybus as missing.
       const list = data.arrivals.map((a) => {
         // null is an unknown ETA, not an imminent one.
         const eta = a.arrival_minutes != null ? `in ${a.arrival_minutes} min` : "no ETA";
-        return `${a.route ?? "?"} → «${a.direction ?? "?"}» ${eta}`;
+        const tags = [a.scheduled && "scheduled, not tracked", a.lowfloor && "low-floor"].filter(Boolean);
+        return `${a.route ?? "?"} → «${a.direction ?? "?"}» ${eta}${tags.length ? ` (${tags.join(", ")})` : ""}`;
       }).join("; ");
-      return `Stop «${stopName}»: ${plural(count, "arrival")}: ${list}.`;
+      return `Stop «${stopName}»: ${plural(count, `${data.lowfloor_only ? "low-floor " : ""}arrival`)}: ${list}.`;
     }
     case "get_route_static": {
       const data = structured.data as ToolData<"get_route_static">;
@@ -563,14 +622,15 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
     case "get_route_realtime": {
       const data = structured.data as ToolData<"get_route_realtime">;
       const count = data.vehicles?.length ?? 0;
-      if (count === 0) return `Route ${data.route_name}: no active vehicles.`;
+      const towardsLabel = data.direction != null ? ` towards «${data.destinations[data.direction] ?? "?"}»` : "";
+      if (count === 0) return `Route ${data.route_name}${towardsLabel}: no active vehicles.${headwaySummary(data.headways)}`;
       const list = data.vehicles.map((v) => {
         const towards = v.destination ? ` → «${v.destination}»` : "";
         const eta = minutesUntil(v.next_stop?.arrival);
         const next = v.next_stop ? `, next stop «${v.next_stop.name ?? "?"}» (${v.next_stop.id})${eta != null ? ` in ${eta} min` : ""}` : "";
         return `${v.id}${towards}${next}${v.lowfloor ? ", low-floor" : ""}`;
       }).join("; ");
-      return `Route ${data.route_name}: ${plural(count, "active vehicle")}: ${list}.`;
+      return `Route ${data.route_name}${towardsLabel}: ${plural(count, "active vehicle")}: ${list}.${headwaySummary(data.headways)}`;
     }
     case "get_stops_around_location": {
       const data = structured.data as ToolData<"get_stops_around_location">;
@@ -590,15 +650,29 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
       const data = structured.data as ToolData<"find_routes_between">;
       const options = data.options ?? [];
       const transfers = data.transfer_options ?? [];
-      const trip = `«${data.from?.name ?? "?"}» → «${data.to?.name ?? "?"}»`;
+      const place = (e: (typeof data)["from"] | undefined) =>
+        e?.point ? `your point (nearest stop «${e.name ?? "?"}»)` : `«${e?.name ?? "?"}»`;
+      const trip = `${place(data.from)} → ${place(data.to)}`;
+      const timing = (o: { schedule: z.infer<typeof zTripSchedule>; next_departures?: NextDeparture[] }) => {
+        const parts = [];
+        if (o.next_departures) {
+          parts.push(o.next_departures.length
+            ? `next ${o.next_departures.map((d) => (d.arrival_minutes != null ? `${d.arrival_minutes}` : "?")).join(", ")} min${o.next_departures.some((d) => d.scheduled) ? " (partly scheduled)" : ""}`
+            : "no live departures");
+        }
+        parts.push(o.schedule
+          ? `by timetable leave ${o.schedule.leave_at}, board ${o.schedule.legs[0].board_at}, arrive ${o.schedule.arrive_at} (${o.schedule.total_minutes} min)`
+          : "no timetabled service for that time");
+        return `; ${parts.join("; ")}`;
+      };
       const direct = (o: (typeof options)[number]) => {
         const walk = o.walk_to_board_meters ? `, ${o.walk_to_board_meters}m walk to board` : "";
-        return `${o.route} towards «${o.destination ?? "?"}» from «${o.board_stop.name}» (${o.board_stop.id}) to «${o.alight_stop.name}» (${o.alight_stop.id}), ${plural(o.stops_count, "stop")}${walk}`;
+        return `${o.route} towards «${o.destination ?? "?"}» from «${o.board_stop.name}» (${o.board_stop.id}) to «${o.alight_stop.name}» (${o.alight_stop.id}), ${plural(o.stops_count, "stop")}${walk}${timing(o)}`;
       };
       const viaTransfer = (t: (typeof transfers)[number]) => {
         const [a, b] = t.legs as [TripLegOut, TripLegOut];
         const walk = t.transfer_walk_meters ? `walk ${t.transfer_walk_meters}m to «${b.board_stop.name}» (${b.board_stop.id}), ` : "";
-        return `${a.route} from «${a.board_stop.name}» (${a.board_stop.id}) to «${a.alight_stop.name}», ${walk}then ${b.route} towards «${b.destination ?? "?"}» (${plural(t.stops_count, "stop")} in total)`;
+        return `${a.route} from «${a.board_stop.name}» (${a.board_stop.id}) to «${a.alight_stop.name}», ${walk}then ${b.route} towards «${b.destination ?? "?"}» (${plural(t.stops_count, "stop")} in total)${timing(t)}`;
       };
       if (data.walk_meters != null) {
         return data.walk_meters === 0
@@ -606,7 +680,7 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
           : `«${data.to?.name ?? "?"}» (${data.to?.id}) is ${data.walk_meters}m from «${data.from?.name ?? "?"}» (${data.from?.id}): walk, no ride needed.`;
       }
       if (!options.length && !transfers.length) return `No route ${trip} with at most one transfer.`;
-      const parts = [];
+      const parts = [`Planned for ${data.timing.mode === "arrive_by" ? "arriving by" : "leaving at"} ${data.timing.at}, Lviv time.`];
       parts.push(options.length
         ? `${plural(options.length, "direct route")} ${trip}, best first: ${options.map(direct).join("; ")}.`
         : `No direct route ${trip}.`);
@@ -616,13 +690,13 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
     case "get_nearby_vehicles": {
       const data = structured.data as ToolData<"get_nearby_vehicles">;
       const count = data.vehicles?.length ?? 0;
-      if (count === 0) return `No vehicles within ${data.radius_meters}m.`;
+      if (count === 0) return `No ${data.lowfloor_only ? "low-floor " : ""}vehicles within ${data.radius_meters}m.`;
       const shown = data.total > count ? ` (nearest ${count} of ${data.total})` : "";
       const list = data.vehicles.map((v) => {
         const towards = v.destination ? ` → «${v.destination}»` : "";
         return `${v.route ?? "?"}${towards}, vehicle ${v.id ?? "?"}, ${v.distance_meters ?? "?"}m away${v.lowfloor ? ", low-floor" : ""}`;
       }).join("; ");
-      return `${plural(count, "vehicle")} within ${data.radius_meters}m${shown}, nearest first: ${list}.`;
+      return `${plural(count, `${data.lowfloor_only ? "low-floor " : ""}vehicle`)} within ${data.radius_meters}m${shown}, nearest first: ${list}.`;
     }
     case "get_vehicle_info": {
       const data = structured.data as ToolData<"get_vehicle_info">;
@@ -637,6 +711,18 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
     default:
       return `${toolName as string}: data retrieved.`;
   }
+}
+
+/** Per direction: vehicles, live gaps and the timetable's headway, for the route realtime text. */
+function headwaySummary(headways: ToolData<"get_route_realtime">["headways"]): string {
+  const lines = headways
+    .filter((h) => h.vehicles || h.scheduled_headway_minutes != null)
+    .map((h) => {
+      const gaps = h.gaps_minutes.length ? `, gaps ${h.gaps_minutes.map((g) => g ?? "?").join(", ")} min` : "";
+      const scheduled = h.scheduled_headway_minutes != null ? `, timetable every ${h.scheduled_headway_minutes} min` : "";
+      return `towards «${h.destination ?? "?"}»: ${plural(h.vehicles, "vehicle")}${gaps}${scheduled}`;
+    });
+  return lines.length ? ` Headways: ${lines.join("; ")}.` : "";
 }
 
 /**
@@ -892,11 +978,11 @@ ${TRANSIT_ASSISTANT_GUIDANCE}
 |------|---------|
 | \`search_stops\` | Stops matching a name (Ukrainian or English), with IDs, coordinates and serving routes. |
 | \`get_stops_around_location\` | Stops near lat/lon (ID, name, coordinates, distance, serving routes). |
-| \`get_stop_realtime\` | Live arrivals at a stop: route, destination, minutes to arrival, vehicle positions. |
-| \`find_routes_between\` | Routes from one stop to another, direct or with one interchange in a nearby-stop cluster: where to board, transfer and get off. |
+| \`get_stop_realtime\` | Live arrivals at a stop: route, destination, minutes to arrival, vehicle positions; \`lowfloor_only\` for step-free vehicles. |
+| \`find_routes_between\` | Routes between two stops or points, direct or with one interchange: where to board, transfer and get off, live next departures, and a timetable estimate of when to leave and arrive (\`depart_at\` / \`arrive_by\`). |
 | \`get_route_static\` | Route metadata, stop lists for both directions, first-stop timetable; polylines on request. |
-| \`get_route_realtime\` | Live vehicles on a route with destination and next stop. |
-| \`get_nearby_vehicles\` | Live vehicles near a point, nearest first, optionally filtered by route. |
+| \`get_route_realtime\` | Live vehicles on a route with destination and next stop, optionally one direction; live gaps and timetable headway per direction. |
+| \`get_nearby_vehicles\` | Live vehicles near a point, nearest first, optionally filtered by route or to low-floor ones. |
 | \`get_vehicle_info\` | One vehicle by ID: position, route, destination, plate, upcoming stops with names. |
 | \`get_disruptions\` | Announced closures, detours and moved stops in force today, optionally for one route or stop. |
 
@@ -912,8 +998,8 @@ Prompts are reusable instruction templates. Pass the listed **arguments** when i
 | \`transit-map-view\` | \`stop_id\` | Map-first rendering for live vehicles near a stop. |
 | \`transit-arrival-list\` | \`stop_id\` | Arrival list sorted by ETA, grouped by route when needed. |
 | \`transit-hybrid-view\` | \`stop_id\` | Map (top) + arrival list (bottom) with ETA consistency checks. |
-| \`plan-trip\` | \`from\`, \`to\` | Routes between two named places (direct or one transfer), with live departures from the boarding stop. |
-| \`route-status\` | \`route_name\` | Where a route's vehicles are right now and how many run each way. |
+| \`plan-trip\` | \`from\`, \`to\`, \`arrive_by\`? | Routes between two named places (direct or one transfer), with live departures and when to leave. |
+| \`route-status\` | \`route_name\` | Where a route's vehicles are right now, how many run each way and how far apart. |
 `,
 };
 
@@ -1124,6 +1210,12 @@ const zLatitude = (what: string) =>
 const zLongitude = (what: string) =>
   z.number().min(-180).max(180).describe(`Decimal longitude of the ${what}, WGS84 (e.g. 24.031 for central Lviv).`);
 
+const zLowfloorOnly = (what: string) =>
+  z
+    .boolean()
+    .optional()
+    .describe(`Only low-floor ${what} (step-free: wheelchairs, prams). Timetable entries without a tracked vehicle are left out, since their floor is unknown. Default false.`);
+
 const countToolCall = (tool: ToolName) => metrics.count("mcp.tool_call", 1, { tool });
 
 /** Runs `fetch` unless a live cache entry exists; only successful results are cached. */
@@ -1188,6 +1280,93 @@ const toStopObj = (s: {
   lng: normalizeCoordinate(s.lng),
 });
 
+/** Live departures are looked up for this many direct options; transfer options are capped by the search. */
+const MAX_LIVE_OPTIONS = 5;
+const MAX_NEXT_DEPARTURES = 3;
+
+/** The route search walks every route and stop; it only changes with the day's disruptions, so keep it a while. */
+const SEARCH_TTL_MS = 5 * 60_000;
+const _searchCache = new Map<string, { value: RoutesBetween; expiresAt: number }>();
+
+function searchRoutes(from: TripEnd, to: TripEnd): RoutesBetween {
+  const key = JSON.stringify([from, to]);
+  const now = Date.now();
+  const hit = _searchCache.get(key);
+  if (hit && now <= hit.expiresAt) return hit.value;
+  if (_searchCache.size >= MAX_CACHE_ENTRIES) {
+    for (const [k, entry] of _searchCache) if (now > entry.expiresAt) _searchCache.delete(k);
+    while (_searchCache.size >= MAX_CACHE_ENTRIES) _searchCache.delete(_searchCache.keys().next().value!);
+  }
+  const value = findRoutesBetween(from, to, servedFilter());
+  _searchCache.delete(key);
+  _searchCache.set(key, { value, expiresAt: now + SEARCH_TTL_MS });
+  return value;
+}
+
+/** One end of a trip from the tool arguments, or a message saying what is wrong with them. */
+function tripEnd(which: "from" | "to", stopId: unknown, lat: number | undefined, lng: number | undefined): TripEnd | string {
+  const hasPoint = lat != null || lng != null;
+  if (stopId != null && hasPoint) return `Give \`${which}_stop_id\` or \`${which}_lat\` + \`${which}_lng\`, not both.`;
+  if (stopId != null) return normalizeStopCode(stopId);
+  if (lat != null && lng != null) return { lat: normalizeCoordinate(lat)!, lng: normalizeCoordinate(lng)! };
+  if (hasPoint) return `\`${which}_lat\` and \`${which}_lng\` go together.`;
+  return `Missing the trip's ${which === "from" ? "start" : "end"}: give \`${which}_stop_id\`, or \`${which}_lat\` + \`${which}_lng\`.`;
+}
+
+const hhmmAt = (at: Date): string =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(at);
+
+type NextDeparture = z.infer<typeof zNextDeparture>;
+
+/**
+ * A loader of a leg's next live departures from its boarding stop, the way
+ * get_stop_realtime sees them: arrivals of that route heading the leg's way.
+ * Each stop is fetched once however many options board there.
+ */
+function liveDeparturesLoader(): (leg: TripLeg) => Promise<NextDeparture[]> {
+  const byStop = new Map<number, Promise<TimetableEntry[]>>();
+  const timetable = (code: number) => {
+    if (!byStop.has(code)) {
+      byStop.set(
+        code,
+        runAction<StopBody>(getSingleStopAction, { stopCode: code, query: { skipTimetableData: "false" } })
+          .then((r) => (r.statusCode < 400 && Array.isArray(r.body?.timetable) ? r.body!.timetable! : []))
+          .catch(() => []),
+      );
+    }
+    return byStop.get(code)!;
+  };
+  return async (leg) => {
+    const entries = await timetable(leg.board_stop.code);
+    return sortedArrivals(
+      entries
+        .filter((e) => {
+          if (e.route !== leg.route) return false;
+          const direction = typeof e.direction === "number" ? e.direction : typeof e.direction_id === "number" ? e.direction_id : null;
+          return direction == null || direction === leg.direction;
+        })
+        .map(normalizeRealtimeArrival),
+    )
+      .slice(0, MAX_NEXT_DEPARTURES)
+      .map((a) => ({ arrival_minutes: a.arrival_minutes, scheduled: a.scheduled, vehicle_id: a.vehicle_id, lowfloor: a.lowfloor }));
+  };
+}
+
+/**
+ * Minutes between consecutive vehicles of one direction, front to back. The
+ * one behind is timed to the stop the one in front reaches next; the feed only
+ * predicts each vehicle's next few stops, so a long gap shows as null.
+ */
+function liveGaps(vehicleEtas: StopEta[][], stopSequence: number[]): (number | null)[] {
+  const progress = (etas: StopEta[]) => (etas.length ? stopSequence.indexOf(etas[0].code) : -1);
+  const ordered = vehicleEtas.filter((e) => e.length).sort((a, b) => progress(b) - progress(a));
+  return ordered.slice(1).map((behind, i) => {
+    const ahead = ordered[i][0];
+    const reach = behind.find((e) => e.code === ahead.code);
+    return reach && reach.time >= ahead.time ? Math.round((reach.time - ahead.time) / 60_000) : null;
+  });
+}
+
 function registerTools(server: McpServer): void {
   server.registerTool(
     "get_stop_realtime",
@@ -1198,13 +1377,17 @@ function registerTools(server: McpServer): void {
         "Use this as the **default tool** when the user asks about arrivals, departures, or the next bus/tram at a specific stop. " +
         "Requires a numeric stop ID (shown on stop signage); use `search_stops` when you have a stop name, or `get_stops_around_location` when you have coordinates.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: { stop_id: zStopId() },
+      inputSchema: {
+        stop_id: zStopId(),
+        lowfloor_only: zLowfloorOnly("arrivals"),
+      },
       outputSchema: OUTPUT_SCHEMAS.get_stop_realtime,
     },
-    async ({ stop_id }) => {
+    async ({ stop_id, lowfloor_only }) => {
       countToolCall("get_stop_realtime");
       const stopCode = normalizeStopCode(stop_id);
-      return cachedTool("get_stop_realtime", { stop_id: stopCode }, async () => {
+      const lowfloorOnly = lowfloor_only === true;
+      return cachedTool("get_stop_realtime", { stop_id: stopCode, lowfloorOnly }, async () => {
         const actionResult = await runAction<StopBody>(getSingleStopAction, {
           stopCode,
           query: { skipTimetableData: "false" },
@@ -1216,7 +1399,7 @@ function registerTools(server: McpServer): void {
         const body = actionResult.body ?? {};
         const arrivals = sortedArrivals(
           Array.isArray(body.timetable) ? body.timetable.map((item) => normalizeRealtimeArrival(item)) : [],
-        );
+        ).filter((a) => !lowfloorOnly || a.lowfloor === true);
         const servingRoutes = [
           ...(Array.isArray(body.transfers) ? body.transfers.map((t) => t.route) : []),
           ...arrivals.map((a) => a.route),
@@ -1224,6 +1407,7 @@ function registerTools(server: McpServer): void {
         return ok("get_stop_realtime", {
           stop: toStopObj({ code: body.code, name: body.name, lat: body.latitude, lng: body.longitude }),
           arrivals,
+          lowfloor_only: lowfloorOnly,
           ...disruptionsField({ routes: servingRoutes, stops: [stopCode] }),
           updated_at: new Date().toISOString(),
         });
@@ -1272,30 +1456,63 @@ function registerTools(server: McpServer): void {
       title: "Find Routes Between Stops",
       description:
         "Lists the routes from one place to another: which stop to board, where to get off, the direction's destination, stops in between, and the walk at each end — best first, walking counted. " +
+        "Each end is a stop ID (`from_stop_id`) or coordinates (`from_lat` + `from_lng`), e.g. an address the user gave; a point covers every stop within a 600 m walk of it. " +
         "`options` are direct routes. `transfer_options` have exactly one interchange (never more): ride `legs[0]`, walk `transfer_walk_meters` (within a 300 m stop cluster, 0 when it is the same stop) to `legs[1].board_stop`, ride `legs[1]`. They are listed when there is no direct route or when they beat the best direct one. " +
+        "Every option carries `schedule`: by the timetable, when to leave, when each leg boards and alights, when you arrive, and `total_minutes` door to door. Plan for now by default, or pass `depart_at` or `arrive_by` (\"HH:MM\" Lviv time today, or ISO 8601). " +
+        "When planning for now, options also carry `next_departures`: the live next departures of the first leg from its boarding stop, so no separate `get_stop_realtime` call is needed. " +
         "`map_stops` holds the best trip's stops in riding order, each with a `role` (board, transfer — or transfer_alight + transfer_board when the interchange is a walk — and alight). " +
-        "Use when the user asks how to get from A to B, or which bus/tram goes from one place to another. " +
-        "Each end covers every stop within a 300 m walk of the one given, since a line's two directions often stop on opposite sides of a street under different names; `board_stop` says where to actually wait. " +
+        "Use when the user asks how to get from A to B, which bus/tram goes from one place to another, how long it takes, or when to leave to be somewhere on time. " +
+        "A stop end covers every stop within a 300 m walk of it, since a line's two directions often stop on opposite sides of a street under different names; `board_stop` says where to actually wait. " +
         "Routes the city has suspended, and stops a detour skips, are left out. " +
-        "`walk_meters` is set when the two stops are within a 300 m walk of each other: no ride is searched then, so tell the user to walk. Otherwise both lists empty means the trip needs two or more transfers. " +
-        "Requires numeric stop IDs; get them with `search_stops` or `get_stops_around_location` first. Follow up with `get_stop_realtime` on `board_stop` for live departures.",
+        "`walk_meters` is set when the two ends are within a 300 m walk of each other: no ride is searched then, so tell the user to walk. Otherwise both lists empty means the trip needs two or more transfers. " +
+        "Get stop IDs with `search_stops` or `get_stops_around_location`.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
-        from_stop_id: zStopId().describe("Stop ID where the trip starts."),
-        to_stop_id: zStopId().describe("Stop ID where the trip ends."),
+        from_stop_id: zStopId().optional().describe("Stop ID where the trip starts. Give this or `from_lat` + `from_lng`."),
+        from_lat: zLatitude("start point").optional(),
+        from_lng: zLongitude("start point").optional(),
+        to_stop_id: zStopId().optional().describe("Stop ID where the trip ends. Give this or `to_lat` + `to_lng`."),
+        to_lat: zLatitude("destination").optional(),
+        to_lng: zLongitude("destination").optional(),
+        depart_at: z
+          .string()
+          .optional()
+          .describe("Leave at this time: \"HH:MM\" Lviv time today, or ISO 8601. Default now. Not together with `arrive_by`."),
+        arrive_by: z
+          .string()
+          .optional()
+          .describe("Arrive by this time: \"HH:MM\" Lviv time today, or ISO 8601. Not together with `depart_at`."),
       },
       outputSchema: OUTPUT_SCHEMAS.find_routes_between,
     },
-    async ({ from_stop_id, to_stop_id }) => {
+    async (args) => {
       countToolCall("find_routes_between");
-      const from = normalizeStopCode(from_stop_id);
-      const to = normalizeStopCode(to_stop_id);
-      return cachedTool("find_routes_between", { from, to }, async () => {
-        const result = findRoutesBetween(from, to, servedFilter());
+      const from = tripEnd("from", args.from_stop_id, args.from_lat, args.from_lng);
+      const to = tripEnd("to", args.to_stop_id, args.to_lat, args.to_lng);
+      if (typeof from === "string") return toolError(from);
+      if (typeof to === "string") return toolError(to);
+      if (args.depart_at && args.arrive_by) return toolError("Give `depart_at` or `arrive_by`, not both.");
+      const timeArg = args.arrive_by ?? args.depart_at;
+      const at = timeArg ? parseTripTime(timeArg) : new Date();
+      if (!at) return toolError(`Unreadable time «${timeArg}». Use "HH:MM" (Lviv time today) or ISO 8601, e.g. "2026-10-26T08:30:00+02:00".`);
+      const when = args.arrive_by ? { arrive_by: at } : { depart_at: at };
+      const live = !timeArg;
+
+      return cachedTool("find_routes_between", { from, to, depart_at: args.depart_at ?? null, arrive_by: args.arrive_by ?? null }, async () => {
+        const result = searchRoutes(from, to);
         if (result.missing != null) {
-          return toolError(NOT_FOUND_HINTS.stop(result.missing));
+          return toolError(
+            typeof result.missing === "number"
+              ? NOT_FOUND_HINTS.stop(result.missing)
+              : `No stop within ${POINT_WALK_RADIUS_METERS} m of the ${result.missing === "from" ? "start" : "destination"} point. Check the coordinates are in Lviv, or pick a stop with get_stops_around_location.`,
+          );
         }
-        const endpoint = (e: { code: number; name?: string; codes: number[] }) => ({ id: String(e.code), name: e.name ?? null, stop_ids: e.codes.map(String) });
+        const endpoint = (e: { code: number; name?: string; codes: number[] }, end: TripEnd) => ({
+          id: String(e.code),
+          name: e.name ?? null,
+          stop_ids: e.codes.map(String),
+          ...(typeof end === "number" ? {} : { point: end }),
+        });
         const leg = (o: TripLeg) => ({
           route: o.route,
           vehicle_type: o.vehicle_type,
@@ -1305,22 +1522,54 @@ function registerTools(server: McpServer): void {
           alight_stop: toStopObj(o.alight_stop),
           stops_count: o.stops_count,
         });
+        const scheduleLeg = (o: TripLeg) => ({
+          route_id: o.route_id,
+          board_code: o.board_stop.code,
+          alight_code: o.alight_stop.code,
+          stops_count: o.stops_count,
+        });
         const transferOptions = result.transfer_options ?? [];
-        return ok("find_routes_between", {
-          from: endpoint(result.from),
-          to: endpoint(result.to),
-          options: result.options.map((o) => ({
+
+        // Live lookups are per boarding stop, shared between options boarding there.
+        const departures = live ? liveDeparturesLoader() : null;
+        const nextDepartures = async (o: TripLeg) =>
+          departures ? { next_departures: await departures(o) } : {};
+
+        const options = await Promise.all(
+          result.options.map(async (o, i) => ({
             ...leg(o),
             walk_to_board_meters: o.walk_to_board_meters,
             walk_from_alight_meters: o.walk_from_alight_meters,
+            schedule: scheduleTrip(
+              [scheduleLeg(o)],
+              { to_board_meters: o.walk_to_board_meters, transfer_meters: [], from_alight_meters: o.walk_from_alight_meters },
+              when,
+            ),
+            ...(i < MAX_LIVE_OPTIONS ? await nextDepartures(o) : {}),
           })),
-          transfer_options: transferOptions.map((t) => ({
+        );
+        const transfers = await Promise.all(
+          transferOptions.map(async (t) => ({
             legs: t.legs.map(leg),
             transfer_walk_meters: t.transfer_walk_meters,
             stops_count: t.stops_count,
             walk_to_board_meters: t.walk_to_board_meters,
             walk_from_alight_meters: t.walk_from_alight_meters,
+            schedule: scheduleTrip(
+              t.legs.map(scheduleLeg),
+              { to_board_meters: t.walk_to_board_meters, transfer_meters: [t.transfer_walk_meters], from_alight_meters: t.walk_from_alight_meters },
+              when,
+            ),
+            ...(await nextDepartures(t.legs[0])),
           })),
+        );
+
+        return ok("find_routes_between", {
+          from: endpoint(result.from, from),
+          to: endpoint(result.to, to),
+          timing: { mode: args.arrive_by ? "arrive_by" : "depart_at", at: hhmmAt(at) },
+          options,
+          transfer_options: transfers,
           map_stops: bestTripStops(result.options[0], transferOptions[0]),
           ...(result.walk_meters != null ? { walk_meters: result.walk_meters } : {}),
           ...disruptionsField({
@@ -1410,16 +1659,28 @@ function registerTools(server: McpServer): void {
       title: "Get Route Realtime",
       description:
         "Returns every vehicle currently running on a route: position, the destination it is heading to, and its next stop with estimated arrival. " +
-        "Use when the user asks \"where is my tram/bus right now?\", how many vehicles are running, or how far the next one is. " +
+        "`headways` sums up each direction: how many vehicles run, the live gaps between consecutive vehicles in minutes (front to back), and how often the timetable says it should run right now. " +
+        "Use when the user asks \"where is my tram/bus right now?\", how many vehicles are running, how far the next one is, or how often a route runs. " +
+        "Pass `direction` (0 or 1, as in `get_route_static`'s `stops`) to get only one way. " +
         "Prefer `get_stop_realtime` when the user is at a stop and wants arrival times there. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: { route_name: zRouteName() },
+      inputSchema: {
+        route_name: zRouteName(),
+        direction: z.coerce
+          .number()
+          .int()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe("Only vehicles heading this way: 0 or 1, the index into get_route_static's `stops`. Omit for both."),
+      },
       outputSchema: OUTPUT_SCHEMAS.get_route_realtime,
     },
-    async ({ route_name }) => {
+    async ({ route_name, direction: wantedDirection }) => {
       countToolCall("get_route_realtime");
-      return cachedTool("get_route_realtime", { route_name }, async () => {
+      const onlyDirection = wantedDirection ?? null;
+      return cachedTool("get_route_realtime", { route_name, onlyDirection }, async () => {
         const actionResult = await runAction<RouteVehicleRow[]>(routeDynamicInfoAction, {
           params: { name: route_name },
         });
@@ -1429,26 +1690,43 @@ function registerTools(server: McpServer): void {
 
         const route = resolveRoute(route_name);
         const destinations = route?.destinations ?? [null, null];
-        const rawVehicles = Array.isArray(actionResult.body) ? actionResult.body : [];
-        const nextStops = await nextStopsForVehicles(rawVehicles.map((v) => v.id).filter(Boolean));
+        const rawVehicles = (Array.isArray(actionResult.body) ? actionResult.body : []).filter(
+          (v) => onlyDirection == null || v.direction === onlyDirection,
+        );
+        const etas = await etasForVehicles(rawVehicles.map((v) => v.id).filter(Boolean));
+
+        const vehicles = rawVehicles.map((v, index) => {
+          const direction = typeof v.direction === "number" ? v.direction : null;
+          const next = etas[String(v.id)]?.[0];
+          return {
+            id: String(v.id ?? `vehicle-${index + 1}`),
+            direction,
+            destination: direction != null ? destinations[direction] ?? null : null,
+            next_stop: next ? { id: String(next.code), name: next.name ?? null, arrival: new Date(next.time).toISOString() } : null,
+            lat: normalizeCoordinate(v.location?.[0]),
+            lng: normalizeCoordinate(v.location?.[1]),
+            bearing: normalizeBearing(v.bearing),
+            lowfloor: typeof v.lowfloor === "boolean" ? v.lowfloor : null,
+          };
+        });
+
+        const headways = (onlyDirection != null ? [onlyDirection] : [0, 1]).map((direction) => ({
+          direction,
+          destination: destinations[direction] ?? null,
+          vehicles: vehicles.filter((v) => v.direction === direction).length,
+          gaps_minutes: liveGaps(
+            vehicles.filter((v) => v.direction === direction).map((v) => etas[v.id] ?? []),
+            route?.stops[direction] ?? [],
+          ),
+          scheduled_headway_minutes: route ? scheduledHeadway(route.external_id, direction) : null,
+        }));
 
         return ok("get_route_realtime", {
           route_name: route?.name ?? route_name,
           destinations,
-          vehicles: rawVehicles.map((v, index) => {
-            const direction = typeof v.direction === "number" ? v.direction : null;
-            const next = nextStops[String(v.id)];
-            return {
-              id: String(v.id ?? `vehicle-${index + 1}`),
-              direction,
-              destination: direction != null ? destinations[direction] ?? null : null,
-              next_stop: next ? { id: String(next.code), name: next.name ?? null, arrival: next.arrival } : null,
-              lat: normalizeCoordinate(v.location?.[0]),
-              lng: normalizeCoordinate(v.location?.[1]),
-              bearing: normalizeBearing(v.bearing),
-              lowfloor: typeof v.lowfloor === "boolean" ? v.lowfloor : null,
-            };
-          }),
+          direction: onlyDirection,
+          vehicles,
+          headways,
           ...disruptionsField({ routes: [route?.name ?? route_name] }),
           updated_at: new Date().toISOString(),
         });
@@ -1581,19 +1859,22 @@ function registerTools(server: McpServer): void {
           .max(50)
           .optional()
           .describe("Maximum vehicles to return, nearest first (1–50, default 15). `total` reports how many were in range."),
+        lowfloor_only: zLowfloorOnly("vehicles"),
       },
       outputSchema: OUTPUT_SCHEMAS.get_nearby_vehicles,
     },
-    async ({ latitude, longitude, radius_meters, route, limit }) => {
+    async ({ latitude, longitude, radius_meters, route, limit, lowfloor_only }) => {
       countToolCall("get_nearby_vehicles");
       const radius = radius_meters ?? 500;
       const max = limit ?? 15;
+      const lowfloorOnly = lowfloor_only === true;
       const cacheArgs = {
         latitude: normalizeCoordinate(latitude),
         longitude: normalizeCoordinate(longitude),
         radius,
         route: route ?? null,
         max,
+        lowfloorOnly,
       };
       return cachedTool("get_nearby_vehicles", cacheArgs, async () => {
         const actionResult = await runAction<NearbyVehicleRow[]>(closestTransportAction, {
@@ -1614,6 +1895,7 @@ function registerTools(server: McpServer): void {
           })
           .filter(({ distance }) => distance == null || distance <= radius)
           .filter(({ v }) => !wantedRoute || v.route === wantedRoute)
+          .filter(({ v }) => !lowfloorOnly || v.lowfloor === true)
           .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 
         // An empty answer for a misspelt route reads as "nothing nearby"; say
@@ -1631,6 +1913,7 @@ function registerTools(server: McpServer): void {
           center_lat: normalizeCoordinate(latitude),
           center_lng: normalizeCoordinate(longitude),
           radius_meters: radius,
+          lowfloor_only: lowfloorOnly,
           total: inRange.length,
           vehicles: shown.map(({ v, lat, lng, distance }) => {
             const direction = typeof v.direction === "number" ? v.direction : null;
@@ -1835,26 +2118,28 @@ function registerWorkflowPrompts(server: McpServer): void {
     "plan-trip",
     {
       title: "Plan a Trip",
-      description: "Find routes (direct or with one transfer) between two places in Lviv and the next live departures.",
+      description: "Find routes (direct or with one transfer) between two places in Lviv, the next live departures and when to leave.",
       argsSchema: {
-        from: z.string().min(1).describe("Where the trip starts: stop name, landmark, or numeric stop ID."),
-        to: z.string().min(1).describe("Where the trip ends: stop name, landmark, or numeric stop ID."),
+        from: z.string().min(1).describe("Where the trip starts: stop name, landmark, numeric stop ID, or \"lat,lng\"."),
+        to: z.string().min(1).describe("Where the trip ends: stop name, landmark, numeric stop ID, or \"lat,lng\"."),
+        arrive_by: z.string().optional().describe("Optional: \"HH:MM\" (Lviv time) the rider has to be there by."),
       },
     },
-    ({ from, to }) =>
-      userPrompt("Trip planning across search_stops, find_routes_between and get_stop_realtime.", [
-        `How do I get from «${from}» to «${to}» by public transport in Lviv?`,
+    ({ from, to, arrive_by }) =>
+      userPrompt("Trip planning across search_stops and find_routes_between.", [
+        `How do I get from «${from}» to «${to}» by public transport in Lviv${arrive_by ? `, arriving by ${arrive_by}` : ""}?`,
         "",
         "Tool workflow:",
-        "1) Resolve each end to a stop ID: use it as is when it is a number, otherwise call `search_stops`. When several different places match, ask which one is meant instead of guessing.",
-        "2) Call `find_routes_between` with the two stop IDs.",
+        "1) Resolve each end: a number is a stop ID; \"lat,lng\" is a point, passed as `*_lat`/`*_lng`; otherwise call `search_stops`. When several different places match, ask which one is meant instead of guessing.",
+        `2) Call \`find_routes_between\` with the two ends${arrive_by ? ` and \`arrive_by: "${arrive_by}"\`` : ""}.`,
         "3) If `walk_meters` is set, the two stops are a short walk apart: say so with the distance and stop there. Otherwise, if both `options` and `transfer_options` are empty, say the trip needs more than one transfer and stop there.",
-        "4) Otherwise take the best direct option, or the first transfer option when there is no direct one or it is listed as better. Call `get_stop_realtime` on its first boarding stop and keep the arrivals of that route heading to its `destination`.",
+        "4) Otherwise take the best direct option, or the first transfer option when there is no direct one or it is listed as better.",
         "",
         "Answer:",
         "- Lead with the best option: route, where to board (and the walk to it), where to get off, number of stops.",
         "- For a transfer, name the interchange: where to get off the first vehicle, the walk to the second stop (if any), and the second route and its direction.",
-        "- Give the next live departures of that route from the boarding stop; if none are reported, say so.",
+        "- Give its `next_departures` (live, minutes from now); if there are none, say so. Then its `schedule`: when to leave and when you arrive, as timetable estimates.",
+        "- Mention any `disruptions`.",
         "- List up to two alternatives in one line each.",
         "- Reply in the language the user wrote in.",
       ]),
@@ -1879,8 +2164,10 @@ function registerWorkflowPrompts(server: McpServer): void {
         "Answer:",
         "- How many vehicles are running, split by `destination`.",
         "- For each direction, the next stop of each vehicle with its estimated arrival time.",
+        "- From `headways`: how far apart the vehicles are, and how that compares with `scheduled_headway_minutes`; call out a gap much longer than the timetable's.",
         "- Mention low-floor vehicles when `lowfloor` is true.",
         "- If no vehicles are running, say the route has no live vehicles right now.",
+        "- Reply in the language the user wrote in.",
       ]),
   );
 }

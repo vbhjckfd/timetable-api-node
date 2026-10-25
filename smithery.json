@@ -54,7 +54,7 @@
     },
     {
       "name": "Find Routes Between Stops",
-      "description": "Direct routes from one stop to another, with where to board and get off",
+      "description": "Routes between two stops or points, direct or with one transfer: where to board and get off, live next departures and when you arrive",
       "tool": "find_routes_between",
       "input": {
         "from_stop_id": 707,

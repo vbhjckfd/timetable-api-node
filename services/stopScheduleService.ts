@@ -72,7 +72,7 @@ function resolveDepartureTime(
 // Sunday can differ (e.g. А06 runs a Sat-only and a Sun-only service), so pick
 // the exact day; the weekend union and then the combined map are fallbacks for
 // routes imported before those splits existed.
-function departuresForStop(route: RouteDoc, microgizId: string, weekday: number): string[] {
+export function departuresForStop(route: RouteDoc, microgizId: string, weekday: number): string[] {
   const preferred =
     weekday === 6
       ? [route.stop_departure_time_map_saturday, route.stop_departure_time_map_weekend]
