@@ -7,6 +7,10 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 vi.mock("../../actions/getSingleStopAction.js", () => ({
   default: async (req, res) => {
     if (req.stopCode === 404404) return res.status(404).send(`Bad argument, stop with code ${req.stopCode} not found`);
+    if (req.stopCode === 303) {
+      // A scheduled arrival with no time the parser can read.
+      return res.json({ code: 303, name: "No ETA Stop", latitude: 49.84, longitude: 24.02, transfers: [], timetable: [{ route: "Т01", end_stop: "Сихів", vehicle_type: "tram" }] });
+    }
     const includeTimetable = req.query.skipTimetableData === "false";
     res.json({
       code: req.stopCode,
@@ -40,7 +44,7 @@ vi.mock("../../actions/routeStaticInfoAction.js", () => ({
       color: "#FF0000",
       type: "tram",
       stops: [
-        [{ code: 101, name: "First", loc: [49.84, 24.02], departures: ["05:30"], schedule: { workday: ["05:30"], weekend: [] } }],
+        [{ code: 101, name: "First", loc: [49.84, 24.02], departures: ["05:30"], schedule: { workday: ["05:30", "05:50"], saturday: ["06:10"], weekend: [] } }],
         [],
       ],
       shapes: [
@@ -149,6 +153,15 @@ vi.mock("../../services/transitLookupService.js", () => ({
   ),
   findRoutesBetween: vi.fn((from, to) => {
     if (from === 9999 || to === 9999) return { from: null, to: null, options: [], missing: 9999 };
+    if (to === 708) {
+      return {
+        from: { code: from, name: "Опера", codes: [from, 708] },
+        to: { code: 708, name: "Опера", codes: [from, 708] },
+        options: [],
+        transfer_options: [],
+        walk_meters: 45,
+      };
+    }
     const stop = (code, name, lat = 49.84, lng = 24.02) => ({ code, name, eng_name: null, lat, lng, routes: [] });
     if (to === 5555) {
       const leg = (route, board, alight, destination, stops_count) => ({
@@ -183,7 +196,7 @@ vi.mock("../../services/transitLookupService.js", () => ({
   }),
   listRouteNames: vi.fn(() => ["А01", "А03", "Н2", "Т01", "Т30"]),
   resolveRoute: vi.fn((name) =>
-    name === "T30" ? { external_id: "EXT30", name: "Т30", destinations: ["Рясне", "Сихів"] } : null,
+    name === "T30" || name === "1030" ? { external_id: "EXT30", name: "Т30", destinations: ["Рясне", "Сихів"] } : null,
   ),
   destinationsFor: vi.fn((pairs) =>
     Object.fromEntries(pairs.map(({ routeId, direction }) => [`${routeId}:${direction}`, `End of ${routeId}/${direction}`])),
@@ -217,6 +230,7 @@ vi.mock("../../services/disruptionService.js", () => ({
     const stops = [...(filter.stops ?? [])];
     return routes.includes("T30") || stops.includes(1234) ? [MOCK_DISRUPTION] : [];
   }),
+  servedFilter: vi.fn(() => () => true),
 }));
 
 import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
@@ -430,6 +444,14 @@ describe("timetable MCP server", () => {
     await client.close();
   });
 
+  it("get_stop_realtime says an arrival has no ETA instead of calling it soon", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 303 } });
+    expect(result.structuredContent.data.arrivals[0].arrival_minutes).toBeNull();
+    expect(result.content[0].text).toBe("Stop «No ETA Stop»: 1 arrival: Т01 → «Сихів» no ETA.");
+    await client.close();
+  });
+
   it("get_route_static leaves polylines out unless asked", async () => {
     const client = await connectClient();
 
@@ -438,6 +460,8 @@ describe("timetable MCP server", () => {
     const text = result.content.find((c) => c.type === "text")?.text;
     expect(text).toContain("Route T30");
     expect(text).toContain("outbound");
+    // Content-only clients need the timetable too, not just the stop list.
+    expect(text).toContain("Departures from «First» (101): workday 05:30 05:50; Saturday 06:10.");
 
     const sc = result.structuredContent;
     expect(sc.data.route.name).toBe("T30");
@@ -680,6 +704,25 @@ describe("timetable MCP server", () => {
     await client.close();
   });
 
+  it("find_routes_between tells the user to walk when the stops are a short walk apart", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({ name: "find_routes_between", arguments: { from_stop_id: 707, to_stop_id: 708 } });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent.data).toMatchObject({ options: [], transfer_options: [], walk_meters: 45 });
+    expect(result.content[0].text).toBe("«Опера» (708) is 45m from «Опера» (707): walk, no ride needed.");
+    await client.close();
+  });
+
+  it("find_routes_between plans around announced disruptions", async () => {
+    const { findRoutesBetween } = await import("../../services/transitLookupService.js");
+    const { servedFilter } = await import("../../services/disruptionService.js");
+    const client = await connectClient();
+    await client.callTool({ name: "find_routes_between", arguments: { from_stop_id: 707, to_stop_id: 4242 } });
+    expect(servedFilter).toHaveBeenCalled();
+    expect(findRoutesBetween).toHaveBeenLastCalledWith(707, 4242, expect.any(Function));
+    await client.close();
+  });
+
   it("get_vehicle_info returns vehicle details with NL summary", async () => {
     const client = new Client(
       { name: "test-client", version: "1.0.0" },
@@ -886,6 +929,11 @@ describe("disruptions in MCP results", () => {
     const other = await client.callTool({ name: "get_disruptions", arguments: { route: "А01" } });
     expect(other.structuredContent.data.disruptions).toEqual([]);
     expect(other.content[0].text).toContain("No announced disruptions for route А01");
+
+    // A numeric external ID is resolved before filtering, not read as bus «А1030».
+    const byId = await client.callTool({ name: "get_disruptions", arguments: { route: "1030" } });
+    expect(byId.structuredContent.data.route).toBe("Т30");
+    expect(byId.structuredContent.data.disruptions.map((d) => d.id)).toEqual(["t30-detour"]);
 
     const atStop = await client.callTool({ name: "get_disruptions", arguments: { stop_id: "1234" } });
     expect(atStop.structuredContent.data.stop_id).toBe("1234");

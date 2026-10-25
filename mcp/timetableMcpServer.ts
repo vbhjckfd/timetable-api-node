@@ -24,7 +24,7 @@ import {
   searchStops,
 } from "../services/transitLookupService.ts";
 import type { StopSummary, TransferOption, TripLeg } from "../services/transitLookupService.ts";
-import { activeDisruptions } from "../services/disruptionService.ts";
+import { activeDisruptions, servedFilter } from "../services/disruptionService.ts";
 import type { DisruptionFilter } from "../services/disruptionService.ts";
 import { distanceMeters, formatRouteName } from "../utils/appHelpers.ts";
 import type { ScheduleByDayType } from "../utils/stopScheduleByDayType.ts";
@@ -120,7 +120,7 @@ Block types:
 - \`get_route_static\` departure times (\`departures\` and \`schedule.workday\`/\`saturday\`/\`sunday\`) are only populated for the first stop of each direction. Saturday and Sunday timetables can differ; \`schedule.weekend\` merges both days and is kept only for backward compatibility.
 - \`direction\` is the index into \`get_route_static\`'s \`stops\` array (0 = outbound, 1 = return); \`destination\` is the name of that direction's last stop.
 - Detours, suspended routes and moved stops are not in the GTFS feed. \`get_stop_realtime\`, \`get_route_static\`, \`get_route_realtime\` and \`find_routes_between\` add a \`disruptions\` array when an announced one touches their routes or stops; always tell the user about it, since stop lists and timetables do not reflect it.
-- \`find_routes_between\` allows at most one interchange, made within a walkable stop cluster (≤ 300 m). Empty \`options\` and \`transfer_options\` mean the trip needs two or more transfers.
+- \`find_routes_between\` allows at most one interchange, made within a walkable stop cluster (≤ 300 m). Suspended routes and stops a detour skips are left out. \`walk_meters\` means the two stops are a short walk apart and no ride is needed; otherwise empty \`options\` and \`transfer_options\` mean the trip needs two or more transfers.
 `;
 
 const MCP_SERVER_INSTRUCTIONS = `\
@@ -295,6 +295,8 @@ const OUTPUT_SCHEMAS = {
       walk_from_alight_meters: z.number().int(),
     })),
     map_stops: z.array(zStopObj.extend({ role: z.enum(["board", "transfer", "transfer_alight", "transfer_board", "alight"]) })),
+    /** Only present when the two stops are a short walk apart, in which case no ride is searched. */
+    walk_meters: z.number().int().optional(),
     disruptions: zDisruptions,
     updated_at: z.string(),
   })),
@@ -540,8 +542,9 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
       // Clients that only show the model `content` (not structuredContent) must
       // still see every arrival, or it reports a later trolleybus as missing.
       const list = data.arrivals.map((a) => {
-        const eta = a.arrival_minutes != null ? `${a.arrival_minutes} min` : "soon";
-        return `${a.route ?? "?"} → «${a.direction ?? "?"}» in ${eta}`;
+        // null is an unknown ETA, not an imminent one.
+        const eta = a.arrival_minutes != null ? `in ${a.arrival_minutes} min` : "no ETA";
+        return `${a.route ?? "?"} → «${a.direction ?? "?"}» ${eta}`;
       }).join("; ");
       return `Stop «${stopName}»: ${plural(count, "arrival")}: ${list}.`;
     }
@@ -552,7 +555,8 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
       const directions = (data.stops ?? []).map((stops, i) => {
         const label = i === 0 ? "outbound" : "inbound";
         const list = stops.map((s) => `«${s.name ?? "?"}» (${s.id})`).join(", ");
-        return `${label} ${plural(stops.length, "stop")}: ${list || "none"}`;
+        const timetables = stops.map(stopTimetable).filter(Boolean).join(" ");
+        return `${label} ${plural(stops.length, "stop")}: ${list || "none"}${timetables ? `. ${timetables}` : ""}`;
       });
       return `Route ${name}${longName ? ` (${longName})` : ""}. ${directions.join(". ")}.`;
     }
@@ -596,6 +600,11 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
         const walk = t.transfer_walk_meters ? `walk ${t.transfer_walk_meters}m to «${b.board_stop.name}» (${b.board_stop.id}), ` : "";
         return `${a.route} from «${a.board_stop.name}» (${a.board_stop.id}) to «${a.alight_stop.name}», ${walk}then ${b.route} towards «${b.destination ?? "?"}» (${plural(t.stops_count, "stop")} in total)`;
       };
+      if (data.walk_meters != null) {
+        return data.walk_meters === 0
+          ? `«${data.from?.name ?? "?"}» (${data.from?.id}) is the stop you are going to: no ride needed.`
+          : `«${data.to?.name ?? "?"}» (${data.to?.id}) is ${data.walk_meters}m from «${data.from?.name ?? "?"}» (${data.from?.id}): walk, no ride needed.`;
+      }
       if (!options.length && !transfers.length) return `No route ${trip} with at most one transfer.`;
       const parts = [];
       parts.push(options.length
@@ -628,6 +637,20 @@ function buildToolSummary(toolName: ToolName, structured: { data: unknown }): st
     default:
       return `${toolName as string}: data retrieved.`;
   }
+}
+
+/**
+ * A stop's departures as text, for clients that only show the model `content`:
+ * without it a timetable question gets the stop list and nothing to answer from.
+ */
+function stopTimetable(s: ToolData<"get_route_static">["stops"][number][number]): string {
+  const days = s.schedule
+    ? ([["workday", s.schedule.workday], ["Saturday", s.schedule.saturday], ["Sunday", s.schedule.sunday]] as const)
+        .filter(([, times]) => times.length)
+        .map(([day, times]) => `${day} ${times.join(" ")}`)
+    : [];
+  if (!days.length && s.departures.length) days.push(s.departures.join(" "));
+  return days.length ? `Departures from «${s.name ?? "?"}» (${s.id}): ${days.join("; ")}.` : "";
 }
 
 // --- UI payload builder ---
@@ -1253,7 +1276,8 @@ function registerTools(server: McpServer): void {
         "`map_stops` holds the best trip's stops in riding order, each with a `role` (board, transfer — or transfer_alight + transfer_board when the interchange is a walk — and alight). " +
         "Use when the user asks how to get from A to B, or which bus/tram goes from one place to another. " +
         "Each end covers every stop within a 300 m walk of the one given, since a line's two directions often stop on opposite sides of a street under different names; `board_stop` says where to actually wait. " +
-        "Both lists empty means the trip needs two or more transfers. " +
+        "Routes the city has suspended, and stops a detour skips, are left out. " +
+        "`walk_meters` is set when the two stops are within a 300 m walk of each other: no ride is searched then, so tell the user to walk. Otherwise both lists empty means the trip needs two or more transfers. " +
         "Requires numeric stop IDs; get them with `search_stops` or `get_stops_around_location` first. Follow up with `get_stop_realtime` on `board_stop` for live departures.",
       annotations: TOOL_ANNOTATIONS,
       inputSchema: {
@@ -1267,7 +1291,7 @@ function registerTools(server: McpServer): void {
       const from = normalizeStopCode(from_stop_id);
       const to = normalizeStopCode(to_stop_id);
       return cachedTool("find_routes_between", { from, to }, async () => {
-        const result = findRoutesBetween(from, to);
+        const result = findRoutesBetween(from, to, servedFilter());
         if (result.missing != null) {
           return toolError(NOT_FOUND_HINTS.stop(result.missing));
         }
@@ -1298,6 +1322,7 @@ function registerTools(server: McpServer): void {
             walk_from_alight_meters: t.walk_from_alight_meters,
           })),
           map_stops: bestTripStops(result.options[0], transferOptions[0]),
+          ...(result.walk_meters != null ? { walk_meters: result.walk_meters } : {}),
           ...disruptionsField({
             routes: [...result.options, ...transferOptions.flatMap((t) => t.legs)].map((l) => l.route),
             stops: [...result.from.codes, ...result.to.codes],
@@ -1456,11 +1481,14 @@ function registerTools(server: McpServer): void {
       const stopCode = stop_id != null ? normalizeStopCode(stop_id) : null;
       return cachedTool("get_disruptions", { route: route ?? null, stopCode }, async () => {
         const filtered = route != null || stopCode != null;
+        // Filter by the resolved name: a numeric external ID would otherwise be
+        // read as a bus number and match nothing.
+        const routeName = route ? resolveRoute(route)?.name ?? route : null;
         return ok("get_disruptions", {
-          route: route ? resolveRoute(route)?.name ?? route : null,
+          route: routeName,
           stop_id: stopCode != null ? String(stopCode) : null,
           disruptions: activeDisruptions(
-            filtered ? { routes: route ? [route] : [], stops: stopCode != null ? [stopCode] : [] } : undefined,
+            filtered ? { routes: routeName ? [routeName] : [], stops: stopCode != null ? [stopCode] : [] } : undefined,
           ),
           updated_at: new Date().toISOString(),
         });
@@ -1820,7 +1848,7 @@ function registerWorkflowPrompts(server: McpServer): void {
         "Tool workflow:",
         "1) Resolve each end to a stop ID: use it as is when it is a number, otherwise call `search_stops`. When several different places match, ask which one is meant instead of guessing.",
         "2) Call `find_routes_between` with the two stop IDs.",
-        "3) If both `options` and `transfer_options` are empty, say the trip needs more than one transfer and stop there.",
+        "3) If `walk_meters` is set, the two stops are a short walk apart: say so with the distance and stop there. Otherwise, if both `options` and `transfer_options` are empty, say the trip needs more than one transfer and stop there.",
         "4) Otherwise take the best direct option, or the first transfer option when there is no direct one or it is listed as better. Call `get_stop_realtime` on its first boarding stop and keep the arrivals of that route heading to its `destination`.",
         "",
         "Answer:",

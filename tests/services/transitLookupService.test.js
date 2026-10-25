@@ -201,6 +201,22 @@ describe("findRoutesBetween", () => {
     expect(findRoutesBetween(707, 12).transfer_options).toEqual([]);
   });
 
+  it("answers a walk, not a ride, when the stops are a short walk apart", () => {
+    // 707 → 707 used to come back with both lists empty, which reads as "needs two transfers".
+    expect(findRoutesBetween(707, 707)).toMatchObject({ options: [], transfer_options: [], walk_meters: 0 });
+    const across = findRoutesBetween(707, 708);
+    expect(across.options).toEqual([]);
+    expect(across.walk_meters).toBeGreaterThan(0);
+    expect(across.walk_meters).toBeLessThanOrEqual(300);
+    expect(findRoutesBetween(707, 12).walk_meters).toBeUndefined();
+  });
+
+  it("leaves out route and stop pairs the served filter rules out", () => {
+    // Т02 suspended; Т09 detoured past «Руська» (17), so it cannot be boarded there.
+    const served = (route, stop) => route !== "Т02" && !(route === "Т09" && stop === 17);
+    expect(findRoutesBetween(707, 12, served).options.map((o) => o.route)).toEqual(["Т01"]);
+  });
+
   it("does not transfer outside the walking cluster", () => {
     // 21 is ~1.9 km from anything on the 707 lines; only the 11/20 cluster connects them.
     const pairs = findRoutesBetween(707, 22).transfer_options.map((t) => [t.legs[0].alight_stop.code, t.legs[1].board_stop.code]);

@@ -51,6 +51,7 @@
     "since": "2026-07-10",
     "until": null,
     "until_text": "до завершення будівництва",
+    "stops": [186, 628, 629, 696, 703],
     "note": "Зупинку на вул. Ковча перенесено перед будмайданчик; рух у бік вул. Шевченка — однією смугою.",
     "source": "ZAXID.NET",
     "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
