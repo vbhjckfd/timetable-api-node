@@ -304,6 +304,8 @@ export type RoutesBetween =
       to: TripEndpoint;
       options: DirectOption[];
       transfer_options: TransferOption[];
+      /** Set when the two stops are a short walk apart: no ride is searched then. */
+      walk_meters?: number;
       missing?: undefined;
     }
   | {
@@ -366,12 +368,19 @@ function clusterIndex(allStops: StopDoc[], radius: number): (code: number) => Ne
   };
 }
 
-/** Every route direction as an ordered stop list. */
-function routeDirections(): RouteDirection[] {
+/**
+ * Whether a route calls at a stop today. Lets the caller take out what the
+ * city announced: a suspended route serves nothing, a detour skips stops.
+ */
+export type ServedFilter = (routeName: string, stopCode: number) => boolean;
+
+/** Every route direction as an ordered list of the stops it actually serves. */
+function routeDirections(served?: ServedFilter): RouteDirection[] {
   const result: RouteDirection[] = [];
   for (const route of routes().find({})) {
     for (const key of ["0", "1"]) {
-      const seq = route.stops_by_shape?.[key] ?? [];
+      const all = route.stops_by_shape?.[key] ?? [];
+      const seq = served ? all.filter((code) => served(route.short_name, code)) : all;
       if (seq.length > 1) result.push({ route, key, seq, id: `${route.external_id}:${key}` });
     }
   }
@@ -456,15 +465,31 @@ function legsToDestination(dirs: RouteDirection[], nearby: Map<number, NearbySto
  * listed when no direct option exists or they beat the best one. The last
  * stop of a direction is where riders get off, so it never counts as a place
  * to board (same rule as routesThroughStop).
+ *
+ * Two stops within a short walk of each other get `walk_meters` and no
+ * options: riding between them is never the answer, and empty lists alone
+ * would read as "needs two or more transfers". `served` drops route and stop
+ * pairs that are out of service, so a suspended route is never suggested.
  */
-export function findRoutesBetween(fromCode: number, toCode: number): RoutesBetween {
+export function findRoutesBetween(fromCode: number, toCode: number, served?: ServedFilter): RoutesBetween {
   const from = stopsWithinWalk(fromCode);
   const to = stopsWithinWalk(toCode);
   if (!from || !to) {
     return { from: null, to: null, options: [], transfer_options: [], missing: !from ? fromCode : toCode };
   }
 
-  const dirs = routeDirections();
+  const endpoint = ({ origin, nearby }: WalkArea): TripEndpoint => ({
+    code: origin.code,
+    name: origin.name,
+    codes: [...nearby.keys()].sort((a, b) => a - b),
+  });
+
+  const walkBetween = from.nearby.get(toCode)?.walk;
+  if (walkBetween != null) {
+    return { from: endpoint(from), to: endpoint(to), options: [], transfer_options: [], walk_meters: walkBetween };
+  }
+
+  const dirs = routeDirections(served);
   const stopsByCode = new Map(stops().find({}).map((s) => [s.code, s]));
   const stopOut = (code: number) => stopSummary(stopsByCode.get(code)!);
 
@@ -570,10 +595,5 @@ export function findRoutesBetween(fromCode: number, toCode: number): RoutesBetwe
       walk_from_alight_meters: leg2.alight.walk,
     }));
 
-  const endpoint = ({ origin, nearby }: WalkArea): TripEndpoint => ({
-    code: origin.code,
-    name: origin.name,
-    codes: [...nearby.keys()].sort((a, b) => a - b),
-  });
   return { from: endpoint(from), to: endpoint(to), options, transfer_options };
 }

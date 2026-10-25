@@ -62,6 +62,11 @@ export function parseDisruptions(raw: unknown): Disruption[] {
     if (ids.has(e.id)) throw new Error(`Duplicate disruption id «${e.id}»`);
     ids.add(e.id);
     if (e.until && e.until < e.since) throw new Error(`Disruption «${e.id}» ends before it starts`);
+    // Tools attach an entry by the routes or stops in their result, so one
+    // naming neither would only ever show in the unfiltered city-wide list.
+    if (!e.routes.length && !e.stops.length && !e.detour?.skipped_stops.length) {
+      throw new Error(`Disruption «${e.id}» names no route or stop`);
+    }
   }
   return entries.map((e) => ({ ...e, routes: e.routes.map(toRoute), alternatives: e.alternatives.map(toRoute) }));
 }
@@ -100,4 +105,43 @@ export function activeDisruptions(
       e.stops.some((s) => stops.has(s)) ||
       (e.detour?.skipped_stops ?? []).some((s) => stops.has(s)),
   );
+}
+
+/**
+ * Whether a route calls at a stop today, for trip planning. A suspended route
+ * serves nothing; a detour skips its `skipped_stops`; a closed stop is closed
+ * to the routes listed, or to every route when none are.
+ */
+export function servedFilter(
+  now: Date = new Date(),
+  entries: Disruption[] = ALL,
+): (routeName: string, stopCode: number) => boolean {
+  const suspended = new Set<string>();
+  const closedToAll = new Set<number>();
+  const closedTo = new Map<string, Set<number>>();
+  const close = (routeId: string, stops: number[]) => {
+    if (!closedTo.has(routeId)) closedTo.set(routeId, new Set());
+    for (const s of stops) closedTo.get(routeId)!.add(s);
+  };
+
+  for (const e of activeDisruptions(undefined, now, entries)) {
+    if (e.kind === "suspended") {
+      for (const r of e.routes) suspended.add(r.id);
+    } else if (e.kind === "stop_closed") {
+      if (e.routes.length) for (const r of e.routes) close(r.id, e.stops);
+      else for (const s of e.stops) closedToAll.add(s);
+    }
+    if (e.detour?.skipped_stops.length) {
+      for (const r of e.routes) close(r.id, e.detour.skipped_stops);
+    }
+  }
+
+  // Trip planning asks once per stop of every route: normalise each name once.
+  const ids = new Map<string, string>();
+  return (routeName, stopCode) => {
+    if (closedToAll.has(stopCode)) return false;
+    if (!ids.has(routeName)) ids.set(routeName, toRoute(routeName).id);
+    const id = ids.get(routeName)!;
+    return !suspended.has(id) && !closedTo.get(id)?.has(stopCode);
+  };
 }

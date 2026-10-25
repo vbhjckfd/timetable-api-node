@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeDisruptions, kyivDate, parseDisruptions } from "../../services/disruptionService.js";
+import { activeDisruptions, kyivDate, parseDisruptions, servedFilter } from "../../services/disruptionService.js";
 import raw from "../../data/disruptions.json" with { type: "json" };
 
 const entry = (over = {}) => ({
@@ -7,6 +7,7 @@ const entry = (over = {}) => ({
   kind: "detour",
   reason: "Ремонт",
   since: "2026-10-01",
+  routes: ["А01"],
   ...over,
 });
 
@@ -32,6 +33,14 @@ describe("parseDisruptions", () => {
     expect(() => parseDisruptions([entry({ kind: "closure" })])).toThrow();
     expect(() => parseDisruptions([entry({ until: "2026-09-01" })])).toThrow(/ends before/);
     expect(() => parseDisruptions([entry({ since: "1 Oct" })])).toThrow();
+  });
+
+  it("rejects an entry that names no route or stop, since no tool could ever attach it", () => {
+    expect(() => parseDisruptions([entry({ routes: [] })])).toThrow(/names no route or stop/);
+    expect(() => parseDisruptions([entry({ routes: [], stops: [707] })])).not.toThrow();
+    expect(() =>
+      parseDisruptions([entry({ routes: [], detour: { via: ["вул. X"], skipped_stops: [808] } })]),
+    ).not.toThrow();
   });
 });
 
@@ -65,5 +74,37 @@ describe("activeDisruptions", () => {
 
   it("formats today's date in Kyiv", () => {
     expect(kyivDate(at("2026-10-23T22:30:00Z"))).toBe("2026-10-24");
+  });
+});
+
+describe("servedFilter", () => {
+  const entries = parseDisruptions([
+    entry({ id: "off", kind: "suspended", routes: ["Т33"] }),
+    entry({ id: "skip", kind: "detour", routes: ["А12"], detour: { via: ["вул. X"], skipped_stops: [808] } }),
+    entry({ id: "closed", kind: "stop_closed", routes: [], stops: [909] }),
+    entry({ id: "closed-a34", kind: "stop_closed", routes: ["А34"], stops: [606] }),
+    entry({ id: "moved", kind: "stop_moved", routes: [], stops: [505] }),
+    entry({ id: "later", kind: "suspended", since: "2026-11-01", routes: ["Т30"] }),
+  ]);
+  const served = servedFilter(new Date("2026-10-23T10:00:00Z"), entries);
+
+  it("takes a suspended route out of service everywhere, in either alphabet", () => {
+    expect(served("Т33", 1)).toBe(false);
+    expect(served("T33", 1)).toBe(false);
+    expect(served("Т30", 1)).toBe(true);
+  });
+
+  it("drops a detour's skipped stops for its own routes only", () => {
+    expect(served("А12", 808)).toBe(false);
+    expect(served("А12", 1)).toBe(true);
+    expect(served("А34", 808)).toBe(true);
+  });
+
+  it("closes a stop to the routes listed, or to every route when none are", () => {
+    expect(served("А01", 909)).toBe(false);
+    expect(served("А34", 606)).toBe(false);
+    expect(served("А01", 606)).toBe(true);
+    // A moved stop is still served.
+    expect(served("А01", 505)).toBe(true);
   });
 });
