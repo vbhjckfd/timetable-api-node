@@ -68,6 +68,30 @@ export async function getTodayServiceIds(): Promise<string[]> {
   return service_ids;
 }
 
+const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+
+/**
+ * Services that run on at least one day of the week. The import keys trip
+ * lookups on these rather than on today's services: the data has to answer
+ * for every day it stays deployed, and the daily refresh skips the rebuild
+ * when the feed is unchanged, so a timetable built on a Sunday would
+ * otherwise know no Monday trip.
+ */
+export async function getAllServiceIds(): Promise<string[]> {
+  return Object.keys(await getServiceDayCounts());
+}
+
+/** Days a week each service runs, for services that run on at least one. */
+export async function getServiceDayCounts(): Promise<Record<string, number>> {
+  const calendars = await getCalendars({}, ["service_id", ...WEEKDAYS]);
+  const counts: Record<string, number> = {};
+  for (const c of calendars) {
+    const days = WEEKDAYS.filter((day) => c[day] === 1).length;
+    if (days) counts[c.service_id] = Math.max(counts[c.service_id] ?? 0, days);
+  }
+  return counts;
+}
+
 export async function getWorkdayServiceIds(): Promise<string[]> {
   return (await getCalendars({ monday: 1 }, ["service_id"])).map(
     (i) => i.service_id,
@@ -297,10 +321,19 @@ export function formatRouteName(name: string): string {
   return name;
 }
 
-export async function getMostPopularShapes(routeId: string): Promise<string[]> {
+/**
+ * Most-used shape per direction over a whole week: each trip counts once for
+ * every day its service runs, so a workday shape is not outvoted by a
+ * weekend one, and the pick does not depend on the import's weekday.
+ */
+export async function getMostPopularShapes(
+  routeId: string,
+  serviceDays?: Record<string, number>,
+): Promise<string[]> {
+  const days = serviceDays ?? (await getServiceDayCounts());
   const trips = await getTrips(
-    { route_id: routeId, service_id: await getTodayServiceIds() },
-    ["shape_id", "direction_id"],
+    { route_id: routeId, service_id: Object.keys(days) },
+    ["shape_id", "direction_id", "service_id"],
   );
 
   if (!trips.length) return [];
@@ -318,7 +351,7 @@ export async function getMostPopularShapes(routeId: string): Promise<string[]> {
     const dir = t.direction_id ?? 0;
     if (!byDir.has(dir)) byDir.set(dir, new Map());
     const m = byDir.get(dir)!;
-    m.set(t.shape_id, (m.get(t.shape_id) ?? 0) + 1);
+    m.set(t.shape_id, (m.get(t.shape_id) ?? 0) + (days[t.service_id] ?? 1));
   }
 
   const result: string[] = [];
@@ -376,10 +409,74 @@ export function getRouteTextColor(routeName: string): string {
   return routeName.charAt(0) === "Т" && DARK_TEXT_LINES.has(rawNumber) ? "#000000" : "#FFFFFF";
 }
 
-export function getSmapleTrips(route: Pick<RouteDoc, "trip_direction_map">): string[] {
+export interface ImportedTrip {
+  trip_id: string;
+  direction_id: number | null;
+  shape_id: string | null;
+}
+
+/**
+ * Every trip of a route on the given services, whatever shape it runs.
+ * Feeds trip_shape_map and trip_direction_map, which realtime vehicles are
+ * looked up in by trip ID: a trip missing there is a vehicle with no
+ * direction.
+ */
+export async function getRouteTrips(routeId: string, serviceIds: string[]): Promise<ImportedTrip[]> {
+  return getTrips({ route_id: routeId, service_id: serviceIds }, ["trip_id", "direction_id", "shape_id"]);
+}
+
+/**
+ * Direction of each trip. A trip on one of the route's shapes takes that
+ * shape's position (getDirectionByTrip). Any other trip — a short-turn or a
+ * variant — gets its GTFS direction_id translated through the trips on the
+ * route's shapes, since direction_id runs opposite to shape order on many
+ * Lviv routes; raw direction_id only when nothing to translate it by.
+ */
+export function assignTripDirections(
+  trips: ImportedTrip[],
+  route: Pick<RouteDoc, "shapes" | "trip_shape_map">,
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  const votes = new Map<number, Map<number, number>>();
+  const offShape: ImportedTrip[] = [];
+  for (const t of trips) {
+    const direction = getDirectionByTrip(t.trip_id, route);
+    if (direction === null) {
+      offShape.push(t);
+      continue;
+    }
+    result[t.trip_id] = direction;
+    if (t.direction_id == null) continue;
+    if (!votes.has(t.direction_id)) votes.set(t.direction_id, new Map());
+    const tally = votes.get(t.direction_id)!;
+    tally.set(direction, (tally.get(direction) ?? 0) + 1);
+  }
+  const translate = new Map(
+    [...votes].map(([gtfs, tally]) => [gtfs, [...tally].sort((a, b) => b[1] - a[1])[0][0]]),
+  );
+  for (const t of offShape) {
+    if (t.direction_id == null) continue;
+    result[t.trip_id] = translate.get(t.direction_id) ?? t.direction_id;
+  }
+  return result;
+}
+
+/**
+ * One trip per direction to read the stop sequence from. Trips on the
+ * route's own shapes only, when there are any: a short-turn variant would
+ * cut the stop list short.
+ */
+export function getSmapleTrips(
+  route: Pick<RouteDoc, "trip_direction_map"> & Partial<Pick<RouteDoc, "shapes" | "trip_shape_map">>,
+): string[] {
+  const entries = Object.entries(route.trip_direction_map);
+  const onShape = entries.filter(([tripId]) => {
+    const shape = route.trip_shape_map?.[tripId];
+    return !!shape && !!route.shapes && shape in route.shapes;
+  });
   let sampleTrips: string[] = [];
 
-  for (const [key, value] of Object.entries(route.trip_direction_map)) {
+  for (const [key, value] of onShape.length ? onShape : entries) {
     sampleTrips[value] = key;
   }
 

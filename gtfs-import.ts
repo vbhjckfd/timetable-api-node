@@ -8,6 +8,7 @@ import {
   getStoptimes,
 } from "gtfs";
 import {
+  getServiceDayCounts,
   getTodayServiceIds,
   getWorkdayServiceIds,
   getWeekendServiceIds,
@@ -32,10 +33,11 @@ const db = new loki("./database/Timetable", {
 
 import { routesThroughStop } from "./services/microgizService.ts";
 import {
+  assignTripDirections,
   getMostPopularShapes,
+  getRouteTrips,
   normalizeRouteName,
   normalizeRouteNameBase,
-  getDirectionByTrip,
   getSmapleTrips,
   shapes_by_direction,
   sortedShapeIds,
@@ -66,6 +68,12 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     unique: ["code", "microgiz_id"],
   });
 
+  // Every service day, not just the import's: the data has to answer for every
+  // day it stays deployed, and the daily refresh skips the rebuild when the
+  // feed is unchanged. A Sunday build used to know no Monday trip.
+  const serviceDays = await getServiceDayCounts();
+  const allServiceIds = Object.keys(serviceDays);
+
   const routeRelatedPromises = importedRoutes.map(async (r) => {
     let routeModel: RouteDoc = {
       external_id: r.route_id,
@@ -89,7 +97,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       return null;
     }
 
-    const mostPopularShapes = await getMostPopularShapes(r.route_id);
+    const mostPopularShapes = await getMostPopularShapes(r.route_id, serviceDays);
 
     //   if (!mostPopularShapes.length) {
     //       console.error(`Route ${r.route_id} - ${r.route_short_name} has no shapes`);
@@ -117,26 +125,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
     let tripShapeMap: Record<string, string | null> = {};
 
-    let trips: { trip_id: string; direction_id: number | null; shape_id: string | null }[] = [];
-
-    trips = await getTrips(
-      {
-        route_id: r.route_id,
-        shape_id: Array.from(mostPopularShapes),
-        service_id: await getTodayServiceIds(),
-      },
-      ["trip_id", "direction_id", "shape_id"],
-    );
-
-    if (trips.length == 0) {
-      trips = await getTrips(
-        {
-          route_id: r.route_id,
-          service_id: await getTodayServiceIds(),
-        },
-        ["trip_id", "direction_id", "shape_id"],
-      );
-    }
+    const trips = await getRouteTrips(r.route_id, allServiceIds);
 
     trips.forEach((t) => {
       tripShapeMap[t.trip_id] = t.shape_id;
@@ -158,17 +147,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       ]),
     );
 
-    routeModel.trip_direction_map = trips.reduce<Record<string, number>>((acc, t) => {
-      let direction = getDirectionByTrip(t.trip_id, routeModel);
-
-      if (direction === null) {
-        direction = t.direction_id as number;
-      }
-
-      acc[t.trip_id] = direction;
-
-      return acc;
-    }, {});
+    routeModel.trip_direction_map = assignTripDirections(trips, routeModel);
 
     return routeModel;
   });
@@ -286,11 +265,13 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     weekendServiceIds,
     saturdayServiceIds,
     sundayServiceIds,
+    todayServiceIds,
   ] = await Promise.all([
     getWorkdayServiceIds(),
     getWeekendServiceIds(),
     getSaturdayServiceIds(),
     getSundayServiceIds(),
+    getTodayServiceIds(),
   ]);
 
   async function buildDepartureTimeMap(routeId: string, serviceIds: string[]): Promise<DepartureTimeMap> {
@@ -359,10 +340,17 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
 
       routeModel.stops_by_shape = stopsByShape;
 
-      const allRouteTrips = Object.keys(routeModel.trip_direction_map);
+      // The combined map keeps its old meaning, the import day's service:
+      // trip_direction_map now spans every day, and merging all of them
+      // would put workday and weekend times in one list. The per-day maps
+      // below are what day-aware readers use.
+      const todayTrips = await getTrips(
+        { route_id: routeModel.external_id, service_id: todayServiceIds },
+        ["trip_id"],
+      );
       const allStopTimes = await getStoptimes(
         {
-          trip_id: allRouteTrips,
+          trip_id: todayTrips.map((t) => t.trip_id),
         },
         ["stop_id", "departure_time"],
         [["departure_time", "ASC"]],

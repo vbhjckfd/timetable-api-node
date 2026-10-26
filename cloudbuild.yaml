@@ -25,6 +25,11 @@ steps:
   - name: gcr.io/cloud-builders/docker
     id: Build
     entrypoint: bash
+    # The Dockerfile's data stage is `FROM --platform=$BUILDPLATFORM`. Only
+    # BuildKit fills that in; the classic builder leaves it empty and fails
+    # with `failed to parse platform : ""`.
+    env:
+      - DOCKER_BUILDKIT=1
     args:
       - -c
       - |

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("gtfs", () => ({
   getCalendars: vi.fn(),
@@ -22,7 +22,14 @@ import {
   getDirectionByTrip,
   sortedShapeIds,
   shapes_by_direction,
+  getAllServiceIds,
+  getServiceDayCounts,
+  getMostPopularShapes,
+  getRouteTrips,
+  assignTripDirections,
+  getSmapleTrips,
 } from "../../utils/appHelpers.js";
+import { getCalendars, getShapes, getTrips } from "gtfs";
 
 describe("escapeHtml", () => {
   it("escapes ampersands", () => {
@@ -261,5 +268,116 @@ describe("secondsUntilImportDone", () => {
   it("is not thrown a day late by the local date running ahead of UTC", () => {
     // 22:30 UTC on the 3rd is 01:30 on the 4th in Kyiv.
     expect(secondsUntilImportDone(new Date("2026-10-03T22:30:00Z"))).toBe(2 * 3600 + 45 * 60);
+  });
+});
+
+describe("import trip lookups span every service day", () => {
+  const calendar = (service_id, days) => ({
+    service_id,
+    ...Object.fromEntries(
+      ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((d) => [d, days.includes(d) ? 1 : 0]),
+    ),
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCalendars.mockResolvedValue([
+      calendar("WD", ["monday", "tuesday", "wednesday", "thursday", "friday"]),
+      calendar("SAT", ["saturday"]),
+      calendar("SUN", ["sunday"]),
+      // Only runs on calendar_dates exceptions: no weekday of its own.
+      calendar("XMAS", []),
+    ]);
+    getShapes.mockResolvedValue([{ shape_id: "S0" }, { shape_id: "S1" }, { shape_id: "WKND" }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("counts the days a week each running service covers", async () => {
+    expect(await getServiceDayCounts()).toEqual({ WD: 5, SAT: 1, SUN: 1 });
+    expect(await getAllServiceIds()).toEqual(["WD", "SAT", "SUN"]);
+  });
+
+  it("picks the same shapes whatever day the import runs, weighting trips by service days", async () => {
+    getTrips.mockResolvedValue([
+      // Two weekend trips on WKND, one workday trip on S0: over a week S0 runs 5 times, WKND 4.
+      { shape_id: "S0", direction_id: 0, service_id: "WD" },
+      { shape_id: "WKND", direction_id: 0, service_id: "SAT" },
+      { shape_id: "WKND", direction_id: 0, service_id: "SAT" },
+      { shape_id: "WKND", direction_id: 0, service_id: "SUN" },
+      { shape_id: "WKND", direction_id: 0, service_id: "SUN" },
+      { shape_id: "S1", direction_id: 1, service_id: "WD" },
+    ]);
+    // A Sunday-night build used to see Sunday's trips only, and the deployed
+    // data then knew no Monday trip until the next rebuild.
+    for (const day of ["2026-10-25T21:55:00Z", "2026-10-26T09:00:00Z"]) {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(day));
+      expect(await getMostPopularShapes("R1")).toEqual(["S0", "S1"]);
+      expect(getTrips).toHaveBeenLastCalledWith(
+        { route_id: "R1", service_id: ["WD", "SAT", "SUN"] },
+        ["shape_id", "direction_id", "service_id"],
+      );
+      vi.useRealTimers();
+    }
+  });
+
+  it("fetches every trip of a route on the given services", async () => {
+    getTrips.mockResolvedValueOnce([{ trip_id: "mon-1", shape_id: "S0", direction_id: 0 }]);
+    expect(await getRouteTrips("R1", ["WD", "SUN"])).toHaveLength(1);
+    expect(getTrips).toHaveBeenCalledWith({ route_id: "R1", service_id: ["WD", "SUN"] }, ["trip_id", "direction_id", "shape_id"]);
+  });
+});
+
+describe("assignTripDirections", () => {
+  // Shape order gives S0 direction 0 and S1 direction 1; GTFS direction_id runs the other way.
+  const route = {
+    shapes: { S0: [], S1: [] },
+    trip_shape_map: { a: "S0", b: "S1", shortTurn: "S9", bare: "S9", noGtfs: "S9" },
+  };
+
+  it("uses shape order for trips on the route's shapes", () => {
+    const dirs = assignTripDirections(
+      [{ trip_id: "a", shape_id: "S0", direction_id: 1 }, { trip_id: "b", shape_id: "S1", direction_id: 0 }],
+      route,
+    );
+    expect(dirs).toEqual({ a: 0, b: 1 });
+  });
+
+  it("translates an off-shape trip's GTFS direction through the on-shape trips", () => {
+    const dirs = assignTripDirections(
+      [
+        { trip_id: "a", shape_id: "S0", direction_id: 1 },
+        { trip_id: "b", shape_id: "S1", direction_id: 0 },
+        // GTFS 1 is shape direction 0 on this route, not 1.
+        { trip_id: "shortTurn", shape_id: "S9", direction_id: 1 },
+        { trip_id: "noGtfs", shape_id: "S9", direction_id: null },
+      ],
+      route,
+    );
+    expect(dirs.shortTurn).toBe(0);
+    expect(dirs).not.toHaveProperty("noGtfs");
+  });
+
+  it("falls back to the raw GTFS direction when nothing can translate it", () => {
+    expect(assignTripDirections([{ trip_id: "bare", shape_id: "S9", direction_id: 1 }], route)).toEqual({ bare: 1 });
+  });
+});
+
+describe("getSmapleTrips", () => {
+  it("samples stop sequences from trips on the route's own shapes", () => {
+    const route = {
+      shapes: { S0: [], S1: [] },
+      trip_shape_map: { full0: "S0", short0: "S9", full1: "S1" },
+      // The short-turn comes last, so an unfiltered pick would take it.
+      trip_direction_map: { full0: 0, full1: 1, short0: 0 },
+    };
+    expect(getSmapleTrips(route)).toEqual(["full0", "full1"]);
+  });
+
+  it("uses any trip when none runs on the route's shapes", () => {
+    expect(getSmapleTrips({ trip_direction_map: { x: 0, y: 1 } })).toEqual(["x", "y"]);
   });
 });
