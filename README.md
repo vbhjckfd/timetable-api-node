@@ -471,6 +471,7 @@ In addition to tools, the server exposes MCP **resources** for reference data th
 - Public read-only (no authentication).
 - No mutating tools are exposed.
 - `POST /mcp` is rate-limited to **60 requests/min per IP** (in-memory, resets on restart). Excess requests receive HTTP 429 with a JSON-RPC error body.
+- Requests carrying `X-Internal-Key` equal to the `INTERNAL_API_KEY` env var (the lad.lviv.ua frontend server) skip every rate limit.
 - `robots.txt` is only a best-effort discovery hint and not a protocol contract.
 
 ## REST API

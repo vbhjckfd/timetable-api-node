@@ -15,6 +15,7 @@ import localDb from "./connections/timetableSqliteDb.ts";
 
 import notFoundAction from "./actions/notFoundAction.ts";
 import validateStopCode from "./utils/stopCodeMiddleware.ts";
+import { isInternalCaller } from "./utils/internalCaller.ts";
 
 import getClosestStopsAction from "./actions/getClosestStopsAction.ts";
 import getSingleStopAction from "./actions/getSingleStopAction.ts";
@@ -85,7 +86,9 @@ const clientIpKey = (req: Request) =>
 // generates. They exist to bound the unattended callers: a scraper looping a
 // fixed set of stop codes, or an app under development replaying deploy
 // loops, both of which otherwise run against the origin with nothing to push
-// back. Liveness paths are exempt so a probe never trips a limit some abusive
+// back. Our own frontend server is exempt from every limiter (see
+// utils/internalCaller.ts): all its page renders and chat lookups share one
+// address. Liveness paths are exempt so a probe never trips a limit some abusive
 // neighbour filled, and /mcp is exempt because it carries its own limiter
 // below: sharing this bucket meant the global one always emptied first (it
 // counts every path) and answered MCP clients with a body that is not
@@ -97,7 +100,10 @@ const globalRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: clientIpKey,
   skip: (req) =>
-    req.path === "/health" || req.path === "/ping" || req.path === "/mcp",
+    req.path === "/health" ||
+    req.path === "/ping" ||
+    req.path === "/mcp" ||
+    isInternalCaller(req),
   message: { error: "Rate limit exceeded. Try again later." },
 });
 
@@ -111,6 +117,7 @@ const liveDataRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
+  skip: (req) => isInternalCaller(req),
   message: { error: "Rate limit exceeded. Try again later." },
 });
 
@@ -132,6 +139,7 @@ const stopDataRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
+  skip: (req) => isInternalCaller(req),
   message: { error: "Rate limit exceeded. Try again later." },
 });
 
@@ -323,6 +331,7 @@ const mcpRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: clientIpKey,
+  skip: (req) => isInternalCaller(req),
   handler: (req, res) =>
     res.status(429).json({
       jsonrpc: "2.0",
