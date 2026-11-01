@@ -493,8 +493,8 @@ All stops as a JSON array, sorted by code.
 The upstream route list for a stop is sometimes behind reality. `GET /stops`
 applies a stored override to its `Маршрути` column — removed routes shown red and
 struck through, added ones green — and hangs the matching `?add=`/`?remove=` on
-that row's SVG and PDF links in both the `Табличка` (stop sign) and `Мапа`
-(network poster, `/:code/schema`) columns, which `offline.lad.lviv.ua` and
+that row's SVG and PDF links in the `Табличка` (stop sign), `Мапа`
+(network poster, `/:code/schema`) and `Панель` (`/:code/panel`) columns, which `offline.lad.lviv.ua` and
 `pdf.lad.lviv.ua` both understand.
 
 The route column is always clickable: click a route to drop or restore it, type

@@ -64,6 +64,8 @@ describe("getAllStopsAction", () => {
     expect(html).toContain('data-kind="pdf"');
     expect(html).toContain('data-kind="schemaSvg"');
     expect(html).toContain('data-kind="schemaPdf"');
+    expect(html).toContain('data-kind="panelSvg"');
+    expect(html).toContain('data-kind="panelPdf"');
     expect(html).toContain('src="/stop-overrides.js"');
   });
 
@@ -76,6 +78,16 @@ describe("getAllStopsAction", () => {
     expect(html).toContain("<th>Мапа</th>");
     expect(html).toContain('href="https://offline.lad.lviv.ua/1001/schema"');
     expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/schema.pdf"');
+  });
+
+  it("links the stop panel as SVG and PDF", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain("<th>Панель</th>");
+    expect(html).toContain('href="https://offline.lad.lviv.ua/1001/panel"');
+    expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/panel.pdf"');
   });
 
   it("styles removed routes red and struck through, added ones green", async () => {

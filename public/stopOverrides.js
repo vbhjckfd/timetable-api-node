@@ -87,7 +87,7 @@ export function overrideQuery(entry) {
 /**
  * @param {string | number} code
  * @param {OverrideInput} entry
- * @returns {{ svg: string, pdf: string, schemaSvg: string, schemaPdf: string }}
+ * @returns {{ svg: string, pdf: string, schemaSvg: string, schemaPdf: string, panelSvg: string, panelPdf: string }}
  */
 export function signLinks(code, entry) {
   const query = overrideQuery(entry);
@@ -98,6 +98,8 @@ export function signLinks(code, entry) {
     pdf: `https://pdf.lad.lviv.ua/${code}.pdf${suffix}`,
     schemaSvg: `https://offline.lad.lviv.ua/${code}/schema${suffix}`,
     schemaPdf: `https://pdf.lad.lviv.ua/${code}/schema.pdf${suffix}`,
+    panelSvg: `https://offline.lad.lviv.ua/${code}/panel${suffix}`,
+    panelPdf: `https://pdf.lad.lviv.ua/${code}/panel.pdf${suffix}`,
   };
 }
 
