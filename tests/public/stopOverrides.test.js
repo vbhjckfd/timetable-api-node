@@ -110,6 +110,8 @@ describe("signLinks", () => {
       pdf: "https://pdf.lad.lviv.ua/62.pdf",
       schemaSvg: "https://offline.lad.lviv.ua/62/schema",
       schemaPdf: "https://pdf.lad.lviv.ua/62/schema.pdf",
+      panelSvg: "https://offline.lad.lviv.ua/62/panel",
+      panelPdf: "https://pdf.lad.lviv.ua/62/panel.pdf",
     });
   });
 
@@ -119,6 +121,8 @@ describe("signLinks", () => {
       pdf: "https://pdf.lad.lviv.ua/62.pdf?add=T02&remove=T03",
       schemaSvg: "https://offline.lad.lviv.ua/62/schema?add=T02&remove=T03",
       schemaPdf: "https://pdf.lad.lviv.ua/62/schema.pdf?add=T02&remove=T03",
+      panelSvg: "https://offline.lad.lviv.ua/62/panel?add=T02&remove=T03",
+      panelPdf: "https://pdf.lad.lviv.ua/62/panel.pdf?add=T02&remove=T03",
     });
   });
 });
