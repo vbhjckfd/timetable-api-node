@@ -47,7 +47,7 @@ async function main() {
   const server = new Server(
     {
       ...upstreamInfo,
-      name: upstreamInfo.name ?? "com.lad.lviv/timetable-api",
+      name: upstreamInfo.name ?? "io.github.vbhjckfd/timetable-api-node",
       version: pkg.version,
     },
     {

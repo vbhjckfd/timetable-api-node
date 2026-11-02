@@ -1,8 +1,6 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Prompt, Tool } from "@modelcontextprotocol/sdk/types.js";
 
-import { buildMcpServerCard, createTimetableMcpServer } from "./timetableMcpServer.ts";
+import { buildMcpServerCard, mcpManifest } from "./timetableMcpServer.ts";
 
 /**
  * GET /mcp is also where a Streamable HTTP client asks for an SSE stream, and
@@ -15,44 +13,9 @@ export function wantsHtmlDocs(acceptHeader: string | null | undefined): boolean 
   return accept.includes("text/html") && !accept.includes("text/event-stream");
 }
 
-/**
- * The tool and prompt lists come from a real tools/list and prompts/list
- * against the server, so the page shows exactly the schemas clients are
- * given and cannot drift from registerTools(). They only change with a code
- * push, so the listing is taken once per process.
- */
-interface Catalog {
-  tools: Tool[];
-  prompts: Prompt[];
-}
-
-let catalogPromise: Promise<Catalog> | undefined;
-
-async function loadCatalog(): Promise<Catalog> {
-  const server = createTimetableMcpServer();
-  const client = new Client({ name: "docs-page", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  try {
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-    const [{ tools }, { prompts }] = await Promise.all([
-      client.listTools(),
-      client.listPrompts(),
-    ]);
-    return { tools, prompts };
-  } finally {
-    await client.close();
-    await server.close();
-  }
-}
-
-function getCatalog(): Promise<Catalog> {
-  catalogPromise ??= loadCatalog().catch((error) => {
-    catalogPromise = undefined;
-    throw error;
-  });
-  return catalogPromise;
-}
+// The tool and prompt lists come from mcpManifest(): a real tools/list and
+// prompts/list against the server, so the page shows exactly the schemas
+// clients are given and cannot drift from registerTools().
 
 const escapeHtml = (value: unknown): string =>
   String(value ?? "")
@@ -129,7 +92,7 @@ function renderPrompt(prompt: Prompt): string {
 
 export async function renderMcpDocsPage(baseUrl: string): Promise<string> {
   const card = buildMcpServerCard(baseUrl);
-  const { tools, prompts } = await getCatalog();
+  const { tools, prompts } = await mcpManifest();
   const endpoint = card.remotes[0].url;
   const base = baseUrl.replace(/\/+$/, "");
 

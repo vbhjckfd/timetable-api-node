@@ -228,7 +228,11 @@ vi.mock("../../services/transitLookupService.js", () => ({
       ],
     };
   }),
-  listRouteNames: vi.fn(() => ["А01", "А03", "Н2", "Т01", "Т30"]),
+  listRouteNames: vi.fn(() => ["А01", "А03", "А32", "Н2", "Т01", "Т30"]),
+  listRoutes: vi.fn(() => [
+    { name: "Т30", long_name: "Рясне - Сихів", vehicle_type: "tram", destinations: ["Сихів", "Рясне"] },
+  ]),
+  listStopCodes: vi.fn(() => [707, 708, 1234]),
   resolveRoute: vi.fn((name) =>
     name === "T30" || name === "1030"
       ? { external_id: "EXT30", name: "Т30", destinations: ["Рясне", "Сихів"], stops: [[707, 708], [708, 707]] }
@@ -294,9 +298,19 @@ import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValid
 import pkg from "../../package.json" with { type: "json" };
 import {
   buildMcpServerCard,
+  compactJsonSchema,
   handleMcpPostRequest,
+  mcpManifest,
   parseArrivalMinutes,
 } from "../../mcp/timetableMcpServer.js";
+import {
+  buildAgentCard,
+  buildAiPluginManifest,
+  buildLlmsFullTxt,
+  buildRobotsTxt,
+  TOOL_EXAMPLES,
+} from "../../mcp/discovery.js";
+import { readFileSync } from "node:fs";
 
 let server;
 let baseUrl;
@@ -309,24 +323,14 @@ beforeAll(async () => {
     await handleMcpPostRequest(req, res);
   });
 
-  app.get("/.well-known/mcp/server-card.json", (req, res) => {
+  app.get("/.well-known/mcp/server-card.json", async (req, res) => {
     const origin = `${req.protocol}://${req.get("host")}`;
-    res.json(buildMcpServerCard(origin));
+    res.json(buildMcpServerCard(origin, await mcpManifest()));
   });
 
   app.get("/robots.txt", (req, res) => {
     const origin = `${req.protocol}://${req.get("host")}`;
-    res
-      .type("text/plain")
-      .send(
-        [
-          "User-agent: *",
-          "Disallow: /private/",
-          "",
-          "# Non-standard hint for AI agent discovery:",
-          `# mcp-server: ${origin}/.well-known/mcp/server-card.json`,
-        ].join("\n"),
-      );
+    res.type("text/plain").send(buildRobotsTxt(origin));
   });
 
   server = createServer(app);
@@ -956,11 +960,18 @@ describe("timetable MCP server", () => {
     expect(serverCard.remotes[0].type).toBe("streamable-http");
     expect(serverCard.remotes[0].url).toBe(`${baseUrl}/mcp`);
     expect(serverCard.authentication.type).toBe("none");
-    expect(serverCard.title).toBe("Lviv Timetable MCP");
+    expect(serverCard.title).toBe("Lviv Public Transport");
     expect(serverCard.version).toBe(pkg.version);
     expect(serverCard.websiteUrl).toBe("https://lad.lviv.ua");
     expect(serverCard.description).toContain("Lviv");
-    expect(serverCard.serverInfo?.name).toBe("com.lad.lviv/timetable-api");
+    expect(serverCard.serverInfo?.name).toBe("io.github.vbhjckfd/timetable-api-node");
+    expect(serverCard.transport).toEqual({ type: "streamable-http", endpoint: `${baseUrl}/mcp` });
+    expect(serverCard.tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
+    expect(serverCard.tools[0].outputSchema).toBeUndefined();
+    expect(serverCard.prompts.map((p) => p.name)).toContain("plan-trip");
+    expect(serverCard.resources.map((r) => r.uri)).toContain("timetable://routes");
+    expect(serverCard.capabilities.tools).toEqual({ listChanged: false });
+    expect(serverCard.instructions).toContain("search_stops");
     expect(serverCard.serverInfo?.websiteUrl).toBe("https://lad.lviv.ua");
     expect(serverCard.serverInfo?.version).toBe(pkg.version);
     expect(serverCard.serverInfo?.description).toContain("Lviv");
@@ -1030,6 +1041,7 @@ describe("timetable MCP server", () => {
     expect(robotsText).toContain(
       `# mcp-server: ${baseUrl}/.well-known/mcp/server-card.json`,
     );
+    expect(robotsText).toContain(`Sitemap: ${baseUrl}/sitemap.xml`);
   });
 });
 
@@ -1071,7 +1083,10 @@ describe("MCP additions", () => {
       });
     expect((await complete("t3")).completion.values).toEqual(["Т30"]);
     expect((await complete("a1")).completion.values).toEqual(["А01"]);
-    expect((await complete("А")).completion.values).toEqual(["А01", "А03"]);
+    expect((await complete("А")).completion.values).toEqual(["А01", "А03", "А32"]);
+    // Riders type the number alone.
+    expect((await complete("3")).completion.values).toEqual(["А03", "А32", "Т30"]);
+    expect((await complete("32")).completion.values).toEqual(["А32"]);
     await client.close();
   });
 
@@ -1157,5 +1172,107 @@ describe("parseArrivalMinutes", () => {
 
   it("reads a plain minute label", () => {
     expect(parseArrivalMinutes({ time_left: "7хв" })).toBe(7);
+  });
+});
+
+describe("MCP discovery", () => {
+  it("advertises no list changes and keeps tools/list free of zod noise", async () => {
+    const client = await connectClient();
+    expect(client.getServerCapabilities()).toMatchObject({
+      tools: { listChanged: false },
+      resources: { listChanged: false },
+      prompts: { listChanged: false },
+    });
+    const { tools } = await client.listTools();
+    const json = JSON.stringify(tools);
+    expect(json).not.toContain(String(Number.MAX_SAFE_INTEGER));
+    expect(json).not.toContain("json-schema.org");
+    const realtime = tools.find((t) => t.name === "get_stop_realtime");
+    expect(realtime.outputSchema.properties.data.properties.arrivals.items.properties.arrival_minutes).toEqual({
+      type: ["integer", "null"],
+    });
+    expect(tools.every((t) => t.annotations.readOnlyHint && t.annotations.openWorldHint)).toBe(true);
+    // Calls still validate against the compacted output schema.
+    const result = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 1234 } });
+    expect(result.isError).toBeFalsy();
+    await client.close();
+  });
+
+  it("compactJsonSchema folds nullable anyOf and drops safe-int bounds", () => {
+    expect(
+      compactJsonSchema(
+        {
+          $schema: "x",
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            n: { anyOf: [{ type: "integer", minimum: Number.MIN_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER }, { type: "null" }] },
+            r: { type: "integer", minimum: 0, maximum: 1 },
+          },
+        },
+        { output: true },
+      ),
+    ).toEqual({ type: "object", properties: { n: { type: ["integer", "null"] }, r: { type: "integer", minimum: 0, maximum: 1 } } });
+  });
+
+  it("lists every route as a resource", async () => {
+    const client = await connectClient();
+    const { contents } = await client.readResource({ uri: "timetable://routes" });
+    expect(JSON.parse(contents[0].text)[0]).toMatchObject({ name: "Т30", vehicle_type: "tram" });
+    await client.close();
+  });
+
+  it("completes stop IDs by code prefix or by name, and trip ends by name", async () => {
+    const client = await connectClient();
+    const stopTemplate = (value) =>
+      client.complete({ ref: { type: "ref/resource", uri: "timetable://stop/{code}" }, argument: { name: "code", value } });
+    expect((await stopTemplate("70")).completion.values).toEqual(["707", "708"]);
+    expect((await stopTemplate("opera")).completion.values).toEqual(["707", "708"]);
+
+    const promptStop = await client.complete({
+      ref: { type: "ref/prompt", name: "transit-arrival-list" },
+      argument: { name: "stop_id", value: "12" },
+    });
+    expect(promptStop.completion.values).toEqual(["1234"]);
+
+    const tripEnd = await client.complete({ ref: { type: "ref/prompt", name: "plan-trip" }, argument: { name: "from", value: "oper" } });
+    expect(tripEnd.completion.values).toEqual(["Опера"]);
+    await client.close();
+  });
+
+  // Hand-kept lists drifted before: agent.json advertised a removed tool and
+  // the website's card sat at 1.0.0. Every discovery document must match the
+  // live tool list and the release version.
+  it("keeps every discovery document in step with the server", async () => {
+    const manifest = await mcpManifest();
+    const toolNames = manifest.tools.map((t) => t.name).sort();
+    expect(toolNames).toEqual([...TOOL_NAMES].sort());
+
+    const agentCard = buildAgentCard("https://api.example.test", manifest);
+    expect(agentCard.skills.map((s) => s.id).sort()).toEqual(toolNames);
+    expect(agentCard.version).toBe(pkg.version);
+    expect(agentCard.url).toBe("https://api.example.test/mcp");
+    expect(agentCard.skills.every((s) => s.description && !s.description.includes("`"))).toBe(true);
+    expect(Object.keys(TOOL_EXAMPLES).sort()).toEqual(toolNames);
+
+    const serverJson = JSON.parse(readFileSync(new URL("../../server.json", import.meta.url), "utf8"));
+    const card = buildMcpServerCard("https://api.lad.lviv.ua", manifest);
+    expect(card.name).toBe(serverJson.name);
+    expect(card.title).toBe(serverJson.title);
+    expect(card.version).toBe(serverJson.version);
+    expect(card.remotes).toEqual(serverJson.remotes);
+
+    const smithery = JSON.parse(readFileSync(new URL("../../smithery.json", import.meta.url), "utf8"));
+    for (const example of smithery.examples ?? []) expect(toolNames).toContain(example.tool);
+
+    const integration = readFileSync(new URL("../../INTEGRATION.md", import.meta.url), "utf8");
+    for (const name of toolNames) expect(integration, name).toContain(`\`${name}\``);
+
+    const llmsFull = buildLlmsFullTxt("https://api.example.test", manifest);
+    for (const name of toolNames) expect(llmsFull).toContain(`### ${name}`);
+    for (const prompt of manifest.prompts) expect(llmsFull).toContain(`\`${prompt.name}\``);
+    expect(llmsFull).toContain("claude mcp add --transport http lviv-timetable https://api.example.test/mcp");
+
+    expect(buildAiPluginManifest("https://api.example.test").description_for_model).toContain("https://api.example.test/mcp");
   });
 });

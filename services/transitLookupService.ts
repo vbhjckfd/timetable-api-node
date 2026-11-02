@@ -148,6 +148,31 @@ export function listRouteNames(): string[] {
   );
 }
 
+/** Every route with its terminus names, in the order listRouteNames sorts them. */
+export function listRoutes(): { name: string; long_name: string | null; vehicle_type: VehicleType; destinations: (string | null)[] }[] {
+  const byName = new Map<string, RouteDoc>();
+  for (const route of routes().find({})) {
+    const name = formatRouteName(route.short_name);
+    if (!byName.has(name)) byName.set(name, route);
+  }
+  return [...byName]
+    .sort(([a], [b]) => a.localeCompare(b, "uk", { numeric: true }))
+    .map(([name, route]) => ({
+      name,
+      long_name: route.long_name ?? null,
+      vehicle_type: getRouteType(name),
+      destinations: [routeTerminusName(route, 0), routeTerminusName(route, 1)],
+    }));
+}
+
+/** Codes of every stop, ascending. */
+export function listStopCodes(): number[] {
+  return stops()
+    .find({})
+    .map((s) => s.code)
+    .sort((a, b) => a - b);
+}
+
 /** Terminus name per `${routeId}:${direction}` for a batch of live vehicles. */
 export function destinationsFor(
   pairs: Iterable<{ routeId: unknown; direction: number | null | undefined }>,

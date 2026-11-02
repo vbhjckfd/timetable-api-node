@@ -1,6 +1,6 @@
 {
   "id": "vbhjckfd/timetable-api-node",
-  "name": "Lviv Timetable MCP",
+  "name": "Lviv Public Transport",
   "description": "Lviv (Ukraine) public transport MCP server — live arrivals, vehicle positions, stop discovery, route shapes, and static timetables. No API key required.",
   "tags": ["transit", "public-transport", "ukraine", "lviv", "gtfs", "timetable", "realtime", "vehicles", "stops", "mcp"],
   "homepage": "https://lad.lviv.ua",

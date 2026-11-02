@@ -1,6 +1,5 @@
 import "dotenv/config";
 
-import pkg from "./package.json" with { type: "json" };
 import path from "path";
 const __dirname = import.meta.dirname;
 const PORT = process.env.PORT || 8080;
@@ -33,7 +32,14 @@ import getDisruptionsAction from "./actions/getDisruptionsAction.ts";
 import {
   buildMcpServerCard,
   handleMcpPostRequest,
+  mcpManifest,
 } from "./mcp/timetableMcpServer.ts";
+import {
+  buildAgentCard,
+  buildAiPluginManifest,
+  buildLlmsFullTxt,
+  buildRobotsTxt,
+} from "./mcp/discovery.ts";
 import { renderMcpDocsPage, wantsHtmlDocs } from "./mcp/docsPage.ts";
 import healthAction from "./actions/healthAction.ts";
 import errorHandler from "./utils/errorHandler.ts";
@@ -56,14 +62,21 @@ const setStaticAssetCache = (res: Response, maxAgeSeconds = 3600 * 24) =>
 
 app.use(cors());
 
+// RFC 8288 Link headers for agent discovery. service-desc is the API
+// description (RFC 8631), so it names the OpenAPI document; the MCP card gets
+// the same rel the website's <link> tag uses. There is no
+// oauth-protected-resource link: nothing here needs auth, and advertising
+// protected-resource metadata invites a client to start an OAuth flow that
+// has no authorization server to go to.
 app.use((req, res, next) => {
   const baseUrl = `${req.protocol}://${req.host}`;
   res.set(
     "Link",
     [
-      `<${baseUrl}/.well-known/oauth-protected-resource>; rel="oauth-protected-resource"`,
-      `<${baseUrl}/.well-known/mcp/server-card.json>; rel="service-desc"`,
+      `<${baseUrl}/openapi.yaml>; rel="service-desc"; type="application/yaml"`,
+      `<${baseUrl}/.well-known/mcp/server-card.json>; rel="mcp-server-card"; type="application/json"`,
       `<${baseUrl}/mcp>; rel="mcp-server"`,
+      `<${baseUrl}/llms.txt>; rel="describedby"; type="text/plain"`,
     ].join(", "),
   );
   res.set("X-MCP-Server", `${baseUrl}/.well-known/mcp/server-card.json`);
@@ -174,140 +187,25 @@ app.get("/.well-known/openapi.yaml", (req, res) => {
 });
 
 app.get("/.well-known/ai-plugin.json", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.host}`;
   setStaticAssetCache(res);
-  res.json({
-    schema_version: "v1",
-    name_for_human: "Lviv Public Transport",
-    name_for_model: "lviv_timetable",
-    description_for_human:
-      "Real-time and static public transport data for Lviv, Ukraine — stops, routes, timetables, live vehicle positions. No API key required.",
-    description_for_model:
-      "Provides real-time arrivals, live vehicle positions, static timetables, route shapes, and stop discovery for public transport in Lviv, Ukraine. Data sourced from municipal GTFS-RT feeds. All endpoints are read-only and require no authentication. Use stop numeric codes (e.g. 707) and route short names (e.g. T30, 32A).",
-    auth: { type: "none" },
-    api: {
-      type: "openapi",
-      url: `${baseUrl}/openapi.yaml`,
-    },
-    logo_url: `${baseUrl}/favicon.png`,
-    contact_email: "vbhjckfd@gmail.com",
-    legal_info_url: "https://lad.lviv.ua",
-  });
+  res.json(buildAiPluginManifest(`${req.protocol}://${req.host}`));
 });
 
-app.get("/.well-known/agent.json", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.host}`;
+// A2A renamed the card from agent.json to agent-card.json; serve both.
+app.get(["/.well-known/agent-card.json", "/.well-known/agent.json"], async (req, res) => {
   setStaticAssetCache(res);
-  res.json({
-    name: "Lviv Public Transport",
-    description:
-      "Real-time and static public transport data for Lviv, Ukraine: stops, routes, timetables, and live vehicle positions. No API key required.",
-    url: baseUrl,
-    version: pkg.version,
-    iconUrl: `${baseUrl}/favicon.png`,
-    documentationUrl: `${baseUrl}/llms.txt`,
-    capabilities: {
-      streaming: false,
-      pushNotifications: false,
-      stateTransitionHistory: false,
-    },
-    defaultInputModes: ["text/plain", "application/json"],
-    defaultOutputModes: ["application/json"],
-    skills: [
-      {
-        id: "get_stop_realtime",
-        name: "Get Stop Realtime",
-        description:
-          "Live arrivals and vehicle positions at a stop by numeric stop code (e.g. 707).",
-        tags: ["transit", "realtime", "arrivals", "lviv"],
-        inputModes: ["text/plain"],
-        outputModes: ["application/json"],
-        examples: ["What buses are arriving at stop 707?", "Live arrivals for stop 1234"],
-      },
-      {
-        id: "get_route_static",
-        name: "Get Route Static",
-        description:
-          "Route metadata, stop lists, departure times, and polylines for both directions.",
-        tags: ["transit", "route", "timetable", "lviv"],
-        inputModes: ["text/plain"],
-        outputModes: ["application/json"],
-        examples: ["Show me route T30 stops", "Route 32A schedule"],
-      },
-      {
-        id: "get_route_realtime",
-        name: "Get Route Realtime",
-        description: "Live vehicle positions for all vehicles currently running on a route.",
-        tags: ["transit", "realtime", "vehicles", "lviv"],
-        inputModes: ["text/plain"],
-        outputModes: ["application/json"],
-        examples: ["Where are all tram 6 vehicles right now?"],
-      },
-      {
-        id: "get_stops_around_location",
-        name: "Get Stops Around Location",
-        description: "Discover transit stops near a given latitude/longitude within a radius.",
-        tags: ["transit", "location", "stops", "lviv"],
-        inputModes: ["text/plain", "application/json"],
-        outputModes: ["application/json"],
-        examples: ["Find stops near 49.84, 24.03", "Stops within 300m of my location"],
-      },
-      {
-        id: "get_stop_geometry",
-        name: "Get Stop Geometry",
-        description:
-          "Static map context for a stop: stop marker and route polylines for all serving routes.",
-        tags: ["transit", "geometry", "map", "lviv"],
-        inputModes: ["text/plain"],
-        outputModes: ["application/json"],
-        examples: ["Get map data for stop 707"],
-      },
-      {
-        id: "get_nearby_vehicles",
-        name: "Get Nearby Vehicles",
-        description:
-          "Live positions for all transit vehicles within 1 km of a given latitude/longitude.",
-        tags: ["transit", "realtime", "vehicles", "location", "lviv"],
-        inputModes: ["text/plain", "application/json"],
-        outputModes: ["application/json"],
-        examples: ["What transport is near 49.84, 24.03?", "Live vehicles around me"],
-      },
-      {
-        id: "get_vehicle_info",
-        name: "Get Vehicle Info",
-        description:
-          "Full details for one vehicle by ID: position, bearing, route, license plate, and upcoming stops.",
-        tags: ["transit", "realtime", "vehicle", "tracking", "lviv"],
-        inputModes: ["text/plain"],
-        outputModes: ["application/json"],
-        examples: ["Track vehicle 12345", "Where is vehicle 12345 heading?"],
-      },
-      {
-        id: "get_disruptions",
-        name: "Get Disruptions",
-        description:
-          "Announced closures, detours and moved stops in force today, optionally for one route or stop.",
-        tags: ["transit", "disruptions", "detours", "road-works", "lviv"],
-        inputModes: ["text/plain"],
-        outputModes: ["application/json"],
-        examples: ["Is bus А34 on a detour?", "Which routes are affected by road works?"],
-      },
-    ],
-    authentication: { schemes: [] },
-    provider: {
-      organization: "lad.lviv.ua",
-      url: "https://lad.lviv.ua",
-    },
-    mcpEndpoint: `${baseUrl}/mcp`,
-    mcpServerCard: `${baseUrl}/.well-known/mcp/server-card.json`,
-    openApiUrl: `${baseUrl}/openapi.yaml`,
-  });
+  res.json(buildAgentCard(`${req.protocol}://${req.host}`, await mcpManifest()));
 });
 
 app.get("/llms.txt", (req, res) => {
   setStaticAssetCache(res);
   res.type("text/plain");
   res.sendFile(path.join(__dirname, "llms.txt"));
+});
+
+app.get("/llms-full.txt", async (req, res) => {
+  setStaticAssetCache(res);
+  res.type("text/plain").send(buildLlmsFullTxt(`${req.protocol}://${req.host}`, await mcpManifest()));
 });
 
 app.get("/INTEGRATION.md", (req, res) => {
@@ -403,13 +301,18 @@ app.get("/.well-known/oauth-protected-resource", (req, res) => {
   });
 });
 
-app.get("/.well-known/mcp/server-card.json", (req, res) => {
+app.get("/.well-known/mcp/server-card.json", async (req, res) => {
   const baseUrl = `${req.protocol}://${req.host}`;
   // The card carries pkg.version, so a code push has to be able to purge it;
   // without the "long" tag the DropCache step in cloudbuild.yaml could not
   // reach it and clients kept a stale version for a day.
   setStaticAssetCache(res);
-  res.json(buildMcpServerCard(baseUrl));
+  res.json(buildMcpServerCard(baseUrl, await mcpManifest()));
+});
+
+// Other paths discovery proposals and crawlers try for the same card.
+app.get(["/.well-known/mcp", "/.well-known/mcp.json"], (req, res) => {
+  res.redirect(301, "/.well-known/mcp/server-card.json");
 });
 
 app.get("/mcp-icon.svg", (req, res) => {
@@ -421,16 +324,8 @@ app.get("/mcp-icon.svg", (req, res) => {
 });
 
 app.get("/robots.txt", (req, res) => {
-  const baseUrl = `${req.protocol}://${req.host}`;
-  const lines = [
-    "User-agent: *",
-    "Disallow: /private/",
-    "",
-    "# Non-standard hint for AI agent discovery:",
-    `# mcp-server: ${baseUrl}/.well-known/mcp/server-card.json`,
-  ];
   setStaticAssetCache(res);
-  res.type("text/plain").send(lines.join("\n"));
+  res.type("text/plain").send(buildRobotsTxt(`${req.protocol}://${req.host}`));
 });
 
 app.get("/last-modified.txt", (req, res, next) => {
@@ -445,6 +340,12 @@ app.get("/last-modified.txt", (req, res, next) => {
 app.get("/favicon.ico", (req, res, next) => {
   setStaticAssetCache(res, 3600 * 24 * 31);
   res.sendFile(path.join(__dirname, "favicon.ico"));
+});
+
+// The plugin manifest and agent card point their logo here.
+app.get("/favicon.png", (req, res, next) => {
+  setStaticAssetCache(res, 3600 * 24 * 31);
+  res.sendFile(path.join(__dirname, "favicon.png"));
 });
 
 // Applies the per-stop route overrides to the /stops listing in the browser.

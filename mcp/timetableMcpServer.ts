@@ -4,8 +4,18 @@ import pkg from "../package.json" with { type: "json" };
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { McpError, PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { LATEST_PROTOCOL_VERSION, ListToolsRequestSchema, McpError, PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  CallToolResult,
+  ListToolsResult,
+  Prompt,
+  Resource,
+  ResourceTemplate as ResourceTemplateInfo,
+  ServerCapabilities,
+  Tool,
+} from "@modelcontextprotocol/sdk/types.js";
 import type { NextFunction, Request, Response } from "express";
 
 import getSingleStopAction from "../actions/getSingleStopAction.ts";
@@ -19,6 +29,8 @@ import {
   etasForVehicles,
   findRoutesBetween,
   listRouteNames,
+  listRoutes,
+  listStopCodes,
   PASSED_GRACE_MS,
   POINT_WALK_RADIUS_METERS,
   resolveRoute,
@@ -31,19 +43,26 @@ import type { DisruptionFilter } from "../services/disruptionService.ts";
 import { distanceMeters, formatRouteName } from "../utils/appHelpers.ts";
 import type { ScheduleByDayType } from "../utils/stopScheduleByDayType.ts";
 
+// openWorldHint: answers come from the city's live GTFS-RT feeds, which
+// change between calls, not from a closed set this server owns.
 const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
   idempotentHint: true,
-  openWorldHint: false,
+  openWorldHint: true,
 };
 
-/** Exposed in MCP `initialize` and in `/.well-known/mcp/server-card.json` (Smithery, client UIs). */
-const MCP_SERVER_INFO = {
-  name: "com.lad.lviv/timetable-api",
-  title: "Lviv Timetable MCP",
+/**
+ * Exposed in MCP `initialize` and in `/.well-known/mcp/server-card.json` (Smithery, client UIs).
+ * `name` and `title` match server.json, the official registry entry: clients
+ * and registries match servers by name, and two names made one server look
+ * like two.
+ */
+export const MCP_SERVER_INFO = {
+  name: "io.github.vbhjckfd/timetable-api-node",
+  title: "Lviv Public Transport",
   version: pkg.version,
   description:
-    "Read-only access to Lviv, Ukraine public transport: stops, routes, static shapes, live vehicle positions, and terminus timetables. Sourced from municipal GTFS and GTFS-RT. No API key, OAuth, or user configuration is required.",
+    "Read-only access to Lviv, Ukraine public transport: live stop arrivals, trip planning (direct or one transfer), stop search by name or location, route stops and timetables, live vehicle positions and headways, and announced detours and closures. Sourced from municipal GTFS and GTFS-RT. No API key, OAuth, or user configuration is required.",
   websiteUrl: "https://lad.lviv.ua",
 };
 
@@ -959,7 +978,7 @@ function formatToolResult(
 }
 
 const MCP_RESOURCES = {
-  about: `# Lviv Timetable MCP
+  about: `# Lviv Public Transport MCP
 
 Read-only access to **public** timetable and live vehicle data for municipal transit in **Lviv, Ukraine** (lad.lviv.ua ecosystem). No authentication required.
 
@@ -968,7 +987,7 @@ ${TRANSIT_ASSISTANT_GUIDANCE}
 
 - Prefer **tools** for live structured data.
 - Use **prompts** (\`plan-trip\`, \`route-status\`, \`transit-map-view\`, \`transit-arrival-list\`, \`transit-hybrid-view\`) for ready-made workflows.
-- Use **resources** (\`timetable://about\`, \`timetable://reference/tools\`, \`timetable://reference/prompts\`) for reference without calling tools.
+- Use **resources** (\`timetable://about\`, \`timetable://reference/tools\`, \`timetable://reference/prompts\`, \`timetable://routes\`) for reference without calling tools.
 - Use **resource templates** (\`timetable://stop/{code}\`, \`timetable://route/{name}\`) to read static stop or route info directly.
 `,
 
@@ -1018,20 +1037,41 @@ const foldRouteInput = (value: unknown): string =>
     .toUpperCase()
     .replace(/[ATH]/g, (c) => LATIN_TO_CYRILLIC[c]);
 
+/** The most values a completion result may carry. */
+const MAX_COMPLETIONS = 100;
+
 /**
  * Route names starting with what was typed, Latin or Cyrillic prefix alike,
- * with or without the leading zero ("a1" → "А01", "т3" → "Т30"). Capped at
- * the 100 values a completion result may carry.
+ * with or without the leading zero ("a1" → "А01", "т3" → "Т30"). Bare digits
+ * match the number alone, since riders say "32" rather than "А32".
  */
 export function completeRouteName(value: string): string[] {
   const typed = foldRouteInput(value);
   const unpadded = (name: string) => name.replace(/^(\D+)0+(?=\d)/u, "$1");
+  const number = (name: string) => name.replace(/^\D+0*/u, "");
+  const digitsOnly = /^\d+$/.test(typed);
   return listRouteNames()
     .filter((name) => {
       const upper = name.toUpperCase();
-      return upper.startsWith(typed) || unpadded(upper).startsWith(typed);
+      return upper.startsWith(typed) || unpadded(upper).startsWith(typed) || (digitsOnly && number(upper).startsWith(typed));
     })
-    .slice(0, 100);
+    .slice(0, MAX_COMPLETIONS);
+}
+
+/** Stop codes for what was typed: a code prefix, or else a stop name. */
+export function completeStopId(value: unknown): string[] {
+  const typed = String(value ?? "").trim();
+  if (/^\d*$/.test(typed)) {
+    return listStopCodes().map(String).filter((code) => code.startsWith(typed)).slice(0, MAX_COMPLETIONS);
+  }
+  return typed.length >= 2 ? searchStops(typed, MAX_COMPLETIONS).map((s) => String(s.code)) : [];
+}
+
+/** Distinct stop names for what was typed, for arguments that take a place by name. */
+export function completeStopName(value: string): string[] {
+  const typed = String(value ?? "").trim();
+  if (typed.length < 2) return [];
+  return [...new Set(searchStops(typed, MAX_COMPLETIONS).map((s) => s.name))];
 }
 
 /** Bodies of the REST actions the tools wrap, as far as the tools read them. */
@@ -1100,7 +1140,7 @@ function registerResources(server: McpServer): void {
     "about",
     "timetable://about",
     {
-      title: "About Lviv Timetable MCP",
+      title: "About Lviv Public Transport MCP",
       description: "Scope, usage, and data caveats for this server.",
       mimeType: "text/markdown",
     },
@@ -1135,11 +1175,25 @@ function registerResources(server: McpServer): void {
     }),
   );
 
+  server.registerResource(
+    "routes",
+    "timetable://routes",
+    {
+      title: "All routes",
+      description: "Every route's short name, long name, vehicle type and the terminus of each direction. Names here are what the route tools take.",
+      mimeType: "application/json",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(listRoutes()) }],
+    }),
+  );
+
   // Resource templates: stop and route static data with URI-based completions
   server.registerResource(
     "stop-template",
     new ResourceTemplate("timetable://stop/{code}", {
       list: undefined,
+      complete: { code: completeStopId },
     }),
     {
       title: "Stop static info",
@@ -2009,7 +2063,7 @@ function registerPrompts(server: McpServer): void {
       description:
         "Render live vehicles on map for a stop.",
       argsSchema: {
-        stop_id: zStopId(),
+        stop_id: completable(zStopId(), completeStopId),
       },
     },
     ({ stop_id }) => ({
@@ -2043,7 +2097,7 @@ function registerPrompts(server: McpServer): void {
       description:
         "Render upcoming arrivals list for a stop.",
       argsSchema: {
-        stop_id: zStopId(),
+        stop_id: completable(zStopId(), completeStopId),
       },
     },
     ({ stop_id }) => ({
@@ -2079,7 +2133,7 @@ function registerPrompts(server: McpServer): void {
       description:
         "Render map and arrival list together with synchronized ETA values.",
       argsSchema: {
-        stop_id: zStopId(),
+        stop_id: completable(zStopId(), completeStopId),
       },
     },
     ({ stop_id }) => ({
@@ -2120,8 +2174,8 @@ function registerWorkflowPrompts(server: McpServer): void {
       title: "Plan a Trip",
       description: "Find routes (direct or with one transfer) between two places in Lviv, the next live departures and when to leave.",
       argsSchema: {
-        from: z.string().min(1).describe("Where the trip starts: stop name, landmark, numeric stop ID, or \"lat,lng\"."),
-        to: z.string().min(1).describe("Where the trip ends: stop name, landmark, numeric stop ID, or \"lat,lng\"."),
+        from: completable(z.string().min(1).describe("Where the trip starts: stop name, landmark, numeric stop ID, or \"lat,lng\"."), completeStopName),
+        to: completable(z.string().min(1).describe("Where the trip ends: stop name, landmark, numeric stop ID, or \"lat,lng\"."), completeStopName),
         arrive_by: z.string().optional().describe("Optional: \"HH:MM\" (Lviv time) the rider has to be there by."),
       },
     },
@@ -2172,6 +2226,61 @@ function registerWorkflowPrompts(server: McpServer): void {
   );
 }
 
+/** Zod's bounds for a plain `.int()`: the safe-integer range, which says nothing a reader needs. */
+const SAFE_INT_BOUNDS = new Set([Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER]);
+
+/**
+ * Strips what zod's JSON Schema output adds without telling a client anything:
+ * the root `$schema`, safe-integer bounds on every int, `anyOf` with a null
+ * branch where a type list says the same, and, in output schemas,
+ * `additionalProperties: false`. Every tools/list lands in a model's context,
+ * and these made up a large share of it.
+ */
+export function compactJsonSchema(schema: unknown, { output = false } = {}): unknown {
+  const walk = (node: unknown, root: boolean): unknown => {
+    if (Array.isArray(node)) return node.map((n) => walk(n, false));
+    if (node === null || typeof node !== "object") return node;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (root && key === "$schema") continue;
+      if ((key === "minimum" || key === "maximum") && SAFE_INT_BOUNDS.has(value as number)) continue;
+      if (output && key === "additionalProperties" && value === false) continue;
+      out[key] = walk(value, false);
+    }
+    const branches = out.anyOf;
+    if (Array.isArray(branches) && branches.length === 2) {
+      const nullIndex = branches.findIndex((b) => (b as { type?: unknown })?.type === "null" && Object.keys(b as object).length === 1);
+      const other = branches[1 - nullIndex] as Record<string, unknown> | undefined;
+      if (nullIndex !== -1 && other && typeof other.type === "string") {
+        delete out.anyOf;
+        Object.assign(out, other, { type: [other.type, "null"] });
+      }
+    }
+    return out;
+  };
+  return walk(schema, true);
+}
+
+/** Wraps the SDK's tools/list handler so the schemas it publishes go out compacted. */
+function compactToolList(server: McpServer): void {
+  // The SDK installs its tools/list handler on the first registerTool and
+  // exposes no hook on its output, so wrap the installed one.
+  const handlers = (server.server as unknown as { _requestHandlers: Map<string, (req: unknown, extra: unknown) => Promise<ListToolsResult>> })._requestHandlers;
+  const original = handlers.get("tools/list");
+  if (!original) return;
+  server.server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
+    const result = await original(request, extra);
+    return {
+      ...result,
+      tools: result.tools.map((tool) => ({
+        ...tool,
+        inputSchema: compactJsonSchema(tool.inputSchema) as Tool["inputSchema"],
+        ...(tool.outputSchema ? { outputSchema: compactJsonSchema(tool.outputSchema, { output: true }) as Tool["outputSchema"] } : {}),
+      })),
+    };
+  });
+}
+
 export function createTimetableMcpServer(): McpServer {
   const server = new McpServer(
     mcpServerImplementation(),
@@ -2187,7 +2296,69 @@ export function createTimetableMcpServer(): McpServer {
   registerResources(server);
   registerPrompts(server);
   registerWorkflowPrompts(server);
+  compactToolList(server);
+  // The SDK advertises listChanged for whatever it registers. Every request
+  // gets a fresh server that answers once and closes, so no list ever changes
+  // under a client and no notification is ever sent.
+  server.server.registerCapabilities({
+    tools: { listChanged: false },
+    resources: { listChanged: false },
+    prompts: { listChanged: false },
+  });
   return server;
+}
+
+/** What the server publishes over MCP, for discovery documents that describe it without a connection. */
+export interface McpManifest {
+  protocolVersion: string;
+  capabilities: ServerCapabilities;
+  instructions: string;
+  tools: Tool[];
+  prompts: Prompt[];
+  resources: Resource[];
+  resourceTemplates: ResourceTemplateInfo[];
+}
+
+let manifestPromise: Promise<McpManifest> | null = null;
+
+/**
+ * Lists the server's tools, prompts and resources over an in-memory
+ * connection, once per process: the lists only change with a code push, which
+ * restarts the instance. Read from the server itself so discovery documents
+ * cannot drift from what a client actually gets.
+ */
+export function mcpManifest(): Promise<McpManifest> {
+  manifestPromise ??= (async () => {
+    const server = createTimetableMcpServer();
+    const client = new Client({ name: "manifest", version: pkg.version });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const [{ tools }, { prompts }, { resources }, { resourceTemplates }] = await Promise.all([
+        client.listTools(),
+        client.listPrompts(),
+        client.listResources(),
+        client.listResourceTemplates(),
+      ]);
+      return {
+        protocolVersion: LATEST_PROTOCOL_VERSION,
+        capabilities: client.getServerCapabilities() ?? {},
+        instructions: client.getInstructions() ?? MCP_SERVER_INSTRUCTIONS,
+        tools,
+        prompts,
+        resources,
+        resourceTemplates,
+      };
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  })().catch((error) => {
+    manifestPromise = null;
+    throw error;
+  });
+  return manifestPromise;
 }
 
 /**
@@ -2251,10 +2422,17 @@ export async function handleMcpPostRequest(req: Request, res: Response): Promise
   }
 }
 
-export function buildMcpServerCard(baseUrl: string) {
+/**
+ * The card's shape follows the MCP server-card proposal (SEP-1649) — server
+ * identity, transport, capabilities and the full tool/prompt/resource lists —
+ * plus the fields Smithery and registries read from it. Without a manifest
+ * (tests, or before the first listing resolves) the lists are left out.
+ */
+export function buildMcpServerCard(baseUrl: string, manifest?: McpManifest) {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
   const svgIconUrl = new URL("mcp-icon.svg", `${normalizedBaseUrl}/`).href;
   const faviconUrl = new URL("favicon.ico", `${normalizedBaseUrl}/`).href;
+  const endpoint = `${normalizedBaseUrl}/mcp`;
 
   const serverInfo = {
     name: MCP_SERVER_INFO.name,
@@ -2276,20 +2454,37 @@ export function buildMcpServerCard(baseUrl: string) {
     description: serverInfo.description,
     websiteUrl: serverInfo.websiteUrl,
     homepage: serverInfo.websiteUrl,
+    repository: "https://github.com/vbhjckfd/timetable-api-node",
     iconUrl: svgIconUrl,
     icon: svgIconUrl,
     icons: serverInfo.icons,
+    transport: { type: "streamable-http", endpoint },
     remotes: [
       {
         type: "streamable-http",
-        url: `${normalizedBaseUrl}/mcp`,
+        url: endpoint,
       },
     ],
     authentication: {
       type: "none",
+      required: false,
     },
+    documentation: `${normalizedBaseUrl}/llms-full.txt`,
     registryUrl:
       "https://registry.modelcontextprotocol.io/v0/servers/io.github.vbhjckfd%2Ftimetable-api-node/versions",
     configSchema: SMITHERY_CONFIG_JSON_SCHEMA,
+    ...(manifest
+      ? {
+          protocolVersion: manifest.protocolVersion,
+          capabilities: manifest.capabilities,
+          instructions: manifest.instructions,
+          // Output schemas are left to tools/list: a card is read to decide
+          // whether to connect, and they would be most of its size.
+          tools: manifest.tools.map(({ outputSchema: _outputSchema, ...tool }) => tool),
+          prompts: manifest.prompts,
+          resources: manifest.resources,
+          resourceTemplates: manifest.resourceTemplates,
+        }
+      : {}),
   };
 }
