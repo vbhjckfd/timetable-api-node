@@ -3,8 +3,6 @@
 # Set your variables
 SERVICE_NAME="timetable-api-node"
 REGION="europe-north1"
-PROJECT_ID="timetable-252615"
-GCR_IMAGE="eu.gcr.io/$PROJECT_ID/github_vbhjckfd_timetable-api-node/$SERVICE_NAME"
 
 # 1. Get the name of the LATEST revision so we can exclude it explicitly
 LATEST_REV=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.latestCreatedRevisionName)')
@@ -27,12 +25,5 @@ for build_id in $(gcloud builds list \
         gcloud builds cancel $build_id --quiet
 done
 
-# 4. Delete untagged (old) image digests from GCR
-echo "Cleaning up untagged images in $GCR_IMAGE..."
-for digest in $(gcloud container images list-tags "$GCR_IMAGE" \
-    --format='json' \
-    --limit=unlimited \
-    | python3 -c "import json,sys; [print(i['digest']) for i in json.load(sys.stdin) if not i.get('tags')]"); do
-        echo "Deleting untagged digest: $digest"
-        gcloud container images delete "$GCR_IMAGE@$digest" --force-delete-tags --quiet
-done
+# Old images need no cleanup here: the Artifact Registry repo's cleanup policy
+# deletes versions older than 14 days, keeping the 5 most recent.

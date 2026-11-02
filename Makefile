@@ -4,9 +4,10 @@ NVM_USE := source ~/.nvm/nvm.sh && nvm use --silent
 .PHONY: start import import-slim test build deploy publish clear-short-cache clear-long-cache clear-all-cache cleanup-revisions smoke
 
 PROJECT_ID ?= timetable-252615
-IMAGE ?= eu.gcr.io/$(PROJECT_ID)/timetable-api-node-sqlite
 SERVICE_NAME ?= timetable-api-node
 REGION ?= europe-north1
+# Same image path the Cloud Build trigger pushes (minus its :branch tag).
+IMAGE ?= $(REGION)-docker.pkg.dev/$(PROJECT_ID)/timetable/$(SERVICE_NAME)
 DOCKER_PLATFORM ?= linux/amd64
 # Keep in sync with _MEMORY in cloudbuild.yaml — 256Mi OOMs at startup.
 MEMORY ?= 512Mi

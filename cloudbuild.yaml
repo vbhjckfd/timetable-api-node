@@ -34,7 +34,7 @@ steps:
       - -c
       - |
         if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
-        docker build --no-cache -t "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME" . -f Dockerfile
+        docker build --no-cache -t "$_AR_HOSTNAME/$PROJECT_ID/$_AR_REPO/$_SERVICE_NAME:$BRANCH_NAME" . -f Dockerfile
   - name: gcr.io/cloud-builders/docker
     id: Push
     entrypoint: bash
@@ -42,7 +42,7 @@ steps:
       - -c
       - |
         if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
-        docker push "$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME"
+        docker push "$_AR_HOSTNAME/$PROJECT_ID/$_AR_REPO/$_SERVICE_NAME:$BRANCH_NAME"
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: Deploy
     entrypoint: bash
@@ -52,7 +52,7 @@ steps:
         if [ -f /workspace/SKIP ]; then echo "skipped"; exit 0; fi
         gcloud run services update "$_SERVICE_NAME" \
           --platform=managed \
-          --image="$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$BRANCH_NAME" \
+          --image="$_AR_HOSTNAME/$PROJECT_ID/$_AR_REPO/$_SERVICE_NAME:$BRANCH_NAME" \
           --labels=managed-by=gcp-cloud-build-deploy-cloud-run,branch-name=$BRANCH_NAME,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS \
           --region=$_DEPLOY_REGION \
           --memory=$_MEMORY \
@@ -76,7 +76,7 @@ steps:
           curl -s --max-time 10 "https://drop-cloudflare-cache-1041251696619.us-central1.run.app?tags=long"
         fi
   # Scheduled cleanup builds (_CLEANUP=1): reclaim storage from stale Cloud Run
-  # revisions and untagged GCR digests. Runs cleanup-revisions.sh, which was
+  # revisions (old images go via the Artifact Registry cleanup policy). Runs cleanup-revisions.sh, which was
   # previously only ever invoked manually via `make cleanup-revisions`.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: Cleanup
@@ -94,7 +94,9 @@ options:
 substitutions:
   _TRIGGER_ID: 3cfc8543-fcbb-4a25-a504-60cd67484549
   _DEPLOY_REGION: europe-north1
-  _GCR_HOSTNAME: eu.gcr.io
+  # Artifact Registry in the service's region, so image pulls stay in europe-north1.
+  _AR_HOSTNAME: europe-north1-docker.pkg.dev
+  _AR_REPO: timetable
   _PLATFORM: managed
   _SERVICE_NAME: timetable-api-node
   _LABELS: gcb-trigger-id=3cfc8543-fcbb-4a25-a504-60cd67484549
