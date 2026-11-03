@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeDisruptions, kyivDate, parseDisruptions, servedFilter } from "../../services/disruptionService.js";
+import { activeDisruptions, kyivDate, parseDisruptions, pathCrossesArea, servedFilter, tripDisruptions } from "../../services/disruptionService.js";
 import raw from "../../data/disruptions.json" with { type: "json" };
 
 const entry = (over = {}) => ({
@@ -106,5 +106,40 @@ describe("servedFilter", () => {
     expect(served("А01", 606)).toBe(true);
     // A moved stop is still served.
     expect(served("А01", 505)).toBe(true);
+  });
+});
+
+describe("tripDisruptions", () => {
+  // Мазепи between Орлика and Інструментальна, as in data/disruptions.json.
+  const area = { lat: 49.8698, lng: 24.0305, radius_meters: 220 };
+  const now = new Date("2026-11-03T12:00:00+02:00");
+  const entries = parseDisruptions([entry({ id: "mazepy", routes: ["А84"], area })]);
+  // Магнус → Епіцентр: the southern end of А84, far from Мазепи.
+  const south = [[49.84394, 24.0241], [49.83613, 23.99916], [49.82445, 23.91027]];
+  // Мазепи → Орлика: the closed stretch lies between the two stops.
+  const north = [[49.86935, 24.02502], [49.87063, 24.03257]];
+
+  it("attaches an area entry only to a leg riding through the area", () => {
+    expect(tripDisruptions([{ route: "А84", ride_path: south }], [], now, entries)).toEqual([]);
+    expect(tripDisruptions([{ route: "A84", ride_path: north }], [], now, entries).map((d) => d.id)).toEqual(["mazepy"]);
+  });
+
+  it("matches by route alone without an area, or when a leg has no path", () => {
+    const routeWide = parseDisruptions([entry({ id: "wide", routes: ["А84"] })]);
+    expect(tripDisruptions([{ route: "А84", ride_path: south }], [], now, routeWide)).toHaveLength(1);
+    expect(tripDisruptions([{ route: "А84" }], [], now, entries)).toHaveLength(1);
+    expect(tripDisruptions([{ route: "А12", ride_path: north }], [], now, entries)).toEqual([]);
+  });
+
+  it("still attaches an entry by the trip's stops", () => {
+    const atStop = parseDisruptions([entry({ id: "moved", kind: "stop_moved", routes: [], stops: [707] })]);
+    expect(tripDisruptions([], [707], now, atStop)).toHaveLength(1);
+    expect(tripDisruptions([], [708], now, atStop)).toEqual([]);
+  });
+
+  it("finds a segment passing the area even when no stop lies inside it", () => {
+    const wide = [[49.8698, 24.02], [49.8698, 24.04]];
+    expect(pathCrossesArea(wide, area)).toBe(true);
+    expect(pathCrossesArea([[49.8698, 24.02]], area)).toBe(false);
   });
 });

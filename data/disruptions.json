@@ -25,6 +25,7 @@
     "detour": {
       "via": ["вул. П. Орлика", "вул. Тичини", "вул. Хвильового", "вул. Інструментальна"]
     },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
     "note": "В обох напрямках, далі за звичною схемою.",
     "source": "ZAXID.NET",
     "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
@@ -40,6 +41,7 @@
     "detour": {
       "via": ["вул. Хвильового", "вул. Інструментальна"]
     },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
     "note": "В обох напрямках, далі за звичною схемою.",
     "source": "ZAXID.NET",
     "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"

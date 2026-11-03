@@ -31,6 +31,12 @@ export const zDisruptionEntry = z.object({
     })
     .nullable()
     .default(null),
+  // Where the entry applies: the stretch a detour replaces. Trip planning
+  // attaches an entry with an area only to a ride that passes through it.
+  area: z
+    .object({ lat: z.number(), lng: z.number(), radius_meters: z.number().positive() })
+    .nullable()
+    .default(null),
   note: z.string().nullable().default(null),
   source: z.string().nullable().default(null),
   url: z.url().nullable().default(null),
@@ -144,4 +150,61 @@ export function servedFilter(
     const id = ids.get(routeName)!;
     return !suspended.has(id) && !closedTo.get(id)?.has(stopCode);
   };
+}
+
+type Area = NonNullable<DisruptionEntry["area"]>;
+
+/** Whether a path of [lat, lng] points comes within the area: a vertex or any segment between two. */
+export function pathCrossesArea(path: [number, number][], area: Area): boolean {
+  // Flat metres around the centre: areas span a street or two, so the error is nil.
+  const ky = 111_320;
+  const kx = ky * Math.cos((area.lat * Math.PI) / 180);
+  const pts = path.map(([lat, lng]) => [(lng - area.lng) * kx, (lat - area.lat) * ky]);
+  const r2 = area.radius_meters ** 2;
+  return pts.some(([x, y], i) => {
+    if (x * x + y * y <= r2) return true;
+    if (i === 0) return false;
+    const [px, py] = pts[i - 1];
+    const dx = x - px;
+    const dy = y - py;
+    const len2 = dx * dx + dy * dy;
+    if (!len2) return false;
+    const t = Math.max(0, Math.min(1, -(px * dx + py * dy) / len2));
+    const cx = px + t * dx;
+    const cy = py + t * dy;
+    return cx * cx + cy * cy <= r2;
+  });
+}
+
+/** A leg of a planned trip: its route and the stops it rides, board to alight, as [lat, lng]. */
+export interface RiddenLeg {
+  route: string;
+  ride_path?: [number, number][];
+}
+
+/**
+ * Entries in force today that a planned trip runs into. By stop, as
+ * activeDisruptions; by route only when the leg rides through the entry's
+ * area, if it has one. А84 is detoured off Мазепи on its northern end, so a
+ * ride from the centre to Рудно on it must not carry that detour.
+ */
+export function tripDisruptions(
+  legs: RiddenLeg[],
+  stops: Iterable<number>,
+  now: Date = new Date(),
+  entries: Disruption[] = ALL,
+): Disruption[] {
+  const stopSet = new Set(stops);
+  const ridden = legs.map((l) => ({ id: toRoute(l.route).id, path: l.ride_path }));
+  return activeDisruptions(undefined, now, entries).filter(
+    (e) =>
+      e.stops.some((s) => stopSet.has(s)) ||
+      (e.detour?.skipped_stops ?? []).some((s) => stopSet.has(s)) ||
+      ridden.some(
+        (l) =>
+          e.routes.some((r) => r.id === l.id) &&
+          // A leg with no path cannot be placed: tell the rider rather than hide it.
+          (!e.area || !l.path?.length || pathCrossesArea(l.path, e.area)),
+      ),
+  );
 }

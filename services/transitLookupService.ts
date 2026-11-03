@@ -339,6 +339,8 @@ export interface TripLeg {
   board_stop: StopSummary;
   alight_stop: StopSummary;
   stops_count: number;
+  /** The stops ridden, board to alight, as [lat, lng]: for disruptions on the way. Not sent to clients. */
+  ride_path: [number, number][];
 }
 
 export interface DirectOption extends TripLeg {
@@ -570,6 +572,8 @@ export function findRoutesBetween(fromEnd: TripEnd, toEnd: TripEnd, served?: Ser
   const dirs = routeDirections(served);
   const stopsByCode = new Map(stops().find({}).map((s) => [s.code, s]));
   const stopOut = (code: number) => stopSummary(stopsByCode.get(code)!);
+  const ridePath = (codes: number[]) =>
+    codes.map((code) => stopsByCode.get(code)!.location.coordinates as [number, number]);
 
   const cost = (o: {
     stops_count: number;
@@ -587,6 +591,7 @@ export function findRoutesBetween(fromEnd: TripEnd, toEnd: TripEnd, served?: Ser
       walk_from_alight_meters: number;
       board: NearbyStop;
       alight: NearbyStop;
+      ride: number[];
     } | null = null;
     for (let i = 0; i < seq.length - 1; i++) {
       const board = from.nearby.get(seq[i]);
@@ -600,6 +605,7 @@ export function findRoutesBetween(fromEnd: TripEnd, toEnd: TripEnd, served?: Ser
           walk_from_alight_meters: alight.walk,
           board,
           alight,
+          ride: seq.slice(i, j + 1),
         };
         if (!best || cost(option) < cost(best)) best = option;
       }
@@ -617,6 +623,7 @@ export function findRoutesBetween(fromEnd: TripEnd, toEnd: TripEnd, served?: Ser
       stops_count: best.stops_count,
       walk_to_board_meters: best.walk_to_board_meters,
       walk_from_alight_meters: best.walk_from_alight_meters,
+      ride_path: ridePath(best.ride),
     });
   }
 
@@ -654,6 +661,7 @@ export function findRoutesBetween(fromEnd: TripEnd, toEnd: TripEnd, served?: Ser
     board_stop: stopOut(board.code),
     alight_stop: stopOut(alight.code),
     stops_count,
+    ride_path: ridePath(dir.seq.slice(board.index, alight.index + 1)),
   });
 
   const bestDirect = options.length ? cost(options[0]) : Infinity;

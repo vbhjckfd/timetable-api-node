@@ -38,7 +38,7 @@ import {
 } from "../services/transitLookupService.ts";
 import type { RoutesBetween, StopEta, StopSummary, TransferOption, TripEnd, TripLeg } from "../services/transitLookupService.ts";
 import { parseTripTime, scheduledHeadway, scheduleTrip } from "../services/tripScheduleService.ts";
-import { activeDisruptions, servedFilter } from "../services/disruptionService.ts";
+import { activeDisruptions, servedFilter, tripDisruptions } from "../services/disruptionService.ts";
 import type { DisruptionFilter } from "../services/disruptionService.ts";
 import { distanceMeters, formatRouteName } from "../utils/appHelpers.ts";
 import type { ScheduleByDayType } from "../utils/stopScheduleByDayType.ts";
@@ -206,6 +206,7 @@ const zDisruption = z.object({
   stops: z.array(z.number().int()),
   alternatives: z.array(zDisruptionRoute),
   detour: z.object({ via: z.array(z.string()), skipped_stops: z.array(z.number().int()) }).nullable(),
+  area: z.object({ lat: z.number(), lng: z.number(), radius_meters: z.number() }).nullable(),
   note: z.string().nullable(),
   source: z.string().nullable(),
   url: z.string().nullable(),
@@ -1293,6 +1294,12 @@ function disruptionsField(filter: DisruptionFilter): { disruptions?: DisruptionO
   return list.length ? { disruptions: list } : {};
 }
 
+/** As disruptionsField, but a route's entry only when a leg rides through where it applies. */
+function tripDisruptionsField(legs: TripLeg[], stops: number[]): { disruptions?: DisruptionOut[] } {
+  const list = tripDisruptions(legs, stops);
+  return list.length ? { disruptions: list } : {};
+}
+
 /** RFC 1123 from the REST action → ISO 8601, like every other timestamp in these tools. */
 const toIsoOrNull = (value: string | null | undefined): string | null => {
   const ms = Date.parse(value ?? "");
@@ -1626,10 +1633,10 @@ function registerTools(server: McpServer): void {
           transfer_options: transfers,
           map_stops: bestTripStops(result.options[0], transferOptions[0]),
           ...(result.walk_meters != null ? { walk_meters: result.walk_meters } : {}),
-          ...disruptionsField({
-            routes: [...result.options, ...transferOptions.flatMap((t) => t.legs)].map((l) => l.route),
-            stops: [...result.from.codes, ...result.to.codes],
-          }),
+          ...tripDisruptionsField(
+            [...result.options, ...transferOptions.flatMap((t) => t.legs)],
+            [...result.from.codes, ...result.to.codes],
+          ),
           updated_at: new Date().toISOString(),
         });
       });

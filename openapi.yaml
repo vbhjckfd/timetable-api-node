@@ -888,6 +888,17 @@ components:
               type: array
               items:
                 type: integer
+        area:
+          type: object
+          nullable: true
+          description: Where the entry applies, e.g. the stretch a detour replaces. Trip planning attaches it only to a ride passing through.
+          properties:
+            lat:
+              type: number
+            lng:
+              type: number
+            radius_meters:
+              type: number
         note:
           type: string
           nullable: true

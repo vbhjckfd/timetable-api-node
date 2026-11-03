@@ -278,6 +278,7 @@ const MOCK_DISRUPTION = {
   stops: [],
   alternatives: [],
   detour: { via: ["вул. Обхідна"], skipped_stops: [1234] },
+  area: null,
   note: null,
   source: "Test",
   url: null,
@@ -291,6 +292,9 @@ vi.mock("../../services/disruptionService.js", () => ({
     const stops = [...(filter.stops ?? [])];
     return routes.includes("T30") || stops.includes(1234) ? [MOCK_DISRUPTION] : [];
   }),
+  tripDisruptions: vi.fn((legs, stops) =>
+    legs.some((l) => String(l.route).replace("Т", "T") === "T30") || [...stops].includes(1234) ? [MOCK_DISRUPTION] : [],
+  ),
   servedFilter: vi.fn(() => () => true),
 }));
 
