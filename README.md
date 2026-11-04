@@ -101,7 +101,7 @@ gcloud run services update timetable-api-node --region=europe-north1 --project=t
 
 ## MCP Server
 
-This service exposes a public read-only MCP endpoint over Streamable HTTP.
+This service exposes a public read-only MCP endpoint over Streamable HTTP. It speaks MCP revision **2026-07-28** (stateless: `server/discover`, a per-request `_meta` envelope, cacheable list results) and still serves 2025-era clients that open with `initialize` (2025-11-25 back to 2024-11-05).
 
 - MCP endpoint: `/mcp`
 - Server card: `/.well-known/mcp/server-card.json`
@@ -142,7 +142,7 @@ graph LR;
 <details>
 <summary><strong>Postman / curl: call a tool on production</strong></summary>
 
-`POST https://api.lad.lviv.ua/mcp` with `Content-Type: application/json` **and** `Accept: application/json, text/event-stream` — the Streamable HTTP transport rejects a request that does not accept both. The server is stateless: there is no session, so `tools/call` works on its own without an `initialize` first. The response arrives as a single SSE `event: message` frame carrying the JSON-RPC result.
+`POST https://api.lad.lviv.ua/mcp` with `Content-Type: application/json` **and** `Accept: application/json, text/event-stream` — the Streamable HTTP transport rejects a request that does not accept both. The server is stateless: there is no session, so `tools/call` works on its own without an `initialize` first. The response arrives as a single SSE `event: message` frame carrying the JSON-RPC result. This is the 2025-era request shape; a 2026-07-28 request also sends `MCP-Protocol-Version: 2026-07-28` and `Mcp-Method` headers, plus `io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities` in `params._meta`.
 
 ```bash
 curl -s https://api.lad.lviv.ua/mcp \
@@ -464,7 +464,7 @@ In addition to tools, the server exposes MCP **resources** for reference data th
 | `timetable://stop/{code}` | Static info for a stop by numeric code — name, coordinates, serving routes (JSON) |
 | `timetable://route/{name}` | Static metadata for a route by short name — color, type, stop counts (JSON) |
 
-`{name}` in `timetable://route/{name}` supports `completion/complete` ("t3" → "Т30", "a1" → "А01"). Unknown stops or routes fail with JSON-RPC error `-32002` (resource not found).
+`{name}` in `timetable://route/{name}` supports `completion/complete` ("t3" → "Т30", "a1" → "А01"). Unknown stops or routes fail with JSON-RPC error `-32602` and `data.uri` (resource not found, per MCP 2026-07-28).
 
 ### Security model
 

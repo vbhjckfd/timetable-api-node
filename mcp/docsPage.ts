@@ -1,4 +1,4 @@
-import type { Prompt, Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { Prompt, Tool } from "@modelcontextprotocol/server";
 
 import { buildMcpServerCard, mcpManifest } from "./timetableMcpServer.ts";
 

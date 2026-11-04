@@ -1,21 +1,28 @@
 import * as metrics from "../utils/metrics.ts";
 import * as z from "zod/v4";
 import pkg from "../package.json" with { type: "json" };
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { LATEST_PROTOCOL_VERSION, ListToolsRequestSchema, McpError, PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { Client } from "@modelcontextprotocol/client";
+import { NodeStreamableHTTPServerTransport, toNodeHandler, toWebRequest } from "@modelcontextprotocol/node";
+import {
+  McpServer,
+  ResourceNotFoundError,
+  ResourceTemplate,
+  completable,
+  createMcpHandler,
+  InMemoryTransport,
+  isLegacyRequest,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
   ListToolsResult,
   Prompt,
   Resource,
-  ResourceTemplate as ResourceTemplateInfo,
+  ResourceTemplateType as ResourceTemplateInfo,
   ServerCapabilities,
+  ServerContext,
   Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/server";
 import type { NextFunction, Request, Response } from "express";
 
 import getSingleStopAction from "../actions/getSingleStopAction.ts";
@@ -1023,11 +1030,8 @@ Prompts are reusable instruction templates. Pass the listed **arguments** when i
 `,
 };
 
-/** JSON-RPC code MCP assigns to "resource not found". */
-const RESOURCE_NOT_FOUND = -32002;
-
-const resourceNotFound = (uri: URL, what: string) =>
-  new McpError(RESOURCE_NOT_FOUND, `${what} not found`, { uri: uri.href });
+/** -32602 with `{ uri }` data: the 2026-07-28 code, and what v1.x SDKs sent on earlier revisions. */
+const resourceNotFound = (uri: URL, what: string) => new ResourceNotFoundError(uri.href, `${what} not found`);
 
 /** Latin look-alikes riders type for the Cyrillic route prefixes. */
 const LATIN_TO_CYRILLIC: Record<string, string> = { A: "А", T: "Т", H: "Н" };
@@ -1438,10 +1442,10 @@ function registerTools(server: McpServer): void {
         "Use this as the **default tool** when the user asks about arrivals, departures, or the next bus/tram at a specific stop. " +
         "Requires a numeric stop ID (shown on stop signage); use `search_stops` when you have a stop name, or `get_stops_around_location` when you have coordinates.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         stop_id: zStopId(),
         lowfloor_only: zLowfloorOnly("arrivals"),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_stop_realtime,
     },
     async ({ stop_id, lowfloor_only }) => {
@@ -1486,10 +1490,10 @@ function registerTools(server: McpServer): void {
         "One name usually covers both sides of the street under different IDs; each is returned, and the `routes` list tells them apart. " +
         "Use `get_stops_around_location` instead when you have coordinates rather than a name.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().trim().min(2).describe("Stop name or part of it, e.g. \"Ринок\", \"opera\", \"Стрийська\"."),
         limit: z.number().int().min(1).max(25).optional().describe("Maximum stops to return (1–25, default 10)."),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.search_stops,
     },
     async ({ query, limit }) => {
@@ -1528,7 +1532,7 @@ function registerTools(server: McpServer): void {
         "`walk_meters` is set when the two ends are within a 300 m walk of each other: no ride is searched then, so tell the user to walk. Otherwise both lists empty means the trip needs two or more transfers. " +
         "Get stop IDs with `search_stops` or `get_stops_around_location`.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         from_stop_id: zStopId().optional().describe("Stop ID where the trip starts. Give this or `from_lat` + `from_lng`."),
         from_lat: zLatitude("start point").optional(),
         from_lng: zLongitude("start point").optional(),
@@ -1543,7 +1547,7 @@ function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe("Arrive by this time: \"HH:MM\" Lviv time today, or ISO 8601. Not together with `depart_at`."),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.find_routes_between,
     },
     async (args) => {
@@ -1654,13 +1658,13 @@ function registerTools(server: McpServer): void {
         "Do NOT use this for live vehicle positions — use `get_route_realtime` instead. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         route_name: zRouteName(),
         include_shapes: z
           .boolean()
           .optional()
           .describe("Include route polylines ([lat, lng] points per direction) for map drawing. Default false."),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_route_static,
     },
     async ({ route_name, include_shapes }) => {
@@ -1726,7 +1730,7 @@ function registerTools(server: McpServer): void {
         "Prefer `get_stop_realtime` when the user is at a stop and wants arrival times there. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         route_name: zRouteName(),
         direction: z.coerce
           .number()
@@ -1735,7 +1739,7 @@ function registerTools(server: McpServer): void {
           .max(1)
           .optional()
           .describe("Only vehicles heading this way: 0 or 1, the index into get_route_static's `stops`. Omit for both."),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_route_realtime,
     },
     async ({ route_name, direction: wantedDirection }) => {
@@ -1805,14 +1809,14 @@ function registerTools(server: McpServer): void {
         "Use when the user asks about road works, closures, detours, or why a route is not running or a vehicle is off its usual path. " +
         "Pass `route` and/or `stop_id` to get only the entries touching them; omit both for the whole city.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         route: z
           .string()
           .min(1)
           .optional()
           .describe("Only disruptions on this route, by short name (e.g. \"Т30\", \"А34\"). Omit for all routes."),
         stop_id: zStopId().optional().describe("Only disruptions at this stop. Omit for all stops."),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_disruptions,
     },
     async ({ route, stop_id }) => {
@@ -1845,7 +1849,7 @@ function registerTools(server: McpServer): void {
         "Use `search_stops` instead when the user gives a stop name. " +
         "Default radius is 1 000 m; narrow it (e.g. 300 m) for dense urban areas or widen it (up to 3 000 m) for rural locations.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         latitude: zLatitude("search centre"),
         longitude: zLongitude("search centre"),
         radius_meters: z
@@ -1857,7 +1861,7 @@ function registerTools(server: McpServer): void {
           .describe(
             "Search radius in metres (50–3000, default 1000). Use ~300 for dense urban intersections, up to 3000 for suburban or rural areas.",
           ),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_stops_around_location,
     },
     async ({ latitude, longitude, radius_meters }) => {
@@ -1898,7 +1902,7 @@ function registerTools(server: McpServer): void {
         "Narrow with `route` when the user cares about one line; prefer `get_route_realtime` for a whole route and `get_stop_realtime` for arrival times at a stop. " +
         "Requires decimal latitude and longitude (WGS84).",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         latitude: zLatitude("centre point"),
         longitude: zLongitude("centre point"),
         radius_meters: z
@@ -1921,7 +1925,7 @@ function registerTools(server: McpServer): void {
           .optional()
           .describe("Maximum vehicles to return, nearest first (1–50, default 15). `total` reports how many were in range."),
         lowfloor_only: zLowfloorOnly("vehicles"),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_nearby_vehicles,
     },
     async ({ latitude, longitude, radius_meters, route, limit, lowfloor_only }) => {
@@ -2007,12 +2011,12 @@ function registerTools(server: McpServer): void {
         "Vehicle IDs come from `get_route_realtime`, `get_nearby_vehicles`, or `get_stop_realtime` results. " +
         "Do NOT use this to get all vehicles on a route — use `get_route_realtime` instead.",
       annotations: TOOL_ANNOTATIONS,
-      inputSchema: {
+      inputSchema: z.object({
         vehicle_id: z
           .string()
           .min(1)
           .describe("Vehicle ID as returned by get_route_realtime, get_nearby_vehicles, or get_stop_realtime."),
-      },
+      }),
       outputSchema: OUTPUT_SCHEMAS.get_vehicle_info,
     },
     async ({ vehicle_id }) => {
@@ -2069,9 +2073,9 @@ function registerPrompts(server: McpServer): void {
       title: "Transit Map View",
       description:
         "Render live vehicles on map for a stop.",
-      argsSchema: {
+      argsSchema: z.object({
         stop_id: completable(zStopId(), completeStopId),
-      },
+      }),
     },
     ({ stop_id }) => ({
       description: "Map-first prompt for live transit vehicles.",
@@ -2103,9 +2107,9 @@ function registerPrompts(server: McpServer): void {
       title: "Transit Arrival List",
       description:
         "Render upcoming arrivals list for a stop.",
-      argsSchema: {
+      argsSchema: z.object({
         stop_id: completable(zStopId(), completeStopId),
-      },
+      }),
     },
     ({ stop_id }) => ({
       description: "Arrival-list focused prompt for realtime stop data.",
@@ -2139,9 +2143,9 @@ function registerPrompts(server: McpServer): void {
       title: "Transit Hybrid View",
       description:
         "Render map and arrival list together with synchronized ETA values.",
-      argsSchema: {
+      argsSchema: z.object({
         stop_id: completable(zStopId(), completeStopId),
-      },
+      }),
     },
     ({ stop_id }) => ({
       description: "Hybrid map + arrival list prompt with strict block order.",
@@ -2180,11 +2184,11 @@ function registerWorkflowPrompts(server: McpServer): void {
     {
       title: "Plan a Trip",
       description: "Find routes (direct or with one transfer) between two places in Lviv, the next live departures and when to leave.",
-      argsSchema: {
+      argsSchema: z.object({
         from: completable(z.string().min(1).describe("Where the trip starts: stop name, landmark, numeric stop ID, or \"lat,lng\"."), completeStopName),
         to: completable(z.string().min(1).describe("Where the trip ends: stop name, landmark, numeric stop ID, or \"lat,lng\"."), completeStopName),
         arrive_by: z.string().optional().describe("Optional: \"HH:MM\" (Lviv time) the rider has to be there by."),
-      },
+      }),
     },
     ({ from, to, arrive_by }) =>
       userPrompt("Trip planning across search_stops and find_routes_between.", [
@@ -2211,9 +2215,9 @@ function registerWorkflowPrompts(server: McpServer): void {
     {
       title: "Route Status",
       description: "Where the vehicles of one route are right now.",
-      argsSchema: {
+      argsSchema: z.object({
         route_name: completable(zRouteName(), completeRouteName),
-      },
+      }),
     },
     ({ route_name }) =>
       userPrompt("Live overview of one route via get_route_realtime.", [
@@ -2272,11 +2276,12 @@ export function compactJsonSchema(schema: unknown, { output = false } = {}): unk
 function compactToolList(server: McpServer): void {
   // The SDK installs its tools/list handler on the first registerTool and
   // exposes no hook on its output, so wrap the installed one.
-  const handlers = (server.server as unknown as { _requestHandlers: Map<string, (req: unknown, extra: unknown) => Promise<ListToolsResult>> })._requestHandlers;
+  type ToolsListHandler = (request: unknown, ctx: ServerContext) => Promise<ListToolsResult>;
+  const handlers = (server.server as unknown as { _requestHandlers: Map<string, ToolsListHandler> })._requestHandlers;
   const original = handlers.get("tools/list");
   if (!original) return;
-  server.server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
-    const result = await original(request, extra);
+  server.server.setRequestHandler("tools/list", async (request, ctx) => {
+    const result = await original(request, ctx);
     return {
       ...result,
       tools: result.tools.map((tool) => ({
@@ -2288,16 +2293,31 @@ function compactToolList(server: McpServer): void {
   });
 }
 
+/**
+ * Cache hints for the 2026-07-28 cacheable results (`ttlMs` / `cacheScope`).
+ * Lists and the reference resources only change with a deploy, and nothing
+ * here is per-user, so shared caches may keep them. Stop and route static
+ * info comes from the GTFS import, which refreshes at most daily.
+ */
+const STATIC_CACHE_HINT = { ttlMs: 60 * 60 * 1000, cacheScope: "public" } as const;
+const MCP_CACHE_HINTS = {
+  "server/discover": STATIC_CACHE_HINT,
+  "tools/list": STATIC_CACHE_HINT,
+  "prompts/list": STATIC_CACHE_HINT,
+  "resources/list": STATIC_CACHE_HINT,
+  "resources/templates/list": STATIC_CACHE_HINT,
+  "resources/read": STATIC_CACHE_HINT,
+};
+
 export function createTimetableMcpServer(): McpServer {
   const server = new McpServer(
     mcpServerImplementation(),
     {
       capabilities: {},
       instructions: MCP_SERVER_INSTRUCTIONS,
+      cacheHints: MCP_CACHE_HINTS,
     },
   );
-
-  server.server.setRequestHandler(PingRequestSchema, () => ({}));
 
   registerTools(server);
   registerResources(server);
@@ -2317,7 +2337,9 @@ export function createTimetableMcpServer(): McpServer {
 
 /** What the server publishes over MCP, for discovery documents that describe it without a connection. */
 export interface McpManifest {
+  /** The newest revision served; `supportedProtocolVersions` lists every one. */
   protocolVersion: string;
+  supportedProtocolVersions: string[];
   capabilities: ServerCapabilities;
   instructions: string;
   tools: Tool[];
@@ -2325,6 +2347,9 @@ export interface McpManifest {
   resources: Resource[];
   resourceTemplates: ResourceTemplateInfo[];
 }
+
+/** Served by createMcpHandler; the SDK keeps its list of modern revisions internal. */
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
 
 let manifestPromise: Promise<McpManifest> | null = null;
 
@@ -2349,7 +2374,8 @@ export function mcpManifest(): Promise<McpManifest> {
         client.listResourceTemplates(),
       ]);
       return {
-        protocolVersion: LATEST_PROTOCOL_VERSION,
+        protocolVersion: MODERN_PROTOCOL_VERSION,
+        supportedProtocolVersions: [MODERN_PROTOCOL_VERSION, ...SUPPORTED_PROTOCOL_VERSIONS],
         capabilities: client.getServerCapabilities() ?? {},
         instructions: client.getInstructions() ?? MCP_SERVER_INSTRUCTIONS,
         tools,
@@ -2412,21 +2438,47 @@ export function normalizeMcpAccept(req: Request): boolean {
   return !wantsSse;
 }
 
-export async function handleMcpPostRequest(req: Request, res: Response): Promise<void> {
-  const jsonOnly = normalizeMcpAccept(req);
+/**
+ * Serves 2026-07-28 traffic: every request carries its protocol version and
+ * client capabilities in `_meta`, `server/discover` answers up front, and
+ * there is no handshake. Strict, so 2025-era requests never reach it; those
+ * go to {@link handleLegacyMcpRequest} below.
+ */
+const modernMcpHandler = toNodeHandler(
+  createMcpHandler(() => createTimetableMcpServer(), {
+    legacy: "reject",
+    onerror: (error) => console.error("MCP modern request failed", error),
+  }),
+);
+
+/**
+ * Serves 2025-era clients (the `initialize` handshake, no `_meta` envelope)
+ * statelessly, one fresh server per request, as before the 2026 revision.
+ */
+async function handleLegacyMcpRequest(req: Request, res: Response, body: unknown, jsonOnly: boolean): Promise<void> {
   const server = createTimetableMcpServer();
-  const transport = new StreamableHTTPServerTransport({
+  const transport = new NodeStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: jsonOnly,
   });
 
   try {
     await server.connect(transport);
-    await transport.handleRequest(req, res, dropNullParams(req.body));
+    await transport.handleRequest(req, res, body);
   } finally {
     await transport.close();
     await server.close();
   }
+}
+
+export async function handleMcpPostRequest(req: Request, res: Response): Promise<void> {
+  const jsonOnly = normalizeMcpAccept(req);
+  const body = dropNullParams(req.body);
+  if (await isLegacyRequest(await toWebRequest(req, body), body)) {
+    await handleLegacyMcpRequest(req, res, body, jsonOnly);
+    return;
+  }
+  await modernMcpHandler(req, res, body);
 }
 
 /**
@@ -2483,6 +2535,7 @@ export function buildMcpServerCard(baseUrl: string, manifest?: McpManifest) {
     ...(manifest
       ? {
           protocolVersion: manifest.protocolVersion,
+          supportedProtocolVersions: manifest.supportedProtocolVersions,
           capabilities: manifest.capabilities,
           instructions: manifest.instructions,
           // Output schemas are left to tools/list: a card is read to decide

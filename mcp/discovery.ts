@@ -1,4 +1,4 @@
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { Tool } from "@modelcontextprotocol/server";
 
 import pkg from "../package.json" with { type: "json" };
 import { MCP_SERVER_INFO } from "./timetableMcpServer.ts";

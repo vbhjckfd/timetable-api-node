@@ -32,7 +32,9 @@
     "api"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "cors": "^2.8.5",
     "dotenv": "^18.0",
     "express": "^5.2.1",

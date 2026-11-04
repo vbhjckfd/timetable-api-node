@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import express from "express";
 import { createServer } from "node:http";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
 vi.mock("../../actions/getSingleStopAction.js", () => ({
   default: async (req, res) => {
@@ -298,7 +297,6 @@ vi.mock("../../services/disruptionService.js", () => ({
   servedFilter: vi.fn(() => () => true),
 }));
 
-import { validateToolName } from "@modelcontextprotocol/sdk/shared/toolNameValidation.js";
 import pkg from "../../package.json" with { type: "json" };
 import {
   buildMcpServerCard,
@@ -361,17 +359,49 @@ const TOOL_NAMES = [
   "get_disruptions",
 ];
 
-async function connectClient() {
-  const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+async function connectClient(options = {}) {
+  const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {}, ...options });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
   return client;
 }
 
+const MODERN = "2026-07-28";
+const connectModernClient = () => connectClient({ versionNegotiation: { mode: { pin: MODERN } } });
+
+/** A bare 2026-07-28 request: the `_meta` envelope plus the standard headers. */
+async function postModern(method, params = {}, { name } = {}) {
+  const response = await fetch(`${baseUrl}/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      "MCP-Protocol-Version": MODERN,
+      "Mcp-Method": method,
+      ...(name ? { "Mcp-Name": name } : {}),
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: {
+        ...params,
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": MODERN,
+          "io.modelcontextprotocol/clientCapabilities": {},
+          "io.modelcontextprotocol/clientInfo": { name: "raw", version: "1.0.0" },
+        },
+      },
+    }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 describe("timetable MCP server", () => {
   it("registers SEP-conforming tool names", () => {
+    // SEP-986: 1–128 characters from A-Z, a-z, 0-9, "_", "-" and ".".
+    // The v2 SDK keeps its validator internal, so the rule is spelled out here.
     for (const name of TOOL_NAMES) {
-      const { isValid, warnings } = validateToolName(name);
-      expect(isValid, `invalid tool name ${name}: ${warnings.join(", ")}`).toBe(true);
+      expect(name, `invalid tool name ${name}`).toMatch(/^[A-Za-z0-9_.-]{1,128}$/);
     }
   });
 
@@ -1096,8 +1126,8 @@ describe("MCP additions", () => {
 
   it("resource templates fail with resource-not-found for unknown ids", async () => {
     const client = await connectClient();
-    await expect(client.readResource({ uri: "timetable://stop/abc" })).rejects.toMatchObject({ code: -32002 });
-    await expect(client.readResource({ uri: "timetable://route/NOPE" })).rejects.toMatchObject({ code: -32002 });
+    await expect(client.readResource({ uri: "timetable://stop/abc" })).rejects.toMatchObject({ code: -32602 });
+    await expect(client.readResource({ uri: "timetable://route/NOPE" })).rejects.toMatchObject({ code: -32602 });
     await client.close();
   });
 
@@ -1278,5 +1308,73 @@ describe("MCP discovery", () => {
     expect(llmsFull).toContain("claude mcp add --transport http lviv-timetable https://api.example.test/mcp");
 
     expect(buildAiPluginManifest("https://api.example.test").description_for_model).toContain("https://api.example.test/mcp");
+  });
+});
+
+describe("protocol revision 2026-07-28", () => {
+  it("answers server/discover with the modern revision and server identity", async () => {
+    const { status, body } = await postModern("server/discover");
+    expect(status).toBe(200);
+    expect(body.result.supportedVersions).toContain(MODERN);
+    expect(body.result.resultType).toBe("complete");
+    expect(body.result._meta["io.modelcontextprotocol/serverInfo"].name).toBe("io.github.vbhjckfd/timetable-api-node");
+  });
+
+  it("marks list results cacheable by shared caches", async () => {
+    const { body } = await postModern("tools/list");
+    expect(body.result).toMatchObject({ resultType: "complete", ttlMs: 3_600_000, cacheScope: "public" });
+    expect(body.result.tools.map((t) => t.name)).toEqual(expect.arrayContaining(TOOL_NAMES));
+  });
+
+  it("serves tools, resources and prompts to a client pinned to 2026-07-28", async () => {
+    const client = await connectModernClient();
+    expect(client.getProtocolEra()).toBe("modern");
+    expect(client.getNegotiatedProtocolVersion()).toBe(MODERN);
+
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
+
+    const result = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 707 } });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toBeDefined();
+
+    const about = await client.readResource({ uri: "timetable://about" });
+    expect(about.contents[0].text).toContain("Lviv Public Transport");
+
+    const { prompts } = await client.listPrompts();
+    expect(prompts.length).toBeGreaterThan(0);
+    await client.close();
+  });
+
+  it("reports a missing resource as -32602 with the uri", async () => {
+    const client = await connectModernClient();
+    await expect(client.readResource({ uri: "timetable://stop/abc" })).rejects.toMatchObject({
+      code: -32602,
+      data: { uri: "timetable://stop/abc" },
+    });
+    await client.close();
+  });
+
+  it("rejects a revision it does not serve with UnsupportedProtocolVersion", async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "Mcp-Method": "tools/list" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2099-01-01", "io.modelcontextprotocol/clientCapabilities": {} } },
+      }),
+    });
+    const body = await response.json();
+    expect(body.error.code).toBe(-32022);
+  });
+
+  it("still serves 2025-era clients through the initialize handshake", async () => {
+    const client = await connectClient();
+    expect(client.getProtocolEra()).toBe("legacy");
+    const { tools } = await client.listTools();
+    expect(tools.length).toBe(TOOL_NAMES.length);
+    await client.close();
   });
 });
