@@ -519,18 +519,18 @@ export function contactBannerStyle(): string {
 }`;
 }
 
-// Shared <head> tags for the public /stops and /routes listings: Raleway
+// Shared <head> tags for the public /stops and /routes listings: Montserrat
 // from Google Fonts, applied page-wide by pageHeaderStyle().
 export function pageFontLinks(): string {
   return `<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap">`;
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap">`;
 }
 
 const PAGE_LOGO_URL = "https://city-service.lviv.ua/i/logo.png";
 
 export function pageHeaderStyle(): string {
-  return `body, button, input, textarea { font-family: 'Raleway', system-ui, sans-serif; }
+  return `body, button, input, textarea { font-family: 'Montserrat', system-ui, sans-serif; }
 .page-header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
 .page-header img { width: 64px; height: 64px; }
 .page-header h1 { margin: 0; font-size: 22px; font-weight: 700; }`;
