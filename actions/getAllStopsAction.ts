@@ -4,6 +4,9 @@ import {
   contactBannerHtml,
   contactBannerStyle,
   escapeHtml,
+  pageFontLinks,
+  pageHeaderHtml,
+  pageHeaderStyle,
 } from "../utils/appHelpers.ts";
 import type { StopDoc } from "../types/domain.ts";
 
@@ -57,6 +60,7 @@ export default async (req: Request, res: Response, next: NextFunction) => {
 <meta property="og:type" content="website">
 <meta property="og:url" content="${canonical}">
 <link rel="icon" href="/favicon.ico">
+${pageFontLinks()}
 <style>
 table, th { text-align: left; }
 table { border-collapse: collapse; }
@@ -79,10 +83,12 @@ td.loc { white-space: nowrap; }
 #overrides-summary { margin-top: 1em; }
 #overrides-summary textarea { width: 100%; max-width: 600px; box-sizing: border-box; }
 ${contactBannerStyle()}
+${pageHeaderStyle()}
 </style>
 <script type="module" src="/stop-overrides.js"></script>
 </head>
 <body>
+${pageHeaderHtml(title)}
 ${contactBannerHtml("stops")}
 <table>
 `;

@@ -4,6 +4,9 @@ import {
   contactBannerHtml,
   contactBannerStyle,
   escapeHtml,
+  pageFontLinks,
+  pageHeaderHtml,
+  pageHeaderStyle,
   getRouteColor,
   getRouteTextColor,
   getRouteType,
@@ -133,6 +136,7 @@ export default async (req: Request, res: Response, next: NextFunction) => {
 <meta property="og:type" content="website">
 <meta property="og:url" content="${canonical}">
 <link rel="icon" href="/favicon.ico">
+${pageFontLinks()}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/protomaps-leaflet@5.1.0/dist/protomaps-leaflet.js"></script>
@@ -167,7 +171,7 @@ td.map-cell { padding-bottom: 15px; }
 .cmp-map:fullscreen, .cmp-map:-webkit-full-screen { width: 100vw; height: 100vh; }
 .cmp-legend {
   background: rgba(255,255,255,.85); padding: 2px 5px; border-radius: 3px;
-  font: 11px/1.4 system-ui, sans-serif; color: #111;
+  font-size: 11px; line-height: 1.4; color: #111;
 }
 .cmp-legend i {
   display: inline-block; width: 10px; height: 10px;
@@ -191,6 +195,7 @@ td.map-cell { padding-bottom: 15px; }
   border: 2px solid rgba(255,255,255,.7); box-shadow: 0 0 3px rgba(0,0,0,.4);
 }
 ${contactBannerStyle()}
+${pageHeaderStyle()}
 </style>
 <script>
 var _maps = {}, _layers = {};
@@ -386,6 +391,7 @@ function simExpand(el, i, j) {
 </script>
 </head>
 <body>
+${pageHeaderHtml(title)}
 ${contactBannerHtml("routes")}
 <table>
 <tr>

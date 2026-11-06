@@ -504,7 +504,7 @@ export function contactBannerStyle(): string {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
   padding: 10px 14px; margin: 0 0 12px;
   background: #dbeafe; border-bottom: 1px solid #93c5fd;
-  font: 15px/1.4 system-ui, sans-serif; color: #1e3a8a;
+  font-size: 15px; line-height: 1.4; color: #1e3a8a;
 }
 .contact-banner a { color: #1d4ed8; font-weight: bold; }
 .contact-banner .chat-link {
@@ -517,6 +517,30 @@ export function contactBannerStyle(): string {
   margin-left: auto; padding: 3px 10px;
   border: 1px solid #1d4ed8; border-radius: 4px;
 }`;
+}
+
+// Shared <head> tags for the public /stops and /routes listings: Raleway
+// from Google Fonts, applied page-wide by pageHeaderStyle().
+export function pageFontLinks(): string {
+  return `<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap">`;
+}
+
+const PAGE_LOGO_URL = "https://city-service.lviv.ua/i/logo.png";
+
+export function pageHeaderStyle(): string {
+  return `body, button, input, textarea { font-family: 'Raleway', system-ui, sans-serif; }
+.page-header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
+.page-header img { width: 64px; height: 64px; }
+.page-header h1 { margin: 0; font-size: 22px; font-weight: 700; }`;
+}
+
+export function pageHeaderHtml(title: string): string {
+  return `<header class="page-header">
+<img src="${PAGE_LOGO_URL}" alt="Логотип" width="64" height="64">
+<h1>${escapeHtml(title)}</h1>
+</header>`;
 }
 
 // Cross-links between the two public listings; key is the page being rendered.
