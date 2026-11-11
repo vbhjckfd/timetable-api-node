@@ -196,7 +196,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       return null;
     }
 
-    if ([83].includes(code)) {
+    if ([83, 139, 142].includes(code)) {
       console.warn(`Manually skipped stop with code ${code}`);
       return null;
     }
