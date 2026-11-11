@@ -3,6 +3,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
+const metrics = vi.hoisted(() => ({
+  count: vi.fn(),
+  distribution: vi.fn(),
+  annotate: vi.fn(),
+  event: vi.fn(),
+  captureException: vi.fn(),
+}));
+vi.mock("../../utils/metrics.js", () => metrics);
+
 vi.mock("gtfs-realtime-bindings", () => ({
   default: {
     transit_realtime: {
@@ -253,13 +262,13 @@ describe("feed reuse", () => {
   it.each([
     ["getVehiclesLocations", getVehiclesLocations],
     ["getArrivalTimes", getArrivalTimes],
-  ])("%s serves a 5-15s old copy at once and refreshes it in the background", async (_name, get) => {
+  ])("%s serves a 5-8s old copy at once and refreshes it in the background", async (_name, get) => {
     const decode = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode;
     fetchMock.mockImplementation(async () => okResponse());
     decode.mockReturnValue({ entity: [{ id: "old" }] });
     await get();
 
-    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 10_000);
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 7_000);
     let release;
     fetchMock.mockImplementation(() => new Promise((r) => (release = r)));
 
@@ -276,13 +285,13 @@ describe("feed reuse", () => {
   it.each([
     ["getVehiclesLocations", getVehiclesLocations],
     ["getArrivalTimes", getArrivalTimes],
-  ])("%s waits for a download once the copy is older than 15s", async (_name, get) => {
+  ])("%s waits for a download once the copy is older than 8s", async (_name, get) => {
     const decode = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode;
     fetchMock.mockImplementation(async () => okResponse());
     decode.mockReturnValue({ entity: [{ id: "old" }] });
     await get();
 
-    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 15_001);
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 8_001);
     decode.mockReturnValue({ entity: [{ id: "new" }] });
     expect(await get()).toEqual([{ id: "new" }]);
   });
@@ -314,6 +323,84 @@ describe("feed reuse", () => {
     fetchMock.mockImplementation(async () => okResponse());
     GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({ entity: [{ id: "b" }] });
     expect(await getArrivalTimes()).toEqual([{ id: "b" }]);
+  });
+});
+
+describe("feed freshness", () => {
+  const response = (headers) => ({
+    ok: true,
+    headers: { get: (name) => headers[name] ?? null },
+    arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+  });
+
+  it("records the edge, publish and fix ages of a vehicle download", async () => {
+    const now = 1_800_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const sec = now / 1000;
+    fetchMock.mockResolvedValue(
+      response({ "content-length": "8", age: "4", "cf-cache-status": "HIT" }),
+    );
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      header: { timestamp: sec - 7 },
+      entity: [
+        { id: "a", vehicle: { timestamp: sec - 30 } },
+        { id: "b", vehicle: { timestamp: sec - 12 } },
+        { id: "c", vehicle: { timestamp: sec - 9 } },
+        { id: "d", vehicle: {} },
+      ],
+    });
+
+    await getVehiclesLocations();
+
+    expect(metrics.event).toHaveBeenCalledWith(
+      "FeedFetch",
+      expect.objectContaining({
+        feed: "vehicle_positions",
+        entities: 4,
+        cacheStatus: "HIT",
+        edgeAgeSec: 4,
+        headerAgeSec: 7,
+        newestFixAgeSec: 9,
+        medianFixAgeSec: 12,
+      }),
+    );
+  });
+
+  it("reads trip update timestamps and marks missing fields as -1", async () => {
+    const now = 1_800_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    fetchMock.mockResolvedValue(response({ "content-length": "8" }));
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({
+      header: {},
+      entity: [{ id: "t", tripUpdate: { timestamp: now / 1000 - 5 } }],
+    });
+
+    await getArrivalTimes();
+
+    expect(metrics.event).toHaveBeenCalledWith(
+      "FeedFetch",
+      expect.objectContaining({
+        feed: "trip_updates",
+        cacheStatus: "",
+        edgeAgeSec: -1,
+        headerAgeSec: -1,
+        newestFixAgeSec: 5,
+        medianFixAgeSec: 5,
+      }),
+    );
+  });
+
+  it("tags the transaction with the age of the copy it used", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+    fetchMock.mockResolvedValue(response({ "content-length": "8" }));
+    GtfsRealtimeBindings.transit_realtime.FeedMessage.decode.mockReturnValue({ entity: [] });
+
+    await getArrivalTimes();
+    expect(metrics.annotate).toHaveBeenLastCalledWith({ tripUpdatesCacheAgeMs: 0 });
+
+    now.mockReturnValue(1_800_000_003_000);
+    await getArrivalTimes();
+    expect(metrics.annotate).toHaveBeenLastCalledWith({ tripUpdatesCacheAgeMs: 3_000 });
   });
 });
 
