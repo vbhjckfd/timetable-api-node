@@ -9,6 +9,7 @@ import {
   getRouteType,
 } from "../utils/appHelpers.ts";
 import type { RouteDoc, StopDoc, Transfer } from "../types/domain.ts";
+import { annotate, event } from "../utils/metrics.ts";
 
 export type FeedEntity = transit_realtime.IFeedEntity;
 
@@ -55,7 +56,12 @@ async function fetchPlus(url: string, options: RequestInit = {}, retries: number
 // after 4s, shorter than the gap between feed downloads; keep them for 30s.
 const feedDispatcher = new Agent({ keepAliveTimeout: 30_000, keepAliveMaxTimeout: 60_000 });
 
-async function fetchBytes(url: string, options: RequestInit = {}, retries: number): Promise<Uint8Array> {
+interface FeedDownload {
+  bytes: Uint8Array;
+  headers: Pick<Headers, "get">;
+}
+
+async function fetchBytes(url: string, options: RequestInit = {}, retries: number): Promise<FeedDownload> {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10_000),
@@ -70,7 +76,7 @@ async function fetchBytes(url: string, options: RequestInit = {}, retries: numbe
           `Truncated response: got ${data.byteLength} of ${expected} bytes ${url}`,
         );
       }
-      return data;
+      return { bytes: data, headers: res.headers };
     }
     if (retries > 0) return fetchBytes(url, options, retries - 1);
     throw new Error(`HTTP ${res.status} ${url}`);
@@ -82,16 +88,69 @@ async function fetchBytes(url: string, options: RequestInit = {}, retries: numbe
 
 // Decodes a GTFS-realtime FeedMessage, tagging decode failures so logs can
 // tell "upstream sent undecodable bytes" apart from network/retry errors.
-function decodeFeed(bytes: Uint8Array, url: string): FeedEntity[] {
+function decodeFeed(bytes: Uint8Array, url: string): transit_realtime.IFeedMessage {
   try {
-    // A FeedMessage always decodes with an entity list, empty or not.
-    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes).entity as FeedEntity[];
+    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(bytes);
   } catch (error) {
     throw new FeedDecodeError(
       `Failed to decode GTFS-realtime feed (${bytes.byteLength} bytes) from ${url}: ${(error as Error).message}`,
       { cause: error },
     );
   }
+}
+
+type FeedName = "vehicle_positions" | "trip_updates";
+
+/** Fix time of one entity: the vehicle's GPS fix, or when its predictions were made. */
+function entityTimestamp(entity: FeedEntity): number {
+  return Number(entity.vehicle?.timestamp ?? entity.tripUpdate?.timestamp ?? 0);
+}
+
+/**
+ * Records how old a freshly downloaded feed already is, one FeedFetch event
+ * per download, so the delay between a GPS fix and our response can be split
+ * by layer instead of guessed:
+ * - edgeAgeSec: how long Cloudflare had held the blob (its Age header);
+ * - headerAgeSec: time since gtfs-eta published it (header timestamp);
+ * - newestFixAgeSec / medianFixAgeSec: age of the vehicle fixes it carries.
+ * The time a copy then spends in our own cache is cacheAgeMs on the
+ * transaction (see reuseOrLoad).
+ * Ages are -1 when the feed or response does not carry the field.
+ */
+function recordFeedFreshness(
+  feed: FeedName,
+  message: transit_realtime.IFeedMessage,
+  headers: Pick<Headers, "get">,
+  fetchMs: number,
+): void {
+  const nowSec = Date.now() / 1000;
+  const age = (ts: number) => (ts > 0 ? Math.round(nowSec - ts) : -1);
+  const fixes = (message.entity ?? [])
+    .map(entityTimestamp)
+    .filter((ts) => ts > 0)
+    .sort((a, b) => a - b);
+  const ageHeader = headers.get("age");
+  const edgeAge = ageHeader === null ? NaN : Number(ageHeader);
+  event("FeedFetch", {
+    feed,
+    entities: message.entity?.length ?? 0,
+    fetchMs: Math.round(fetchMs),
+    cacheStatus: headers.get("cf-cache-status") ?? "",
+    edgeAgeSec: Number.isFinite(edgeAge) ? edgeAge : -1,
+    headerAgeSec: age(Number(message.header?.timestamp ?? 0)),
+    newestFixAgeSec: age(fixes.at(-1) ?? 0),
+    medianFixAgeSec: age(fixes[Math.floor(fixes.length / 2)] ?? 0),
+  });
+}
+
+/** Downloads and decodes one feed, recording its freshness. */
+async function loadFeed(feed: FeedName, url: string, retries: number): Promise<FeedEntity[]> {
+  const started = performance.now();
+  const { bytes, headers } = await fetchBytes(url, {}, retries);
+  // A FeedMessage always decodes with an entity list, empty or not.
+  const message = decodeFeed(bytes, url);
+  recordFeedFreshness(feed, message, headers, performance.now() - started);
+  return message.entity as FeedEntity[];
 }
 
 async function withBackoff<T>(fn: () => Promise<T>, retries = 4, baseDelayMs = 200): Promise<T> {
@@ -134,17 +193,33 @@ let vehiclesInFlight: Promise<VehicleEntity[]> | null = null;
 // throttles CPU between requests, so a timer would stall exactly when idle.
 // Callers already treat the entities as shared (see stopArrivalService),
 // since the stale fallback in the loaders hands out the same objects.
+// The stale window was 15s. It sits on top of Cloudflare's own 10s cache of
+// the feed, so a request could be answered from a copy 25s behind gtfs-eta;
+// 8s keeps a background refresh in front of most requests at today's traffic
+// while capping our share of that delay.
 const FEED_FRESH_MS = 5_000;
-const FEED_SERVE_STALE_MS = 15_000;
+const FEED_SERVE_STALE_MS = 8_000;
+
+// Transaction attribute holding how old our copy of each feed was when the
+// request used it: 0 when the request waited for a fresh download.
+const CACHE_AGE_ATTRIBUTE: Record<FeedName, string> = {
+  vehicle_positions: "vehiclePositionsCacheAgeMs",
+  trip_updates: "tripUpdatesCacheAgeMs",
+};
 
 function reuseOrLoad<T>(
+  feed: FeedName,
   cache: FeedCache<T> | null,
   inFlight: Promise<T[]> | null,
   load: () => Promise<T[]>,
   setInFlight: (p: Promise<T[]> | null) => void,
 ): Promise<T[]> {
   const age = cache ? Date.now() - cache.at : Infinity;
-  if (cache && age < FEED_FRESH_MS) return Promise.resolve(cache.entities);
+  const served = (ageMs: number) => annotate({ [CACHE_AGE_ATTRIBUTE[feed]]: ageMs });
+  if (cache && age < FEED_FRESH_MS) {
+    served(age);
+    return Promise.resolve(cache.entities);
+  }
 
   let p = inFlight;
   if (!p) {
@@ -154,8 +229,10 @@ function reuseOrLoad<T>(
   if (cache && age < FEED_SERVE_STALE_MS) {
     // The loaders log their own failures; nobody awaits this one.
     p.catch(() => {});
+    served(age);
     return Promise.resolve(cache.entities);
   }
+  served(0);
   return p;
 }
 
@@ -166,7 +243,7 @@ export function __resetVehiclesCache(): void {
 }
 
 export function getVehiclesLocations(): Promise<VehicleEntity[]> {
-  return reuseOrLoad(vehiclesCache, vehiclesInFlight, loadVehiclesLocations, (p) => {
+  return reuseOrLoad("vehicle_positions", vehiclesCache, vehiclesInFlight, loadVehiclesLocations, (p) => {
     vehiclesInFlight = p;
   });
 }
@@ -175,10 +252,7 @@ async function loadVehiclesLocations(): Promise<VehicleEntity[]> {
   const url =
     process.env.VEHICLES_LOCATION_URL || "https://track.ua-gis.com/gtfs/lviv/vehicle_position";
   try {
-    const entities = await withBackoff(async () => {
-      const data = await fetchBytes(url, {}, 3);
-      return decodeFeed(data, url) as VehicleEntity[];
-    });
+    const entities = (await withBackoff(() => loadFeed("vehicle_positions", url, 3))) as VehicleEntity[];
     vehiclesCache = { entities, at: Date.now() };
     return entities;
   } catch (err) {
@@ -208,7 +282,7 @@ export function __resetArrivalsCache(): void {
 }
 
 export function getArrivalTimes(): Promise<FeedEntity[]> {
-  return reuseOrLoad(arrivalsCache, arrivalsInFlight, loadArrivalTimes, (p) => {
+  return reuseOrLoad("trip_updates", arrivalsCache, arrivalsInFlight, loadArrivalTimes, (p) => {
     arrivalsInFlight = p;
   });
 }
@@ -225,11 +299,7 @@ async function loadArrivalTimes(): Promise<FeedEntity[]> {
   const url =
     process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates";
   try {
-    const entities = await withBackoff(
-      async () => decodeFeed(await fetchBytes(url, {}, 0), url),
-      1,
-      100,
-    );
+    const entities = await withBackoff(() => loadFeed("trip_updates", url, 0), 1, 100);
     arrivalsCache = { entities, at: Date.now() };
     return entities;
   } catch (err) {

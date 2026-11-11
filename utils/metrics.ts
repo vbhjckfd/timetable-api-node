@@ -25,6 +25,16 @@ export function distribution(name: string, value: number, attributes?: Attribute
   if (attributes) newrelic.addCustomAttributes(attributes);
 }
 
+/** Attributes on the current transaction, with no metric behind them. */
+export function annotate(attributes: Attributes): void {
+  newrelic.addCustomAttributes(attributes);
+}
+
+/** A standalone event, for samples that belong to no request (background refreshes). */
+export function event(type: string, attributes: Attributes): void {
+  newrelic.recordCustomEvent(type, attributes);
+}
+
 export function captureException(error: unknown, attributes?: Attributes): void {
   newrelic.noticeError(error as Error, attributes);
 }
