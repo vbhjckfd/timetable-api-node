@@ -599,6 +599,7 @@ Closures, detours and moved stops the city announced that are in force today. Th
 | `GET /llms.txt`, `GET /INTEGRATION.md` | LLM-oriented overview and the [integration guide](INTEGRATION.md). |
 | `GET /.well-known/ai-plugin.json`, `GET /.well-known/agent.json` | OpenAI plugin manifest and A2A agent card. |
 | `GET /server.json`, `GET /smithery.json` | MCP Registry and Smithery manifests. |
+| `GET /.well-known/openai-apps-challenge` | Domain-verification token for the ChatGPT plugin directory (package in `openai-plugin/`). |
 | `GET /sitemap.xml` | Sitemap of the public `lad.lviv.ua` pages. |
 
 ## Deployment
