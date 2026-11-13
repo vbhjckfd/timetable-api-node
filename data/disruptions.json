@@ -19,6 +19,102 @@
     "kind": "detour",
     "reason": "Ремонт вул. Гетьмана І. Мазепи від П. Орлика до Інструментальної",
     "since": "2026-10-03",
+    "until": "2026-11-12",
+    "until_text": "до 12 листопада; з 13 до 22 листопада — інший об’їзд через перекриття перехрестя з вул. Орлика",
+    "routes": ["А12", "А17", "А34", "А46", "А51", "А55", "А84"],
+    "detour": {
+      "via": ["вул. П. Орлика", "вул. Тичини", "вул. Хвильового", "вул. Інструментальна"]
+    },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
+    "note": "В обох напрямках, далі за звичною схемою.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-orlyka-junction-a12",
+    "kind": "detour",
+    "reason": "Перекриття перехрестя вулиць Мазепи, Орлика і Тичини",
+    "since": "2026-11-13",
+    "until": "2026-11-22",
+    "until_text": "з 13 до 22 листопада",
+    "routes": ["А12"],
+    "detour": {
+      "via": ["вул. Інструментальна", "вул. Хвильового", "вул. Миколайчука", "вул. Грінченка", "вул. Б. Хмельницького", "вул. Липинського", "вул. Миколайчука"]
+    },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
+    "note": "Від вул. Замарстинівської через вул. Мазепи до вул. Інструментальної, далі за схемою об’їзду.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-orlyka-junction-shchurata",
+    "kind": "detour",
+    "reason": "Перекриття перехрестя вулиць Мазепи, Орлика і Тичини",
+    "since": "2026-11-13",
+    "until": "2026-11-22",
+    "until_text": "з 13 до 22 листопада",
+    "routes": ["А17", "А84"],
+    "detour": {
+      "via": ["вул. Інструментальна", "вул. Хвильового", "вул. Миколайчука", "вул. Щурата"]
+    },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
+    "note": "Від вул. Замарстинівської через вул. Мазепи до вул. Інструментальної, далі за схемою об’їзду.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-orlyka-junction-hrinchenka",
+    "kind": "detour",
+    "reason": "Перекриття перехрестя вулиць Мазепи, Орлика і Тичини",
+    "since": "2026-11-13",
+    "until": "2026-11-22",
+    "until_text": "з 13 до 22 листопада",
+    "routes": ["А34", "А51"],
+    "detour": {
+      "via": ["вул. Інструментальна", "вул. Хвильового", "вул. Миколайчука", "вул. Мазепи", "вул. Грінченка"]
+    },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
+    "note": "Від вул. Замарстинівської через вул. Мазепи до вул. Інструментальної, далі за схемою об’їзду і за звичною схемою.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-orlyka-junction-a46",
+    "kind": "detour",
+    "reason": "Перекриття перехрестя вулиць Мазепи, Орлика і Тичини",
+    "since": "2026-11-13",
+    "until": "2026-11-22",
+    "until_text": "з 13 до 22 листопада",
+    "routes": ["А46"],
+    "detour": {
+      "via": ["вул. Інструментальна", "вул. Хвильового", "вул. Миколайчука", "вул. П. Орлика", "вул. Віри, Надії, Любові"]
+    },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
+    "note": "Від вул. Замарстинівської через вул. Мазепи до вул. Інструментальної, далі за схемою об’їзду і за звичною схемою.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-orlyka-junction-a55",
+    "kind": "detour",
+    "reason": "Перекриття перехрестя вулиць Мазепи, Орлика і Тичини",
+    "since": "2026-11-13",
+    "until": "2026-11-22",
+    "until_text": "з 13 до 22 листопада",
+    "routes": ["А55"],
+    "detour": {
+      "via": ["вул. Інструментальна", "вул. Хвильового", "вул. Миколайчука"]
+    },
+    "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
+    "note": "Від вул. Замарстинівської через вул. Мазепи до вул. Інструментальної, далі за схемою об’їзду і за звичною схемою. У повідомленні маршрут названо №55а.",
+    "source": "ZAXID.NET",
+    "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
+  },
+  {
+    "id": "mazepy-detour-orlyka-after-junction",
+    "kind": "detour",
+    "reason": "Ремонт вул. Гетьмана І. Мазепи від П. Орлика до Інструментальної",
+    "since": "2026-11-23",
     "until": null,
     "until_text": "орієнтовно до кінця 2026 року",
     "routes": ["А12", "А17", "А34", "А46", "А51", "А55", "А84"],
@@ -26,7 +122,7 @@
       "via": ["вул. П. Орлика", "вул. Тичини", "вул. Хвильового", "вул. Інструментальна"]
     },
     "area": { "lat": 49.8698, "lng": 24.0305, "radius_meters": 220 },
-    "note": "В обох напрямках, далі за звичною схемою.",
+    "note": "Після відкриття перехрестя з вул. Орлика — знову цей об’їзд, в обох напрямках, далі за звичною схемою.",
     "source": "ZAXID.NET",
     "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
   },
