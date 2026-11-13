@@ -101,8 +101,11 @@ vi.mock("../../actions/routeDynamicInfoAction.js", () => ({
   },
 }));
 
+const closestStopsQueries = vi.hoisted(() => []);
+
 vi.mock("../../actions/getClosestStopsAction.js", () => ({
   default: async (req, res) => {
+    closestStopsQueries.push({ ...req.query });
     res.json([
       {
         code: 101,
@@ -649,6 +652,22 @@ describe("timetable MCP server", () => {
     expect(sc.ui_blocks[0].data.layers).toEqual({ stops: "data.stops" });
     expect(sc.ui_blocks[0].data.center[0]).toBe(49.84);
     expect(sc.ui_blocks[0].data.center[1]).toBe(24.02);
+
+    await client.close();
+  });
+
+  it("get_stops_around_location defaults radius to 500 m", async () => {
+    const client = await connectClient();
+    closestStopsQueries.length = 0;
+
+    const result = await client.callTool({
+      name: "get_stops_around_location",
+      arguments: { latitude: 49.8411, longitude: 24.0311 },
+    });
+
+    expect(closestStopsQueries.at(-1)?.radius).toBe("500");
+    expect(result.structuredContent.data.radius_meters).toBe(500);
+    expect(result.content.find((c) => c.type === "text")?.text).toContain("within 500m");
 
     await client.close();
   });

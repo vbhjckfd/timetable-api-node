@@ -1848,7 +1848,7 @@ function registerTools(server: McpServer): void {
         "Finds stops near a geographic point, returning each stop's numeric ID, name, coordinates, walking distance, and the routes serving it. " +
         "Use this as the **first step** when the user gives an address or coordinates and you need stop IDs for `get_stop_realtime` or `find_routes_between`. " +
         "Use `search_stops` instead when the user gives a stop name. " +
-        "Default radius is 1 000 m; narrow it (e.g. 300 m) for dense urban areas or widen it (up to 3 000 m) for rural locations.",
+        "Default radius is 500 m (about a 6-minute walk), enough in the city centre; widen it to 1 000–3 000 m in suburbs or rural areas where stops are sparse.",
       annotations: { ...TOOL_ANNOTATIONS, title: "Get Stops Around Location" },
       inputSchema: z.object({
         latitude: zLatitude("search centre"),
@@ -1860,17 +1860,21 @@ function registerTools(server: McpServer): void {
           .max(3000)
           .optional()
           .describe(
-            "Search radius in metres (50–3000, default 1000). Use ~300 for dense urban intersections, up to 3000 for suburban or rural areas.",
+            "Search radius in metres (50–3000, default 500). Use ~300 for a single dense intersection, 1000–3000 for suburban or rural areas.",
           ),
       }),
       outputSchema: OUTPUT_SCHEMAS.get_stops_around_location,
     },
     async ({ latitude, longitude, radius_meters }) => {
       countToolCall("get_stops_around_location");
-      const cacheArgs = { latitude: normalizeCoordinate(latitude), longitude: normalizeCoordinate(longitude), radius_meters };
+      const radius = radius_meters ?? 500;
+      const cacheArgs = { latitude: normalizeCoordinate(latitude), longitude: normalizeCoordinate(longitude), radius_meters: radius };
       return cachedTool("get_stops_around_location", cacheArgs, async () => {
-        const query: Record<string, string> = { latitude: String(latitude), longitude: String(longitude) };
-        if (radius_meters != null) query.radius = String(radius_meters);
+        const query: Record<string, string> = {
+          latitude: String(latitude),
+          longitude: String(longitude),
+          radius: String(radius),
+        };
 
         const actionResult = await runAction<ClosestStopRow[]>(getClosestStopsAction, { query });
         if (actionResult.statusCode >= 400) {
@@ -1881,7 +1885,7 @@ function registerTools(server: McpServer): void {
         return ok("get_stops_around_location", {
           center_lat: normalizeCoordinate(latitude),
           center_lng: normalizeCoordinate(longitude),
-          radius_meters: radius_meters ?? 1000,
+          radius_meters: radius,
           stops: rows.map((s) => ({
             ...toStopObj({ code: s.code, name: s.name, lat: s.latitude, lng: s.longitude }),
             routes: Array.isArray(s.routes) ? s.routes : [],
