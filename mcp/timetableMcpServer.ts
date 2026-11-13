@@ -54,6 +54,7 @@ import type { ScheduleByDayType } from "../utils/stopScheduleByDayType.ts";
 // change between calls, not from a closed set this server owns.
 const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
+  destructiveHint: false,
   idempotentHint: true,
   openWorldHint: true,
 };
