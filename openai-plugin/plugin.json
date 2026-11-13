@@ -1,0 +1,107 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "lviv-public-transport",
+  "version": "1.0.0",
+  "description": "Live arrivals, trip planning, timetables and vehicle positions for public transport in Lviv, Ukraine.",
+  "author": {
+    "name": "lad.lviv.ua",
+    "url": "https://lad.lviv.ua"
+  },
+  "homepage": "https://lad.lviv.ua",
+  "repository": "https://github.com/vbhjckfd/timetable-api-node",
+  "keywords": [
+    "lviv",
+    "ukraine",
+    "public transport",
+    "transit",
+    "bus",
+    "tram",
+    "gtfs"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Lviv Public Transport",
+        "shortDescription": "Live Lviv transit arrivals",
+        "longDescription": "Ask about buses, trams and trolleybuses in Lviv, Ukraine, in Ukrainian or English.\n\n- Live arrivals at any stop: which route, where it is heading, and how many minutes until it arrives.\n- Trip planning from one stop, address or point to another: direct routes or one transfer, with walking, door-to-door time and the live next departures.\n- Stop search by name or by location.\n- Route stops and timetables (workday, Saturday, Sunday).\n- Live vehicle positions, how many vehicles run on a route and the real gaps between them.\n- Detours, closures and suspended routes announced by the city.\n\nData comes from the municipal GTFS and GTFS-Realtime feeds, the same data behind lad.lviv.ua. Read-only: no account, API key or sign-in, and nothing about the user is stored.",
+        "developerName": "lad.lviv.ua",
+        "category": "Travel",
+        "capabilities": [
+          "Live arrivals at a stop",
+          "Trip planning with one transfer",
+          "Stop search by name or location",
+          "Route stops and timetables",
+          "Live vehicle positions and headways",
+          "Detours and closures"
+        ],
+        "websiteURL": "https://lad.lviv.ua",
+        "supportURL": "https://github.com/vbhjckfd/timetable-api-node/issues",
+        "privacyPolicyURL": "https://lad.lviv.ua/privacy",
+        "termsOfServiceURL": "https://lad.lviv.ua/terms",
+        "defaultPrompt": [
+          "When is the next tram at the Opera stop in Lviv?",
+          "How do I get from Lviv railway station to Sykhiv?",
+          "Are there any detours in Lviv today?"
+        ],
+        "brandColor": "#0F766E",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/logo.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Live arrivals at a stop named by the user",
+              "prompt": "When is the next tram at the Opera stop in Lviv?",
+              "tools_triggered": "search_stops, get_stop_realtime",
+              "expected_behavior": "Finds the Opera stop IDs, then lists the next arrivals with route, destination and minutes until arrival."
+            },
+            {
+              "description": "Trip planning between two places",
+              "prompt": "How do I get from Lviv main railway station to Sykhiv by public transport, and when should I leave?",
+              "tools_triggered": "search_stops, find_routes_between",
+              "expected_behavior": "Suggests direct routes or one-transfer options with the stop to board, where to get off, total travel time and the next departures."
+            },
+            {
+              "description": "Route timetable",
+              "prompt": "What are the first and last departures of bus A61 in Lviv on weekdays?",
+              "tools_triggered": "get_route_static",
+              "expected_behavior": "Gives the first and last weekday departure times from each terminus of route A61."
+            },
+            {
+              "description": "Live vehicles on a route",
+              "prompt": "Where are the T1 trams in Lviv right now and how often do they run?",
+              "tools_triggered": "get_route_realtime",
+              "expected_behavior": "Lists the trams currently on route T1 with their next stops and the live gaps between them per direction."
+            },
+            {
+              "description": "Detours and closures",
+              "prompt": "Are there any public transport detours or closures in Lviv today?",
+              "tools_triggered": "get_disruptions",
+              "expected_behavior": "Lists the detours and closures in force today with affected routes, dates and reason, or says there are none."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Public transport in another city",
+              "prompt": "When is the next metro in Kyiv?"
+            },
+            {
+              "description": "Buying or booking a ticket",
+              "prompt": "Buy me a bus ticket for route A61 in Lviv."
+            },
+            {
+              "description": "Unrelated question",
+              "prompt": "What is the weather in Lviv tomorrow?"
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Does not sell products or process payments."
+      },
+      "publication": {
+        "release_notes": "Initial release."
+      }
+    }
+  }
+}

@@ -380,6 +380,15 @@ app.get("/.well-known/glama.json", (req, res) => {
   res.sendFile(path.join(__dirname, "glama.json"));
 });
 
+// ChatGPT plugin directory domain check: the portal reads this exact token as plain
+// text before it lets the MCP server be submitted. Not a secret; it only proves we
+// control api.lad.lviv.ua.
+const OPENAI_APPS_CHALLENGE = "KSs9ImBWcC7R_bj1oUcI0cG5EOfHQzFBLgtk8__zim8";
+app.get("/.well-known/openai-apps-challenge", (req, res) => {
+  setStaticAssetCache(res, 3600);
+  res.type("text/plain").send(OPENAI_APPS_CHALLENGE);
+});
+
 app.get("/server.json", (req, res) => {
   setStaticAssetCache(res, 3600 * 24 * 7);
   res.sendFile(path.join(__dirname, "server.json"));
