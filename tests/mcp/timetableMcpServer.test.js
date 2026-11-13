@@ -1226,6 +1226,7 @@ describe("MCP discovery", () => {
       type: ["integer", "null"],
     });
     expect(tools.every((t) => t.annotations.readOnlyHint && t.annotations.openWorldHint)).toBe(true);
+    expect(tools.every((t) => t.annotations.title === t.title)).toBe(true);
     // Calls still validate against the compacted output schema.
     const result = await client.callTool({ name: "get_stop_realtime", arguments: { stop_id: 1234 } });
     expect(result.isError).toBeFalsy();

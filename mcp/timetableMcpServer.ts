@@ -1441,7 +1441,7 @@ function registerTools(server: McpServer): void {
         "Returns live arrivals at a stop: route, destination, vehicle type, minutes until arrival, and each vehicle's position. " +
         "Use this as the **default tool** when the user asks about arrivals, departures, or the next bus/tram at a specific stop. " +
         "Requires a numeric stop ID (shown on stop signage); use `search_stops` when you have a stop name, or `get_stops_around_location` when you have coordinates.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Stop Realtime" },
       inputSchema: z.object({
         stop_id: zStopId(),
         lowfloor_only: zLowfloorOnly("arrivals"),
@@ -1489,7 +1489,7 @@ function registerTools(server: McpServer): void {
         "Use this as the **first step** when the user names a stop or landmark stop (e.g. \"Опера\", \"Rynok\", \"Головний вокзал\") and you need a stop ID for `get_stop_realtime` or `find_routes_between`. " +
         "One name usually covers both sides of the street under different IDs; each is returned, and the `routes` list tells them apart. " +
         "Use `get_stops_around_location` instead when you have coordinates rather than a name.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Search Stops" },
       inputSchema: z.object({
         query: z.string().trim().min(2).describe("Stop name or part of it, e.g. \"Ринок\", \"opera\", \"Стрийська\"."),
         limit: z.number().int().min(1).max(25).optional().describe("Maximum stops to return (1–25, default 10)."),
@@ -1531,7 +1531,7 @@ function registerTools(server: McpServer): void {
         "Routes the city has suspended, and stops a detour skips, are left out. " +
         "`walk_meters` is set when the two ends are within a 300 m walk of each other: no ride is searched then, so tell the user to walk. Otherwise both lists empty means the trip needs two or more transfers. " +
         "Get stop IDs with `search_stops` or `get_stops_around_location`.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Find Routes Between Stops" },
       inputSchema: z.object({
         from_stop_id: zStopId().optional().describe("Stop ID where the trip starts. Give this or `from_lat` + `from_lng`."),
         from_lat: zLatitude("start point").optional(),
@@ -1657,7 +1657,7 @@ function registerTools(server: McpServer): void {
         "Set `include_shapes` only when you will draw the route on a map — the polylines are large and carry nothing a text answer needs. " +
         "Do NOT use this for live vehicle positions — use `get_route_realtime` instead. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Route Static" },
       inputSchema: z.object({
         route_name: zRouteName(),
         include_shapes: z
@@ -1729,7 +1729,7 @@ function registerTools(server: McpServer): void {
         "Pass `direction` (0 or 1, as in `get_route_static`'s `stops`) to get only one way. " +
         "Prefer `get_stop_realtime` when the user is at a stop and wants arrival times there. " +
         "Requires a route short name (e.g. \"T30\", \"32A\") or numeric external ID.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Route Realtime" },
       inputSchema: z.object({
         route_name: zRouteName(),
         direction: z.coerce
@@ -1808,7 +1808,7 @@ function registerTools(server: McpServer): void {
         "The GTFS stop lists and timetables do not reflect any of this. " +
         "Use when the user asks about road works, closures, detours, or why a route is not running or a vehicle is off its usual path. " +
         "Pass `route` and/or `stop_id` to get only the entries touching them; omit both for the whole city.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Disruptions" },
       inputSchema: z.object({
         route: z
           .string()
@@ -1848,7 +1848,7 @@ function registerTools(server: McpServer): void {
         "Use this as the **first step** when the user gives an address or coordinates and you need stop IDs for `get_stop_realtime` or `find_routes_between`. " +
         "Use `search_stops` instead when the user gives a stop name. " +
         "Default radius is 1 000 m; narrow it (e.g. 300 m) for dense urban areas or widen it (up to 3 000 m) for rural locations.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Stops Around Location" },
       inputSchema: z.object({
         latitude: zLatitude("search centre"),
         longitude: zLongitude("search centre"),
@@ -1901,7 +1901,7 @@ function registerTools(server: McpServer): void {
         "Use when the user asks \"what transport is near me right now?\" or wants a live map around a location. " +
         "Narrow with `route` when the user cares about one line; prefer `get_route_realtime` for a whole route and `get_stop_realtime` for arrival times at a stop. " +
         "Requires decimal latitude and longitude (WGS84).",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Nearby Vehicles" },
       inputSchema: z.object({
         latitude: zLatitude("centre point"),
         longitude: zLongitude("centre point"),
@@ -2010,7 +2010,7 @@ function registerTools(server: McpServer): void {
         "Use when the user wants to follow a particular vehicle, e.g. \"where does this tram go next?\" or \"when will it reach X?\". " +
         "Vehicle IDs come from `get_route_realtime`, `get_nearby_vehicles`, or `get_stop_realtime` results. " +
         "Do NOT use this to get all vehicles on a route — use `get_route_realtime` instead.",
-      annotations: TOOL_ANNOTATIONS,
+      annotations: { ...TOOL_ANNOTATIONS, title: "Get Vehicle Info" },
       inputSchema: z.object({
         vehicle_id: z
           .string()
