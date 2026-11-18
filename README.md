@@ -41,7 +41,7 @@ All variables are optional; see `.env.dist`.
 |----------|---------|---------|
 | `PORT` | `8080` | HTTP port. |
 | `VEHICLES_LOCATION_URL` | `https://track.ua-gis.com/gtfs/lviv/vehicle_position` | GTFS-RT vehicle positions feed. |
-| `TRIP_UDPDATES_URL` | `https://track.ua-gis.com/gtfs/lviv/trip_updates` | GTFS-RT trip updates feed (the misspelling is the real name). |
+| `TRIP_UPDATES_URL` | `https://track.ua-gis.com/gtfs/lviv/trip_updates` | GTFS-RT trip updates feed. |
 | `MCP_PUBLIC_BASE_URL` | `https://api.lad.lviv.ua` | Base URL used in MCP metadata (icon URL). |
 | `NEW_RELIC_LICENSE_KEY` | — | Enables New Relic APM (see [Monitoring](#monitoring)). |
 | `NEW_RELIC_APP_NAME`, `NEW_RELIC_LOG_LEVEL` | `timetable-api-node`, `info` | New Relic agent settings. |

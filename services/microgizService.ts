@@ -288,16 +288,16 @@ export function getArrivalTimes(): Promise<FeedEntity[]> {
 }
 
 async function loadArrivalTimes(): Promise<FeedEntity[]> {
-  // trip_updates is served from our own gtfs-eta worker (R2-cached,
-  // max-age=10), so the full backoff ladder used for the upstream position
-  // feed would fan request volume out to the worker on every error. One
-  // retry is the compromise: it covers the common blip — a body cut
-  // mid-stream, which HTTP 200s and surfaces only as a Content-Length
-  // mismatch or a decode error — without turning a worker hiccup into a
-  // stampede. Arrivals are the whole response for /stops/:code/timetable, so
+  // In prod trip_updates is our own feed, pushed by gtfs-eta to R2 and read
+  // straight off its public domain (eta.lad.lviv.ua, max-age=10), so the full
+  // backoff ladder used for the upstream position feed would fan request
+  // volume out to it on every error. One retry is the compromise: it covers
+  // the common blip — a body cut mid-stream, which HTTP 200s and surfaces
+  // only as a Content-Length mismatch or a decode error — without turning a
+  // hiccup into a stampede. Arrivals are the whole response for /stops/:code/timetable, so
   // a single unretried failure blanks every stop at once.
   const url =
-    process.env.TRIP_UDPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates";
+    process.env.TRIP_UPDATES_URL || "https://track.ua-gis.com/gtfs/lviv/trip_updates";
   try {
     const entities = await withBackoff(() => loadFeed("trip_updates", url, 0), 1, 100);
     arrivalsCache = { entities, at: Date.now() };
