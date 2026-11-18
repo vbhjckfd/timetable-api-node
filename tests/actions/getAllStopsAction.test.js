@@ -90,6 +90,16 @@ describe("getAllStopsAction", () => {
     expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/panel.pdf"');
   });
 
+  it("titles the stop code link as the executive committee code", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain(
+      '<a target="blank" href="https://lad.lviv.ua/stops/1001" title="Код з рішення виконкому">1001</a>',
+    );
+  });
+
   it("styles removed routes red and struck through, added ones green", async () => {
     const { req, res, next } = makeReqRes({ path: "/stops" });
     await getAllStopsAction(req, res, next);
