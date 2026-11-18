@@ -61,7 +61,7 @@
     "version": "node scripts/sync-manifest-versions.ts && git add server.json openapi.yaml"
   },
   "author": "vbhjckfd@gmail.com",
-  "license": "WTFPL",
+  "license": "MIT",
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/cors": "^2.8.19",
