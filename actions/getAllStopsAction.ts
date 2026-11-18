@@ -69,7 +69,10 @@ tr:nth-child(even) { background: #f3f6fa; }
 tr:hover td { background: #e6eefb; }
 th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #ccd; }
 th.name { width: 15%; }
-.gtfs-id { cursor: help; border-bottom: 1px dotted #888; }
+.gtfs-id, .hint { cursor: help; border-bottom: 1px dotted #888; }
+.hint { position: relative; }
+.hint .preview { display: none; position: absolute; top: 100%; left: 0; z-index: 10; width: 360px; max-width: 90vw; margin-top: 4px; background: #fff; border: 1px solid #ccd; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.hint:hover .preview, .hint:focus .preview { display: block; }
 a { text-decoration: none; }
 td.loc { white-space: nowrap; }
 .route { display: inline-block; padding: 1px 7px; margin: 1px 0; border-radius: 10px; font-size: 0.9em; background: #eee; border: 1px solid #ccc; }
@@ -95,9 +98,9 @@ ${contactBannerHtml("stops")}
 
     result += `<tr>
         <th>Код</th>
-        <th>Табличка</th>
-        <th>Мапа</th>
-        <th>Панель</th>
+        <th><span class="hint" tabindex="0">Табличка<img class="preview" src="https://offline.lad.lviv.ua/60" alt="Табличка зупинки 60" loading="lazy"></span></th>
+        <th><span class="hint" tabindex="0">Мапа<img class="preview" src="https://offline.lad.lviv.ua/60/schema" alt="Мапа зупинки 60" loading="lazy"></span></th>
+        <th><span class="hint" tabindex="0">Панель<img class="preview" src="https://offline.lad.lviv.ua/60/panel" alt="Панель зупинки 60" loading="lazy"></span></th>
         <th class="name">Назва</th>
         <th>Розташування</th>
         <th>Маршрути</th>

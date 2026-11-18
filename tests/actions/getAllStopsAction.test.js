@@ -74,8 +74,6 @@ describe("getAllStopsAction", () => {
     await getAllStopsAction(req, res, next);
 
     const html = res.send.mock.calls[0][0];
-    expect(html).toContain("<th>Табличка</th>");
-    expect(html).toContain("<th>Мапа</th>");
     expect(html).toContain('href="https://offline.lad.lviv.ua/1001/schema"');
     expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/schema.pdf"');
   });
@@ -85,9 +83,26 @@ describe("getAllStopsAction", () => {
     await getAllStopsAction(req, res, next);
 
     const html = res.send.mock.calls[0][0];
-    expect(html).toContain("<th>Панель</th>");
     expect(html).toContain('href="https://offline.lad.lviv.ua/1001/panel"');
     expect(html).toContain('href="https://pdf.lad.lviv.ua/1001/panel.pdf"');
+  });
+
+  it("previews stop 60's real SVG when hovering the Табличка/Мапа/Панель headers", async () => {
+    const { req, res, next } = makeReqRes({ path: "/stops" });
+    await getAllStopsAction(req, res, next);
+
+    const html = res.send.mock.calls[0][0];
+    for (const [label, src] of [
+      ["Табличка", "https://offline.lad.lviv.ua/60"],
+      ["Мапа", "https://offline.lad.lviv.ua/60/schema"],
+      ["Панель", "https://offline.lad.lviv.ua/60/panel"],
+    ]) {
+      expect(html).toContain(
+        `<th><span class="hint" tabindex="0">${label}<img class="preview" src="${src}" alt="${label} зупинки 60" loading="lazy"></span></th>`,
+      );
+    }
+    expect(html).toContain(".gtfs-id, .hint { cursor: help; border-bottom: 1px dotted #888; }");
+    expect(html).toContain(".hint:hover .preview, .hint:focus .preview { display: block; }");
   });
 
   it("titles the stop code link as the executive committee code", async () => {
