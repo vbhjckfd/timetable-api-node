@@ -72,6 +72,7 @@ th.name { width: 15%; }
 .gtfs-id, .hint { cursor: help; border-bottom: 1px dotted #888; }
 .hint { position: relative; }
 .hint .preview { display: none; position: absolute; top: 100%; left: 0; z-index: 10; width: 360px; max-width: 90vw; margin-top: 4px; background: #fff; border: 1px solid #ccd; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.hint .preview.wide { width: 900px; }
 .hint:hover .preview, .hint:focus .preview { display: block; }
 a { text-decoration: none; }
 td.loc { white-space: nowrap; }
@@ -100,7 +101,7 @@ ${contactBannerHtml("stops")}
         <th>Код</th>
         <th><span class="hint" tabindex="0">Табличка<img class="preview" src="https://offline.lad.lviv.ua/60" alt="Табличка зупинки 60" loading="lazy"></span></th>
         <th><span class="hint" tabindex="0">Мапа<img class="preview" src="https://offline.lad.lviv.ua/60/schema" alt="Мапа зупинки 60" loading="lazy"></span></th>
-        <th><span class="hint" tabindex="0">Панель<img class="preview" src="https://offline.lad.lviv.ua/60/panel" alt="Панель зупинки 60" loading="lazy"></span></th>
+        <th><span class="hint" tabindex="0">Панель<img class="preview wide" src="https://offline.lad.lviv.ua/60/panel" alt="Панель зупинки 60" loading="lazy"></span></th>
         <th class="name">Назва</th>
         <th>Розташування</th>
         <th>Маршрути</th>
