@@ -382,6 +382,16 @@ app.get("/.well-known/glama.json", (req, res) => {
   res.sendFile(path.join(__dirname, "glama.json"));
 });
 
+// LightNow domain verification: it fetches this file and matches the token.
+// Not a secret; it only proves we control api.lad.lviv.ua.
+app.get("/.well-known/mcp-verification.json", (req, res) => {
+  setStaticAssetCache(res, 3600);
+  res.json({
+    domain: "api.lad.lviv.ua",
+    token: "lightnow-verification=3043b004-cd01-45b0-a192-92d27521ba0b",
+  });
+});
+
 // ChatGPT plugin directory domain check: the portal reads this exact token as plain
 // text before it lets the MCP server be submitted. Not a secret; it only proves we
 // control api.lad.lviv.ua.
