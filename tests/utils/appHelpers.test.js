@@ -27,7 +27,7 @@ import {
   getMostPopularShapes,
   getRouteTrips,
   assignTripDirections,
-  getSmapleTrips,
+  getSampleTrips,
 } from "../../utils/appHelpers.js";
 import { getCalendars, getShapes, getTrips } from "gtfs";
 
@@ -366,7 +366,7 @@ describe("assignTripDirections", () => {
   });
 });
 
-describe("getSmapleTrips", () => {
+describe("getSampleTrips", () => {
   it("samples stop sequences from trips on the route's own shapes", () => {
     const route = {
       shapes: { S0: [], S1: [] },
@@ -374,10 +374,10 @@ describe("getSmapleTrips", () => {
       // The short-turn comes last, so an unfiltered pick would take it.
       trip_direction_map: { full0: 0, full1: 1, short0: 0 },
     };
-    expect(getSmapleTrips(route)).toEqual(["full0", "full1"]);
+    expect(getSampleTrips(route)).toEqual(["full0", "full1"]);
   });
 
   it("uses any trip when none runs on the route's shapes", () => {
-    expect(getSmapleTrips({ trip_direction_map: { x: 0, y: 1 } })).toEqual(["x", "y"]);
+    expect(getSampleTrips({ trip_direction_map: { x: 0, y: 1 } })).toEqual(["x", "y"]);
   });
 });
