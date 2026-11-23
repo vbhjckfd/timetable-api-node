@@ -388,7 +388,7 @@ app.get("/.well-known/mcp-verification.json", (req, res) => {
   setStaticAssetCache(res, 3600);
   res.json({
     domain: "api.lad.lviv.ua",
-    token: "lightnow-verification=3043b004-cd01-45b0-a192-92d27521ba0b",
+    token: "lightnow-verification=f50180ae-d04c-4c22-a35b-d6c43ac4890d",
   });
 });
 
