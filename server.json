@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.vbhjckfd/timetable-api-node",
+  "name": "io.github.vbhjckfd/lviv-public-transport",
   "title": "Lviv Public Transport",
   "description": "Lviv public transport MCP: stops, timetables, routes, and live vehicle positions. No API key.",
   "version": "1.8.31",
