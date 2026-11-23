@@ -38,7 +38,7 @@ import {
   getRouteTrips,
   normalizeRouteName,
   normalizeRouteNameBase,
-  getSmapleTrips,
+  getSampleTrips,
   shapes_by_direction,
   sortedShapeIds,
 } from "./utils/appHelpers.ts";
@@ -300,7 +300,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
     .map(async (routeModel) => {
       const stopTimes = await getStoptimes(
         {
-          trip_id: getSmapleTrips(routeModel),
+          trip_id: getSampleTrips(routeModel),
         },
         ["trip_id", "stop_id", "stop_sequence"],
         [["stop_sequence", "ASC"]],

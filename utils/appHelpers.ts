@@ -466,7 +466,7 @@ export function assignTripDirections(
  * route's own shapes only, when there are any: a short-turn variant would
  * cut the stop list short.
  */
-export function getSmapleTrips(
+export function getSampleTrips(
   route: Pick<RouteDoc, "trip_direction_map"> & Partial<Pick<RouteDoc, "shapes" | "trip_shape_map">>,
 ): string[] {
   const entries = Object.entries(route.trip_direction_map);
