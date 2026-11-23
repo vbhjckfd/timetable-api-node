@@ -2,7 +2,7 @@
   "name": "timetable-api-node",
   "version": "1.8.33",
   "description": "Lviv (Ukraine) public transport REST API and read-only Model Context Protocol (MCP) server: stops, timetables, routes, live vehicle positions, GTFS/GTFS-RT. No API key required.",
-  "mcpName": "io.github.vbhjckfd/timetable-api-node",
+  "mcpName": "io.github.vbhjckfd/lviv-public-transport",
   "main": "index.ts",
   "type": "module",
   "engines": {

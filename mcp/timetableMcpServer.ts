@@ -66,7 +66,7 @@ const TOOL_ANNOTATIONS = {
  * like two.
  */
 export const MCP_SERVER_INFO = {
-  name: "io.github.vbhjckfd/timetable-api-node",
+  name: "io.github.vbhjckfd/lviv-public-transport",
   title: "Lviv Public Transport",
   version: pkg.version,
   description:
@@ -2535,7 +2535,7 @@ export function buildMcpServerCard(baseUrl: string, manifest?: McpManifest) {
     },
     documentation: `${normalizedBaseUrl}/llms-full.txt`,
     registryUrl:
-      "https://registry.modelcontextprotocol.io/v0/servers/io.github.vbhjckfd%2Ftimetable-api-node/versions",
+      "https://registry.modelcontextprotocol.io/v0/servers/io.github.vbhjckfd%2Flviv-public-transport/versions",
     configSchema: SMITHERY_CONFIG_JSON_SCHEMA,
     ...(manifest
       ? {

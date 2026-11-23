@@ -46,7 +46,7 @@ async function main() {
     const server = new Server(
       {
         ...upstreamInfo,
-        name: upstreamInfo.name ?? "io.github.vbhjckfd/timetable-api-node",
+        name: upstreamInfo.name ?? "io.github.vbhjckfd/lviv-public-transport",
         version: pkg.version,
       },
       {

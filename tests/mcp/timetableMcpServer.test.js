@@ -1017,7 +1017,7 @@ describe("timetable MCP server", () => {
     expect(serverCard.version).toBe(pkg.version);
     expect(serverCard.websiteUrl).toBe("https://lad.lviv.ua");
     expect(serverCard.description).toContain("Lviv");
-    expect(serverCard.serverInfo?.name).toBe("io.github.vbhjckfd/timetable-api-node");
+    expect(serverCard.serverInfo?.name).toBe("io.github.vbhjckfd/lviv-public-transport");
     expect(serverCard.transport).toEqual({ type: "streamable-http", endpoint: `${baseUrl}/mcp` });
     expect(serverCard.tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
     expect(serverCard.tools[0].outputSchema).toBeUndefined();
@@ -1338,7 +1338,7 @@ describe("protocol revision 2026-07-28", () => {
     expect(status).toBe(200);
     expect(body.result.supportedVersions).toContain(MODERN);
     expect(body.result.resultType).toBe("complete");
-    expect(body.result._meta["io.modelcontextprotocol/serverInfo"].name).toBe("io.github.vbhjckfd/timetable-api-node");
+    expect(body.result._meta["io.modelcontextprotocol/serverInfo"].name).toBe("io.github.vbhjckfd/lviv-public-transport");
   });
 
   it("marks list results cacheable by shared caches", async () => {
