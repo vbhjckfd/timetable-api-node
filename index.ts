@@ -80,6 +80,8 @@ app.use((req, res, next) => {
     ].join(", "),
   );
   res.set("X-MCP-Server", `${baseUrl}/.well-known/mcp/server-card.json`);
+  // Host-only (no includeSubDomains): lad.lviv.ua and siblings share the zone.
+  res.set("Strict-Transport-Security", "max-age=31536000");
   next();
 });
 

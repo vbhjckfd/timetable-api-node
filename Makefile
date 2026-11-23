@@ -37,7 +37,7 @@ build:
 		--push .
 
 publish:
-	$(NVM_USE) && npm version patch && git push --tags
+	$(NVM_USE) && npm version patch && git push origin HEAD "v$$(node -p "require('./package.json').version")"
 
 deploy: build
 	gcloud run deploy $(SERVICE_NAME) --image $(IMAGE) --region $(REGION) --platform managed --project $(PROJECT_ID) --memory $(MEMORY) --quiet
