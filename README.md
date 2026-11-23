@@ -1,5 +1,7 @@
 # Timetable API Node
 
+<!-- mcp-name: io.github.vbhjckfd/timetable-api-node -->
+
 [![CI](https://img.shields.io/github/actions/workflow/status/vbhjckfd/timetable-api-node/ci.yml?branch=master&logo=github&label=CI)](https://github.com/vbhjckfd/timetable-api-node/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/node.js-26-43853d?logo=node.js&logoColor=white)](https://github.com/vbhjckfd/timetable-api-node/blob/master/.nvmrc)
 [![License: MIT](https://img.shields.io/github/license/vbhjckfd/timetable-api-node?label=license)](https://github.com/vbhjckfd/timetable-api-node/blob/master/LICENSE)
