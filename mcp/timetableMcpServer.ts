@@ -1,4 +1,6 @@
 import * as metrics from "../utils/metrics.ts";
+import { classifyMcpClient } from "../utils/mcpClient.ts";
+import { isInternalCaller } from "../utils/internalCaller.ts";
 import * as z from "zod/v4";
 import pkg from "../package.json" with { type: "json" };
 import { Client } from "@modelcontextprotocol/client";
@@ -2476,9 +2478,24 @@ async function handleLegacyMcpRequest(req: Request, res: Response, body: unknown
   }
 }
 
+/** Tags the transaction with who called and what for: `FACET mcpClient, mcpMethod`. */
+function annotateMcpCaller(req: Request, body: unknown): void {
+  const first = (Array.isArray(body) ? body[0] : body) as
+    | { method?: unknown; params?: { clientInfo?: { name?: unknown } } }
+    | undefined;
+  const method = typeof first?.method === "string" ? first.method : "";
+  const clientName = first?.params?.clientInfo?.name;
+  metrics.annotate({
+    mcpClient: classifyMcpClient(req.get("User-Agent"), isInternalCaller(req), typeof clientName === "string" ? clientName : ""),
+    ...(method && { mcpMethod: method }),
+    ...(typeof clientName === "string" && { mcpClientName: clientName }),
+  });
+}
+
 export async function handleMcpPostRequest(req: Request, res: Response): Promise<void> {
   const jsonOnly = normalizeMcpAccept(req);
   const body = dropNullParams(req.body);
+  annotateMcpCaller(req, body);
   if (await isLegacyRequest(await toWebRequest(req, body), body)) {
     await handleLegacyMcpRequest(req, res, body, jsonOnly);
     return;
