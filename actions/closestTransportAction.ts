@@ -17,6 +17,10 @@ import type { RouteDoc } from "../types/domain.ts";
 export default async (req: Request, res: Response, next: NextFunction) => {
   const latitude = parseFloat(req.query.latitude as string);
   const longitude = parseFloat(req.query.longitude as string);
+  const rawRadius = parseFloat(req.query.radius as string);
+  const radiusMeters = Number.isFinite(rawRadius)
+    ? Math.min(3000, Math.max(100, Math.round(rawRadius)))
+    : 1000;
 
   if (
     !isFinite(latitude) ||
@@ -43,7 +47,7 @@ export default async (req: Request, res: Response, next: NextFunction) => {
     .filter((i) => !!routes[i.vehicle.trip.routeId])
     .filter((i) => {
       const position = i.vehicle.position;
-      return distanceMeters(position.latitude, position.longitude, latitude, longitude) < 1000;
+      return distanceMeters(position.latitude, position.longitude, latitude, longitude) < radiusMeters;
     });
 
   const tripsRaw = await getTrips({

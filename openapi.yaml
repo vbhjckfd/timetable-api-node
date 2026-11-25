@@ -232,12 +232,19 @@ paths:
   /transport:
     get:
       operationId: getNearbyTransport
-      summary: Vehicles currently within 1 km of a coordinate
+      summary: Vehicles currently within a radius (default 1 km) of a coordinate
       description: >
-        Returns all active vehicles within 1 kilometre of the given
-        coordinate, regardless of route. Useful for a "what's passing near
-        me right now" query.
+        Returns all active vehicles within `radius` metres (default 1000) of
+        the given coordinate, regardless of route. Useful for a "what's
+        passing near me right now" query.
       parameters:
+        - name: radius
+          in: query
+          required: false
+          description: Search radius in metres, clamped to 100–3000. Default 1000.
+          schema:
+            type: integer
+            default: 1000
         - name: latitude
           in: query
           required: true

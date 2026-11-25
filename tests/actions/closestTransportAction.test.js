@@ -114,6 +114,40 @@ describe("closestTransportAction", () => {
     expect(ids).not.toContain("VH2");
   });
 
+  it("widens the search to the radius query param", async () => {
+    db.getCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue([mockRoute]),
+    });
+    // farVehicleEntity sits ~5.6 km north of the target.
+    getVehiclesLocations.mockResolvedValue([nearVehicleEntity, farVehicleEntity]);
+    getTrips.mockResolvedValue([mockTrip]);
+
+    const res = makeRes();
+    await closestTransportAction(
+      { query: { latitude: String(TARGET_LAT), longitude: String(TARGET_LON), radius: "6000" } },
+      res,
+      vi.fn(),
+    );
+    // Clamped to 3 km, so the far vehicle stays out.
+    expect(res.send.mock.calls[0][0].map((v) => v.id)).toEqual(["VH1"]);
+
+    const near = {
+      vehicle: {
+        ...farVehicleEntity.vehicle,
+        position: { latitude: TARGET_LAT + 0.015, longitude: TARGET_LON, bearing: 0 },
+      },
+    };
+    getVehiclesLocations.mockResolvedValue([nearVehicleEntity, near]);
+    const res2 = makeRes();
+    await closestTransportAction(
+      { query: { latitude: String(TARGET_LAT), longitude: String(TARGET_LON), radius: "2000" } },
+      res2,
+      vi.fn(),
+    );
+    // ~1.7 km away: outside the 1 km default, inside radius=2000.
+    expect(res2.send.mock.calls[0][0].map((v) => v.id)).toEqual(["VH1", "VH2"]);
+  });
+
   it("returns vehicle with location and bearing fields", async () => {
     db.getCollection.mockReturnValue({
       find: vi.fn().mockReturnValue([mockRoute]),
