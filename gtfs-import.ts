@@ -19,6 +19,7 @@ import type { DepartureTimeMap, LatLng, RouteDoc, StopDoc } from "./types/domain
 
 import PublicGoogleSheetsParser from "public-google-sheets-parser";
 import { buildEngNames, engNameFor } from "./utils/engNames.ts";
+import { stopCodeFor } from "./utils/stopCode.ts";
 const spreadsheetId = "1AXRYgB4QqFaUCBEHJ8gueMnpYR2tI2NMgi2d8Ai7nAY";
 
 import { readFile } from "fs/promises";
@@ -173,21 +174,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
   );
 
   const stopPromises = importedStops.map(async (stopRow): Promise<StopDoc | null | undefined> => {
-    const codeMatch = stopRow.stop_name!.match(/(\([\-\d]+\))/i);
-
-    // If still zero - skip it
-    if (null === codeMatch) {
-      console.warn(
-        `Skipped stop with microgiz id ${stopRow.stop_id}, bad code in ${stopRow.stop_name}`,
-      );
-      return null;
-    }
-
-    let codeText = codeMatch[0];
-    for (const cleaner of ["(", ")"]) {
-      codeText = codeText.replace(cleaner, "");
-    }
-    const code = Number(codeText);
+    const code = stopCodeFor(stopRow.stop_name!, stopRow.stop_code, (c) => !!imported_stop_codes[c]);
 
     if (!code) {
       console.warn(
@@ -214,6 +201,7 @@ const globalIgnoreStopList = ["45002", "45001", "2551851", "4671"];
       `00${code}`,
       `0${code}`,
       String(code),
+      /\(\d+\)/, // a neighbour's code, when the stop's own stop_code was used
       "()",
       '" "',
       "(Т6)",
