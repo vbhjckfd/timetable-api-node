@@ -143,6 +143,19 @@
     "url": "https://zaxid.net/grafiki_remontiv_vulits_u_lvovi_yak_obyihati_karta_aktualni_remonti_dorig_u_lvovi_n1639867"
   },
   {
+    "id": "a33-driver-shortage",
+    "kind": "suspended",
+    "reason": "Нестача водіїв у перевізника ТзОВ «Міра і К»",
+    "since": "2026-11-27",
+    "until": null,
+    "until_text": "до відновлення укомплектованості водіями",
+    "routes": ["А33"],
+    "alternatives": ["А10", "А51", "Т22"],
+    "note": "Безоплатна пересадка між міськими маршрутами при оплаті сервісами ЛеоКарт.",
+    "source": "Львівська міська рада",
+    "url": "https://city-adm.lviv.ua/news/city/transport/cherez-krytychnyi-brak-vodiiv-pereviznyk-tymchasovo-pryzupynyv-robotu-avtobusnoho-marshrutu-33/"
+  },
+  {
     "id": "kovcha-overpass",
     "kind": "stop_moved",
     "reason": "Будівництво шляхопроводу на вул. Отця Омеляна Ковча",
